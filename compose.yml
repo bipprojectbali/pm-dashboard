@@ -48,6 +48,9 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.pm-dashboard.rule=Host(`pm-dashboard.wibudev.com`)"
       - "traefik.http.services.pm-dashboard.loadbalancer.server.port=3000"
+      - "traefik.http.routers.pm-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.pm-dashboard.tls=true"
+      - "traefik.http.routers.pm-dashboard.tls.certresolver=letsencrypt"
 
   migrate:
     image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest

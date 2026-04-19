@@ -56,11 +56,10 @@ services:
     image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest
     container_name: pm-dashboard-stg-migrate
     restart: "no"
-    entrypoint: ["sh", "-c", "bun prisma migrate deploy && bun prisma/seed.ts"]
+    entrypoint: ["sh", "-c", "bun prisma migrate deploy"]
     environment:
       - DATABASE_URL=${DIRECT_URL}
       - DIRECT_URL=${DIRECT_URL}
-      - ADMIN_EMAILS=${ADMIN_EMAILS}
     networks:
       - postgres-net-stg
 

@@ -26,6 +26,14 @@ function getIp(request: Request): string {
   return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? request.headers.get('x-real-ip') ?? 'unknown'
 }
 
+function getPublicOrigin(request: Request): string {
+  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, '')
+  const url = new URL(request.url)
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? url.host
+  return `${proto ?? url.protocol.replace(':', '')}://${host}`
+}
+
 function audit(userId: string | null, action: string, detail: string | null, ip: string) {
   prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
 }
@@ -422,7 +430,7 @@ export function createApp() {
 
       // ─── Google OAuth ──────────────────────────────────
       .get('/api/auth/google', ({ request, set }) => {
-        const origin = new URL(request.url).origin
+        const origin = getPublicOrigin(request)
         const params = new URLSearchParams({
           client_id: env.GOOGLE_CLIENT_ID,
           redirect_uri: `${origin}/api/auth/callback/google`,
@@ -439,7 +447,7 @@ export function createApp() {
         const ip = getIp(request)
         const url = new URL(request.url)
         const code = url.searchParams.get('code')
-        const origin = url.origin
+        const origin = getPublicOrigin(request)
 
         if (!code) {
           set.status = 302

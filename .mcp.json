@@ -17,6 +17,13 @@
       "env": {
         "GH_DEPLOY_REPO": "bipprojectbali/pm-dashboard"
       }
+    },
+    "pm-dashboard-stg": {
+      "type": "http",
+      "url": "https://pm-dashboard.wibudev.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_SECRET_STG}"
+      }
     }
   }
 }

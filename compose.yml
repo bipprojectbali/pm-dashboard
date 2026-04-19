@@ -1,0 +1,70 @@
+services:
+  pm-dashboard:
+    image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest
+    container_name: pm-dashboard-stg
+    restart: unless-stopped
+    environment:
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - PORT=3000
+      # Redis
+      - REDIS_URL=${REDIS_URL}
+      # telegram
+      - TELEGRAM_NOTIFY_TOKEN=${TELEGRAM_NOTIFY_TOKEN}
+      - TELEGRAM_NOTIFY_CHAT_ID=${TELEGRAM_NOTIFY_CHAT_ID}
+
+      # better-auth
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL}
+
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      
+      - PMW_WEBHOOK_TOKEN=${PMW_WEBHOOK_TOKEN}
+      - PMW_EVENT_BATCH_MAX=${PMW_EVENT_BATCH_MAX}
+      # Admin
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}
+      - MCP_SECRET=${MCP_SECRET}
+
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+    networks:
+      - public-net
+      - postgres-net-stg
+      - redis-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pm-dashboard.rule=Host(`pm-dashboard.wibudev.com`)"
+      - "traefik.http.services.pm-dashboard.loadbalancer.server.port=3000"
+
+  migrate:
+    image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest
+    container_name: pm-dashboard-stg-migrate
+    restart: "no"
+    entrypoint: ["sh", "-c", "bun prisma migrate deploy && bun prisma/seed.ts"]
+    environment:
+      - DATABASE_URL=${DIRECT_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - ADMIN_EMAILS=${ADMIN_EMAILS}
+    networks:
+      - postgres-net-stg
+
+networks:
+  public-net:
+    external: true
+  postgres-net-stg:
+    external: true
+  redis-net:
+    external: true

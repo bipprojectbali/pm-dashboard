@@ -5603,15 +5603,17 @@ export function createApp() {
             headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' },
           })
         }
+        const effectiveScope: McpScope = process.env.NODE_ENV === 'production' ? 'readonly' : scope
         const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
-        const mcp = createMcpServer(scope)
+        const mcp = createMcpServer(effectiveScope)
         await mcp.connect(transport)
         const response = await transport.handleRequest(request)
         response.headers.set('x-mcp-server', 'pm-dashboard')
-        response.headers.set('x-mcp-scope', scope)
+        response.headers.set('x-mcp-scope', effectiveScope)
+        if (effectiveScope !== scope) response.headers.set('x-mcp-scope-capped', 'production')
         return response
       })
 

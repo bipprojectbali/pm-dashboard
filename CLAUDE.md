@@ -182,7 +182,7 @@ Projects can be linked 1:1 to a GitHub repo via `Project.githubRepo` (stored can
 
 ## MCP Server
 
-Local MCP server lets Claude drive the app remotely. `.mcp.json` registers `pm-dashboard` (runs `scripts/mcp/server.ts`) alongside `playwright`. Requires `MCP_SECRET`; `MCP_SECRET_ADMIN` unlocks write/dev tools.
+Local MCP server lets Claude drive the app remotely. `.mcp.json` registers `pm-dashboard` (runs `scripts/mcp/server.ts`) alongside `playwright`. Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
 - Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `redis`, `tags`, `tasks`, `webhooks` (17 modules, 92 tools). `shared.ts` is a helper, not a tool module.
@@ -195,7 +195,7 @@ Local MCP server lets Claude drive the app remotely. `.mcp.json` registers `pm-d
 - Overview tools (readonly): `admin_overview` (KPIs across users/projects/tasks/agents/webhooks), `project_health` (per-project score A-F from overdue/blocked/extensions/velocity), `team_load` (per-user open/overdue/estimated hours, flags overloaded), `risk_report` (overdue tasks + stale IN_PROGRESS + past-due projects + pending agents + offline agents + missing env, severity rolled up)
 - Effort tools (readonly, in `overview` module): `effort_report` (estimate vs actual for many tasks), `task_effort` (single task detail), `ghost_tasks` (stalled IN_PROGRESS with user-online signal), `phantom_work` (per-user untracked activity)
 - Retro tool (readonly, in `overview` module): `project_retro` (automated retrospective snapshot — markdown by default, JSON optional)
-- HTTP fallback: `POST /mcp` — readonly with `MCP_SECRET`, full with `MCP_SECRET_ADMIN`
+- HTTP fallback: `POST /mcp` — Bearer `MCP_SECRET`. Response `x-mcp-scope` reflects the effective scope (readonly in prod, admin otherwise).
 
 ## WebSocket
 

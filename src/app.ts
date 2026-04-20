@@ -1394,7 +1394,7 @@ export function createApp() {
             path: '/mcp',
             auth: 'shared-secret',
             category: 'mcp',
-            description: 'MCP HTTP fallback (Bearer MCP_SECRET readonly / MCP_SECRET_ADMIN full)',
+            description: 'MCP HTTP fallback (Bearer MCP_SECRET; scope by NODE_ENV — production=readonly, else=admin)',
           },
           {
             method: 'GET',
@@ -1804,15 +1804,7 @@ export function createApp() {
             required: false,
             default: '(empty)',
             category: 'mcp',
-            description: 'Shared secret for readonly MCP tools (local server + /mcp HTTP)',
-          },
-          {
-            name: 'MCP_SECRET_ADMIN',
-            envKey: 'MCP_SECRET_ADMIN',
-            required: false,
-            default: '(empty)',
-            category: 'mcp',
-            description: 'Shared secret for admin/write MCP tools',
+            description: 'Shared secret for MCP (local + /mcp HTTP). Scope gated by NODE_ENV: production=readonly, else=admin.',
           },
           {
             name: 'PMW_WEBHOOK_TOKEN',
@@ -5584,8 +5576,8 @@ export function createApp() {
 
       // ─── MCP over HTTP ────────────────────────────────
       .all('/mcp', async ({ request }) => {
-        if (!env.MCP_SECRET && !env.MCP_SECRET_ADMIN) {
-          return new Response(JSON.stringify({ error: 'MCP not configured: set MCP_SECRET and/or MCP_SECRET_ADMIN' }), {
+        if (!env.MCP_SECRET) {
+          return new Response(JSON.stringify({ error: 'MCP not configured: set MCP_SECRET' }), {
             status: 503,
             headers: { 'Content-Type': 'application/json' },
           })
@@ -5593,27 +5585,23 @@ export function createApp() {
         const header = request.headers.get('authorization') ?? ''
         const bearer = header.replace(/^Bearer\s+/i, '').trim()
         const provided = bearer || request.headers.get('x-mcp-secret') || ''
-        let scope: McpScope | null = null
-        if (env.MCP_SECRET_ADMIN && provided === env.MCP_SECRET_ADMIN) scope = 'admin'
-        else if (env.MCP_SECRET && provided === env.MCP_SECRET) scope = 'readonly'
-        if (!scope) {
+        if (provided !== env.MCP_SECRET) {
           appLog('warn', `MCP unauthorized from ${getIp(request)}`)
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' },
           })
         }
-        const effectiveScope: McpScope = process.env.NODE_ENV === 'production' ? 'readonly' : scope
+        const scope: McpScope = process.env.NODE_ENV === 'production' ? 'readonly' : 'admin'
         const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
           enableJsonResponse: true,
         })
-        const mcp = createMcpServer(effectiveScope)
+        const mcp = createMcpServer(scope)
         await mcp.connect(transport)
         const response = await transport.handleRequest(request)
         response.headers.set('x-mcp-server', 'pm-dashboard')
-        response.headers.set('x-mcp-scope', effectiveScope)
-        if (effectiveScope !== scope) response.headers.set('x-mcp-scope-capped', 'production')
+        response.headers.set('x-mcp-scope', scope)
         return response
       })
 

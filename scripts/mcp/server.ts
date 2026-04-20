@@ -54,8 +54,8 @@ const ADMIN_MODULES: ToolModule[] = [
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {
   // Hard cap: production is readonly, full stop. No config knob, no exception.
-  // Prevents a misconfigured MCP_SECRET_ADMIN or stray stdio invocation from
-  // exposing write tools against live data.
+  // Scope is decided solely by NODE_ENV so write tools can never be exposed
+  // against prod data regardless of how MCP_SECRET is configured.
   const effectiveScope: McpScope = process.env.NODE_ENV === 'production' ? 'readonly' : scope
 
   const server = new McpServer({

@@ -22,7 +22,7 @@
       "type": "http",
       "url": "https://pm-dashboard.wibudev.com/mcp",
       "headers": {
-        "Authorization": "Bearer ${MCP_SECRET_STG}"
+        "Authorization": "Bearer ${MCP_SECRET}"
       }
     }
   }

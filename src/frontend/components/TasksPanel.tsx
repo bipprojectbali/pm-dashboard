@@ -496,9 +496,11 @@ export function TasksPanel({
             </Text>
             {writableProjects.length > 0 ? (
               <Group gap="xs">
-                <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
-                  New Task
-                </Button>
+                {activeProjectId && canWriteOverride === false ? null : (
+                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
+                    New Task
+                  </Button>
+                )}
                 {activeProject ? (
                   <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>
                     View all tasks

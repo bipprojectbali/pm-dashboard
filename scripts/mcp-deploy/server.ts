@@ -59,6 +59,51 @@ async function localIsPushed(branch: string): Promise<{ pushed: boolean; local: 
   return { pushed: local === remote, local, remote }
 }
 
+async function checkMigrationDrift(): Promise<{
+  ok: boolean
+  reason: 'none' | 'drift' | 'error' | 'no-shadow'
+  summary: string
+  detail: string
+}> {
+  const shadow = process.env.SHADOW_DATABASE_URL
+  if (!shadow) {
+    return {
+      ok: false,
+      reason: 'no-shadow',
+      summary:
+        'SHADOW_DATABASE_URL not set — prisma migrate diff needs a throwaway database to replay migrations against. Set SHADOW_DATABASE_URL in .env to a separate empty DB on your postgres server (e.g. postgresql://user:pass@host:5432/pm_shadow).',
+      detail: '',
+    }
+  }
+  const proc = Bun.spawn(
+    [
+      'bunx', 'prisma', 'migrate', 'diff',
+      '--from-migrations', 'prisma/migrations',
+      '--to-schema-datamodel', 'prisma/schema.prisma',
+      '--shadow-database-url', shadow,
+      '--exit-code',
+    ],
+    { cwd: PROJECT_ROOT, stdout: 'pipe', stderr: 'pipe' },
+  )
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
+  const code = await proc.exited
+  const detail = (stdout + stderr).trim()
+  if (code === 0) return { ok: true, reason: 'none', summary: 'no drift', detail: '' }
+  if (code === 2) {
+    return {
+      ok: false,
+      reason: 'drift',
+      summary:
+        'prisma/schema.prisma has changes not captured in prisma/migrations — run `bun run db:migrate --name <desc>` to generate one, commit it, then redeploy',
+      detail,
+    }
+  }
+  return { ok: false, reason: 'error', summary: `prisma migrate diff exited ${code}`, detail }
+}
+
 async function pushDeployTag(tagName: string): Promise<{ ok: boolean; message: string }> {
   const create = await git(['tag', tagName])
   if (!create.ok && !create.stderr.includes('already exists')) {
@@ -258,9 +303,20 @@ server.registerTool(
       publish_timeout_seconds: z.number().int().min(60).max(1800).default(900).optional(),
       repull_timeout_seconds: z.number().int().min(60).max(1800).default(600).optional(),
       force: z.boolean().default(false).optional().describe('Skip version-already-deployed guard.'),
+      skip_migration_check: z
+        .boolean()
+        .default(false)
+        .optional()
+        .describe('Skip the prisma schema↔migrations drift guard (emergency only).'),
     },
   },
-  async ({ stack_name = 'pm-dashboard', publish_timeout_seconds = 900, repull_timeout_seconds = 600, force = false }) => {
+  async ({
+    stack_name = 'pm-dashboard',
+    publish_timeout_seconds = 900,
+    repull_timeout_seconds = 600,
+    force = false,
+    skip_migration_check = false,
+  }) => {
     const branch = await currentBranch()
     if (branch !== 'stg') return errText(`must be on branch "stg" to deploy stg (current: "${branch}")`)
 
@@ -276,6 +332,16 @@ server.registerTool(
       return errText(
         `local stg is not in sync with origin/stg — push first.\n  local:  ${sync.local}\n  remote: ${sync.remote}`,
       )
+    }
+
+    if (!skip_migration_check) {
+      const drift = await checkMigrationDrift()
+      if (!drift.ok) {
+        return errText(
+          `migration drift blocked deploy — ${drift.summary}\n\n${drift.detail}\n\n` +
+            `Pass skip_migration_check: true to bypass (emergency only — the migrate sidecar will not catch up automatically).`,
+        )
+      }
     }
 
     const version = await readLocalVersion()
@@ -344,6 +410,20 @@ server.registerTool(
       re_pull: { run_id: repullId, ...repullFinal },
       deploy_tag: { name: tagName, pushed: tagged.ok, message: tagged.message },
     })
+  },
+)
+
+server.registerTool(
+  'check_migrations',
+  {
+    title: 'Check prisma schema ↔ migrations drift',
+    description:
+      'Runs `prisma migrate diff --exit-code` to verify prisma/schema.prisma matches prisma/migrations. Returns ok=true when no drift. On drift, the reply includes the SQL/detail so you can see what migration is needed.',
+    inputSchema: {},
+  },
+  async () => {
+    const r = await checkMigrationDrift()
+    return jsonText({ ok: r.ok, reason: r.reason, summary: r.summary, detail: r.detail })
   },
 )
 

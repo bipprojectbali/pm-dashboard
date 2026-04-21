@@ -1,0 +1,50 @@
+name: Check Prisma migrations
+
+on:
+  pull_request:
+    branches: [main, stg, prod]
+  push:
+    branches: [main, stg, prod]
+
+jobs:
+  drift:
+    name: schema ↔ migrations drift
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shadow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shadow
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Check prisma schema.prisma ↔ migrations
+        run: |
+          bunx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+        # exit 0 = no drift, 2 = drift detected (fail the job)
+
+      - name: Explain failure
+        if: failure()
+        run: |
+          echo "::error::prisma/schema.prisma has changes not captured in prisma/migrations."
+          echo "Run locally: bun run db:migrate --name <short_description>"
+          echo "Then commit the new prisma/migrations/<timestamp>_<name>/migration.sql file and push again."

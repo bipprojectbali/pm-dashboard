@@ -293,6 +293,26 @@ function canGrantProjectOwner(auth: { role: string }, membership: { role: Projec
   return membership?.role === 'OWNER'
 }
 
+async function canReadProject(
+  projectId: string,
+  auth: { userId: string; role: string },
+): Promise<{ ok: boolean; status: 403 | 404 | null; membership: { role: ProjectRole } | null }> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { visibility: true },
+  })
+  if (!project) return { ok: false, status: 404, membership: null }
+  const membership = await requireProjectMember(projectId, auth.userId)
+  const isAdmin = isSystemAdmin(auth.role)
+  const isVisible =
+    isAdmin ||
+    membership != null ||
+    project.visibility === 'INTERNAL' ||
+    project.visibility === 'PUBLIC'
+  if (!isVisible) return { ok: false, status: 403, membership }
+  return { ok: true, status: null, membership }
+}
+
 export function createApp() {
   appLog('info', 'Server starting')
 
@@ -2876,7 +2896,7 @@ export function createApp() {
               include: { user: { select: { id: true, name: true, email: true, role: true } } },
               orderBy: { joinedAt: 'asc' },
             },
-            _count: { select: { tasks: true } },
+            _count: { select: { tasks: true, members: true, milestones: true } },
           },
         })
         if (!project) {
@@ -3017,10 +3037,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const project = await prisma.project.findUnique({
           where: { id: params.id },
@@ -3101,10 +3121,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const limit = Math.min(100, Math.max(1, parseInt((query.limit as string) ?? '50', 10) || 50))
         const kindParam = typeof query.kind === 'string' ? query.kind.toUpperCase() : null
@@ -3128,10 +3148,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN' && auth.role !== 'ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const now = Date.now()
         const defaultSince = new Date(now - 14 * 24 * 60 * 60 * 1000)
@@ -3260,10 +3280,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const extensions = await prisma.projectExtension.findMany({
           where: { projectId: params.id },
@@ -3298,10 +3318,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const milestones = await prisma.projectMilestone.findMany({
           where: { projectId: params.id },
@@ -3483,13 +3503,28 @@ export function createApp() {
         const myProjectIds = (
           await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })
         ).map((m) => m.projectId)
-        const where: Record<string, unknown> = isAdmin ? {} : { projectId: { in: myProjectIds } }
+        const visibilityFilter = isAdmin
+          ? {}
+          : {
+              project: {
+                OR: [
+                  { id: { in: myProjectIds } },
+                  { visibility: 'INTERNAL' as const },
+                  { visibility: 'PUBLIC' as const },
+                ],
+              },
+            }
+        const where: Record<string, unknown> = { ...visibilityFilter }
         if (query.projectId) {
-          if (!isAdmin && !myProjectIds.includes(String(query.projectId))) {
-            set.status = 403
-            return { error: 'Not a member of that project' }
+          if (!isAdmin) {
+            const access = await canReadProject(String(query.projectId), auth)
+            if (!access.ok) {
+              set.status = access.status!
+              return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
+            }
           }
           where.projectId = String(query.projectId)
+          delete where.project
         }
         const TASK_STATUS_VALUES = ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'] as const
         const TASK_KIND_VALUES = ['TASK', 'BUG', 'QC'] as const
@@ -3998,10 +4033,10 @@ export function createApp() {
           set.status = 401
           return { error: 'Unauthorized' }
         }
-        const membership = await requireProjectMember(params.id, auth.userId)
-        if (!membership && auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Not a project member' }
+        const access = await canReadProject(params.id, auth)
+        if (!access.ok) {
+          set.status = access.status!
+          return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
         }
         const tags = await prisma.tag.findMany({
           where: { projectId: params.id },

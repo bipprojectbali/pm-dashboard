@@ -170,11 +170,14 @@ export function ProjectDetailView({
   const systemRole = session.data?.user?.role ?? null
   const detailQ = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => api<{ project: ProjectDetail; myRole: string | null }>(`/api/projects/${projectId}`),
+    queryFn: () =>
+      api<{ project: ProjectDetail; myRole: string | null; canWrite: boolean }>(
+        `/api/projects/${projectId}`,
+      ),
   })
 
   const project = detailQ.data?.project
-  const canWrite = project?.canWrite ?? false
+  const canWrite = detailQ.data?.canWrite ?? false
 
   useHotkeys([['Escape', onBack]])
 

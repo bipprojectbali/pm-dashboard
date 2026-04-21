@@ -25,11 +25,13 @@ export default function EChartImpl({
   style,
   colorScheme,
   onEvents,
+  renderer = 'canvas',
 }: {
   option: EChartsOption
   style?: CSSProperties
   colorScheme: 'light' | 'dark'
   onEvents?: Record<string, (params: unknown) => void>
+  renderer?: 'canvas' | 'svg'
 }) {
   const isDark = colorScheme === 'dark'
   const textColor = isDark ? '#c1c2c5' : '#495057'
@@ -130,7 +132,7 @@ export default function EChartImpl({
       onEvents={onEvents as never}
       notMerge
       lazyUpdate
-      opts={{ renderer: 'canvas' }}
+      opts={{ renderer }}
     />
   )
 }

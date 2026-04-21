@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Alert,
   Badge,
+  Button,
   Card,
   Group,
   Progress,
@@ -19,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   TbActivity,
   TbAlertTriangle,
+  TbFileReport,
   TbFlame,
   TbHeartbeat,
   TbInfoCircle,
@@ -357,6 +359,17 @@ export function OverviewPanel() {
               updated {freshness}
             </Text>
           )}
+          <Button
+            leftSection={<TbFileReport size={16} />}
+            size="xs"
+            variant="light"
+            color="violet"
+            onClick={() => {
+              window.location.href = '/admin/report'
+            }}
+          >
+            Laporan Lengkap
+          </Button>
           <Tooltip label="Refresh all">
             <ActionIcon variant="subtle" onClick={refetchAll} loading={fetching}>
               <TbRefresh size={16} />

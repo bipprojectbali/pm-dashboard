@@ -41,7 +41,8 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `TaskComment`, `TaskEvidence` — comments + attachments on tasks
 - Enums: `Role` = `USER | QC | ADMIN | SUPER_ADMIN` (default `USER`); `TaskKind` = `TASK | BUG | QC`; `TaskStatus` = `OPEN | IN_PROGRESS | READY_FOR_QC | REOPENED | CLOSED`; `TaskPriority` = `LOW | MEDIUM | HIGH | CRITICAL`; `AgentStatus` = `PENDING | APPROVED | REVOKED`; `WebhookTokenStatus` = `ACTIVE | DISABLED | REVOKED`; `GithubEventKind` = `PUSH_COMMIT | PR_OPENED | PR_CLOSED | PR_MERGED | PR_REVIEWED`
 - Client singleton: `src/lib/db.ts` — import `{ prisma }` from here
-- Seed: `prisma/seed.ts` — demo users (superadmin, admin, user) with `Bun.password.hash` bcrypt
+- Seed: `prisma/seed.ts` — demo users (superadmin, admin, user) with `Bun.password.hash` bcrypt. **Seed runs local/dev only** — the prod/stg migrate sidecar in `compose.yml` runs `bun prisma migrate deploy` without seeding. Seed's `wipe()` truncates tables, so never wire it into deploy flow.
+- Migrations: single baseline `prisma/migrations/20260420014347_baseline/` represents the full schema. Earlier incremental migrations were collapsed to avoid drift; prod was marked `--applied` against this baseline.
 - Commands: `bun run db:migrate`, `bun run db:seed`, `bun run db:generate`
 
 ## Redis
@@ -57,7 +58,7 @@ Bun native `Bun.RedisClient` — no external package needed.
 Session-based auth with HttpOnly cookies stored in DB.
 
 - Login: `POST /api/auth/login` — finds user by email, verifies password with `Bun.password.verify`, checks blocked status, creates Session record. Logs to audit trail.
-- Google OAuth: `GET /api/auth/google` → Google → `GET /api/auth/callback/google` — upserts user, creates session
+- Google OAuth: `GET /api/auth/google` → Google → `GET /api/auth/callback/google` — upserts user, creates session. Redirect URI is built via `getPublicOrigin(request)` which honors `BETTER_AUTH_URL`, then `X-Forwarded-Proto`/`X-Forwarded-Host` (behind Traefik TLS termination), falling back to `request.url`. Prevents `redirect_uri_mismatch` when the app sits behind a reverse proxy.
 - Session: `GET /api/auth/session` — looks up session by cookie token, returns user (including role & blocked) or 401, auto-deletes expired
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
 - Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
@@ -182,7 +183,14 @@ Projects can be linked 1:1 to a GitHub repo via `Project.githubRepo` (stored can
 
 ## MCP Server
 
-Local MCP server lets Claude drive the app remotely. `.mcp.json` registers `pm-dashboard` (runs `scripts/mcp/server.ts`) alongside `playwright`. Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
+Local MCP server lets Claude drive the app remotely. `.mcp.json` registers 4 servers:
+
+- `playwright` — browser automation (`@playwright/mcp@latest`)
+- `pm-dashboard` — local stdio MCP against the dev DB/Redis (`scripts/mcp/server.ts`)
+- `deploy` — thin wrapper around `gh workflow run` for the Publish/Re-Pull pipeline (`scripts/mcp-deploy/server.ts`). See **Deployment**.
+- `pm-dashboard-stg` — remote HTTP MCP against stg (`https://pm-dashboard.wibudev.com/mcp`, Bearer `MCP_SECRET`). Readonly because stg runs with `NODE_ENV=production` — override that env to `staging` in Portainer if full CRUD is needed.
+
+Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
 - Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `redis`, `tags`, `tasks`, `webhooks` (17 modules, 92 tools). `shared.ts` is a helper, not a tool module.
@@ -323,6 +331,22 @@ bun run test:integration  # tests/integration/ — API endpoints via app.handle(
 
 - `tests/helpers.ts` — `createTestApp()`, `seedTestUser()`, `createTestSession()`, `cleanupTestData()`
 - Integration tests use `createApp().handle(new Request(...))` — no server needed
+
+## Deployment
+
+Container image → GHCR → Portainer stack → Traefik TLS. Two-step flow driven by GitHub Actions, wrapped in the `deploy` MCP server for hands-off ops.
+
+- **Dockerfile** — multi-stage `oven/bun:1` build: `deps` (install) → `prisma` (client generate) → `builder` (Vite build) → `runner` (copies `node_modules`, `generated/`, `prisma/`, `scripts/`, `src/`, `dist/`, `package.json`). Sets `NODE_ENV=production`, exposes `3000`, runs `bun src/index.tsx`. Runner **must** include `generated/` and `scripts/` — prior builds missed them and crashed on `require('../../generated/prisma')`.
+- **.dockerignore** — excludes `node_modules`, `dist`, `generated`, `.git`, `.env*` (allows `.env.example`), tests, IDE junk, `compose.yml`, `Dockerfile`, docs.
+- **compose.yml** (stg stack) — two services:
+  - `pm-dashboard` — app container, `restart: unless-stopped`, networks: `public-net` (Traefik) + `postgres-net-stg` + `redis-net`. Traefik labels: `Host('pm-dashboard.wibudev.com')`, entrypoint `websecure`, TLS via `letsencrypt` certresolver, routes to container port 3000.
+  - `migrate` — one-shot sidecar, `restart: "no"`, `entrypoint: bun prisma migrate deploy`. Uses `DIRECT_URL` (bypass PgBouncer) for migrations. **No seed** — seed belongs to local dev only.
+- **GitHub Actions** (`.github/workflows/`):
+  - `publish.yml` — `workflow_dispatch` with `stack_env` (dev/stg/prod) and `tag`. Builds `linux/amd64` with Buildx, pushes to GHCR as `ghcr.io/<repo>:<env>-<tag>` + `<env>-latest`. Checks out branch matching `stack_env`.
+  - `re-pull.yml` — `workflow_dispatch` with `stack_name` + `stack_env`. Calls Portainer API (`PORTAINER_*` secrets) to redeploy the stack against `<stack_name>-<stack_env>`. Migrate sidecar runs first; app container restarts on new image. One-shot sidecar showing `Exited (0)` is normal — Portainer's "failure" label on it is a false positive.
+- **deploy MCP** (`scripts/mcp-deploy/server.ts`) — Bun stdio server wrapping `gh` CLI. Tools: `publish_docker`, `re_pull`, `run_status`, `run_wait`, `run_logs`, `run_list`, and `deploy_stg` (convenience one-shot: publish → wait → re-pull → wait). `GH_DEPLOY_REPO` env sets target repo (default `bipprojectbali/pm-dashboard`).
+- **Pre-deploy checks**: ensure working tree is pushed to the target branch (`stg`/`prod`), typecheck passes, Portainer stack already exists (first-time creation is manual).
+- **PgBouncer note**: stg uses PgBouncer in `transaction` mode. `DATABASE_URL` must include `?pgbouncer=true` so Prisma disables prepared statements; `DIRECT_URL` points at Postgres directly and is used by the migrate sidecar (PgBouncer rejects `ALTER USER` etc.). Both `DATABASE_URL` and `DIRECT_URL` must use the same username PgBouncer knows about (`DB_USER`).
 
 ## APIs
 

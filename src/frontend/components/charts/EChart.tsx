@@ -9,11 +9,13 @@ export function EChart({
   style,
   height = 260,
   onEvents,
+  renderer,
 }: {
   option: EChartsOption
   style?: CSSProperties
   height?: number | string
   onEvents?: Record<string, (params: unknown) => void>
+  renderer?: 'canvas' | 'svg'
 }) {
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true })
   const h = typeof height === 'number' ? `${height}px` : height
@@ -30,6 +32,7 @@ export function EChart({
         style={{ height: h, width: '100%', ...style }}
         colorScheme={colorScheme}
         onEvents={onEvents}
+        renderer={renderer}
       />
     </Suspense>
   )

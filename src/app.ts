@@ -2,6 +2,7 @@ import { cors } from '@elysiajs/cors'
 import { html } from '@elysiajs/html'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Elysia } from 'elysia'
+import pkg from '../package.json' with { type: 'json' }
 import { createMcpServer, type McpScope } from '../scripts/mcp/server'
 import {
   computeAdminOverview,
@@ -1497,6 +1498,7 @@ export function createApp() {
           },
           // Utility
           { method: 'GET', path: '/health', auth: 'public', category: 'utility', description: 'Health check' },
+          { method: 'GET', path: '/api/version', auth: 'public', category: 'utility', description: 'App name + version from package.json' },
           { method: 'GET', path: '/api/hello', auth: 'public', category: 'utility', description: 'Hello world (GET)' },
           { method: 'PUT', path: '/api/hello', auth: 'public', category: 'utility', description: 'Hello world (PUT)' },
           {
@@ -5757,6 +5759,12 @@ export function createApp() {
         response.headers.set('x-mcp-scope', scope)
         return response
       })
+
+      // ─── Version ───────────────────────────────────────
+      .get('/api/version', () => ({
+        name: pkg.name,
+        version: pkg.version,
+      }))
 
       // ─── Example API ───────────────────────────────────
       .get('/api/hello', () => ({

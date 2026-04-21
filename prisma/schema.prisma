@@ -49,6 +49,12 @@ enum ProjectPriority {
   CRITICAL
 }
 
+enum ProjectVisibility {
+  PRIVATE
+  INTERNAL
+  PUBLIC
+}
+
 enum TaskKind {
   TASK
   BUG
@@ -211,6 +217,7 @@ model Project {
   ownerId        String
   status         ProjectStatus   @default(ACTIVE)
   priority       ProjectPriority @default(MEDIUM)
+  visibility     ProjectVisibility @default(INTERNAL)
   startsAt       DateTime?
   endsAt         DateTime?
   originalEndAt  DateTime?

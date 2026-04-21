@@ -73,6 +73,8 @@ interface TaskStats {
   total: number
 }
 
+export type ProjectVisibility = 'PRIVATE' | 'INTERNAL' | 'PUBLIC'
+
 export interface ProjectListItem {
   id: string
   name: string
@@ -80,6 +82,7 @@ export interface ProjectListItem {
   ownerId: string
   status: ProjectStatus
   priority: ProjectPriority
+  visibility: ProjectVisibility
   startsAt: string | null
   endsAt: string | null
   originalEndAt: string | null
@@ -90,6 +93,7 @@ export interface ProjectListItem {
   owner: ProjectUser
   _count: { members: number; tasks: number; milestones: number }
   myRole: MemberRole | null
+  canWrite: boolean
   joinedAt: string | null
   taskStats?: TaskStats
   milestoneStats?: { done: number; total: number }
@@ -277,6 +281,7 @@ export function ProjectsPanel() {
   const role = session.data?.user?.role
   const canCreateProject = role === 'ADMIN' || role === 'SUPER_ADMIN'
   const [createOpen, setCreateOpen] = useState(false)
+  const [scope, setScope] = useState<'mine' | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null)
   const [priorityFilter, setPriorityFilter] = useState<ProjectPriority | null>(null)
   const [roleFilter, setRoleFilter] = useState<MemberRole | null>(null)
@@ -295,8 +300,8 @@ export function ProjectsPanel() {
   }
 
   const projectsQ = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<{ projects: ProjectListItem[] }>('/api/projects'),
+    queryKey: ['projects', scope],
+    queryFn: () => api<{ projects: ProjectListItem[] }>(`/api/projects?scope=${scope}`),
     refetchInterval: 30_000,
   })
 
@@ -501,6 +506,15 @@ export function ProjectsPanel() {
         <Card withBorder padding="sm" radius="md">
           <Stack gap="xs">
             <Group gap="xs" wrap="wrap" justify="flex-end">
+              <SegmentedControl
+                size="xs"
+                value={scope}
+                onChange={(v) => setScope(v as 'mine' | 'all')}
+                data={[
+                  { value: 'mine', label: 'Proyek saya' },
+                  { value: 'all', label: 'Semua proyek' },
+                ]}
+              />
               <Select
                 size="xs"
                 w={150}
@@ -763,7 +777,16 @@ function ProjectCard({
             <Badge color="gray" variant="outline" size="xs">
               ADMIN VIEW
             </Badge>
-          ) : null}
+          ) : (
+            <Badge color="gray" variant="outline" size="xs">
+              READ-ONLY
+            </Badge>
+          )}
+          {p.visibility === 'PRIVATE' && (
+            <Badge color="orange" variant="outline" size="xs">
+              PRIVATE
+            </Badge>
+          )}
           {overdue && (
             <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={10} />}>
               Overdue {daysOver}d

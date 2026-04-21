@@ -97,6 +97,7 @@ interface ProjectOption {
   id: string
   name: string
   myRole: 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER' | null
+  canWrite?: boolean
 }
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
@@ -133,10 +134,12 @@ export function TasksPanel({
   projectId,
   onProjectChange,
   onBackToProjects,
+  canWriteOverride,
 }: {
   projectId?: string
   onProjectChange?: (id: string | null) => void
   onBackToProjects?: () => void
+  canWriteOverride?: boolean
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -219,7 +222,12 @@ export function TasksPanel({
   })
 
   const projects = projectsQ.data?.projects ?? []
-  const writableProjects = projects.filter((p) => isAdmin || (p.myRole !== null && p.myRole !== 'VIEWER'))
+  const writableProjects = projects.filter((p) => {
+    if (projectId && p.id === projectId && canWriteOverride !== undefined) return canWriteOverride
+    if (isAdmin) return true
+    if (typeof p.canWrite === 'boolean') return p.canWrite
+    return p.myRole !== null && p.myRole !== 'VIEWER'
+  })
   const rawTasks = tasksQ.data?.tasks ?? []
   const tasks = useMemo(() => {
     const now = Date.now()
@@ -297,13 +305,32 @@ export function TasksPanel({
               <TbRefresh size={16} />
             </ActionIcon>
           </Tooltip>
-          <Button
-            leftSection={<TbPlus size={16} />}
-            onClick={() => setCreateOpen(true)}
-            disabled={writableProjects.length === 0}
+          <Tooltip
+            label={
+              activeProjectId && canWriteOverride === false
+                ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
+                : writableProjects.length === 0
+                  ? 'Tidak ada proyek yang bisa ditulis'
+                  : ''
+            }
+            disabled={
+              !(
+                (activeProjectId && canWriteOverride === false) ||
+                writableProjects.length === 0
+              )
+            }
           >
-            New Task
-          </Button>
+            <Button
+              leftSection={<TbPlus size={16} />}
+              onClick={() => setCreateOpen(true)}
+              disabled={
+                writableProjects.length === 0 ||
+                (activeProjectId ? canWriteOverride === false : false)
+              }
+            >
+              New Task
+            </Button>
+          </Tooltip>
         </Group>
       </Group>
 
@@ -486,7 +513,11 @@ export function TasksPanel({
       ) : view === 'kanban' ? (
         <TasksKanbanView
           tasks={tasks}
-          canWrite={writableProjects.length > 0}
+          canWrite={
+            activeProjectId
+              ? canWriteOverride !== false && writableProjects.length > 0
+              : writableProjects.length > 0
+          }
           onSelect={(id) => openTask(id)}
           onMove={(id, status) =>
             api(`/api/tasks/${id}`, {

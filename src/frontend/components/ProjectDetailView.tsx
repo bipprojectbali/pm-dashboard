@@ -55,6 +55,7 @@ import {
   type ProjectListItem,
   type ProjectPriority,
   type ProjectStatus,
+  type ProjectVisibility,
 } from './ProjectsPanel'
 import { RetroTab } from './RetroTab'
 import { Breadcrumbs } from './shared/Breadcrumbs'
@@ -173,6 +174,7 @@ export function ProjectDetailView({
   })
 
   const project = detailQ.data?.project
+  const canWrite = project?.canWrite ?? false
 
   useHotkeys([['Escape', onBack]])
 
@@ -271,7 +273,7 @@ export function ProjectDetailView({
         </Alert>
       ) : (
         <>
-          <ProjectHeader project={project} systemRole={systemRole} />
+          <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} />
 
           <Tabs value={tab} onChange={(v) => v && onTabChange(v as ProjectDetailTab)} keepMounted={false}>
             <Tabs.List>
@@ -314,7 +316,7 @@ export function ProjectDetailView({
               <OverviewTab project={project} onOpenTasks={() => onTabChange('tasks')} />
             </Tabs.Panel>
             <Tabs.Panel value="tasks" pt="md">
-              <TasksPanel projectId={project.id} />
+              <TasksPanel projectId={project.id} canWriteOverride={canWrite} />
             </Tabs.Panel>
             <Tabs.Panel value="team" pt="md">
               <MembersSection
@@ -365,7 +367,15 @@ function TabCount({ value }: { value?: number }) {
   )
 }
 
-function ProjectHeader({ project, systemRole }: { project: ProjectDetail; systemRole: string | null }) {
+function ProjectHeader({
+  project,
+  systemRole,
+  canWrite,
+}: {
+  project: ProjectDetail
+  systemRole: string | null
+  canWrite: boolean
+}) {
   const { overdue, daysOver } = computeOverdue(project)
   const extended =
     project.originalEndAt &&
@@ -407,6 +417,25 @@ function ProjectHeader({ project, systemRole }: { project: ProjectDetail; system
               <Tooltip label={`Original deadline: ${formatDate(project.originalEndAt)}`}>
                 <Badge color="grape" variant="light" size="sm">
                   Extended
+                </Badge>
+              </Tooltip>
+            )}
+            {project.visibility === 'PRIVATE' && (
+              <Tooltip label="Proyek privat — hanya anggota yang dapat mengakses">
+                <Badge color="dark" variant="filled" size="sm">
+                  Private
+                </Badge>
+              </Tooltip>
+            )}
+            {project.visibility === 'PUBLIC' && (
+              <Badge color="cyan" variant="light" size="sm">
+                Public
+              </Badge>
+            )}
+            {!canWrite && (
+              <Tooltip label="Kamu bukan anggota proyek ini — hanya bisa melihat">
+                <Badge color="gray" variant="outline" size="sm">
+                  Read-only
                 </Badge>
               </Tooltip>
             )}
@@ -839,6 +868,7 @@ function SettingsTab({
   const [description, setDescription] = useState(project.description ?? '')
   const [status, setStatus] = useState<ProjectStatus>(project.status)
   const [priority, setPriority] = useState<ProjectPriority>(project.priority)
+  const [visibility, setVisibility] = useState<ProjectVisibility>(project.visibility)
   const [startsAt, setStartsAt] = useState<Date | null>(project.startsAt ? new Date(project.startsAt) : null)
   const [endsAt, setEndsAt] = useState<Date | null>(project.endsAt ? new Date(project.endsAt) : null)
   const [githubRepoInput, setGithubRepoInput] = useState(project.githubRepo ?? '')
@@ -934,6 +964,24 @@ function SettingsTab({
               disabled={!canManage}
             />
           </Group>
+          <Select
+            label="Visibility"
+            description={
+              visibility === 'PRIVATE'
+                ? 'Hanya anggota proyek yang bisa melihat.'
+                : visibility === 'INTERNAL'
+                  ? 'Semua user bisa melihat; hanya anggota yang bisa mengubah task.'
+                  : 'Semua user bisa melihat; hanya anggota yang bisa mengubah task.'
+            }
+            data={[
+              { value: 'PRIVATE', label: 'Private — member saja' },
+              { value: 'INTERNAL', label: 'Internal — semua user bisa lihat' },
+              { value: 'PUBLIC', label: 'Public — semua user bisa lihat' },
+            ]}
+            value={visibility}
+            onChange={(v) => v && setVisibility(v as ProjectVisibility)}
+            disabled={!canManage}
+          />
           <Group grow>
             <DateInput
               label="Start date"
@@ -983,6 +1031,7 @@ function SettingsTab({
                     description: description.trim() || null,
                     status,
                     priority,
+                    visibility,
                     startsAt: startsAt ? startsAt.toISOString() : null,
                     endsAt: endsAt ? endsAt.toISOString() : null,
                   })

@@ -11,11 +11,12 @@
         "MCP_SECRET": "${MCP_SECRET}"
       }
     },
-    "deploy": {
+    "deploy-stg": {
       "command": "bun",
       "args": ["run", "scripts/mcp-deploy/server.ts"],
       "env": {
-        "GH_DEPLOY_REPO": "bipprojectbali/pm-dashboard"
+        "GH_DEPLOY_REPO": "bipprojectbali/pm-dashboard",
+        "STG_BASE_URL": "https://pm-dashboard.wibudev.com"
       }
     },
     "pm-dashboard-stg": {

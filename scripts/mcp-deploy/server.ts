@@ -6,6 +6,28 @@ const REPO = process.env.GH_DEPLOY_REPO ?? 'bipprojectbali/pm-dashboard'
 const PUBLISH_WORKFLOW = process.env.GH_PUBLISH_WORKFLOW ?? 'Publish Docker to GHCR'
 const REPULL_WORKFLOW = process.env.GH_REPULL_WORKFLOW ?? 'Re-Pull Docker'
 const PROJECT_ROOT = process.env.GH_DEPLOY_ROOT ?? process.cwd()
+const STG_BASE_URL = (process.env.STG_BASE_URL ?? 'https://pm-dashboard.wibudev.com').replace(/\/+$/, '')
+
+const ENV_LEAK_PATTERNS: Array<{ name: string; re: RegExp }> = [
+  { name: 'AWS access key', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: 'GitHub token', re: /\bghp_[A-Za-z0-9]{30,}\b/ },
+  { name: 'GitHub fine-grained token', re: /\bgithub_pat_[A-Za-z0-9_]{30,}\b/ },
+  { name: 'OpenAI / Anthropic style key', re: /\bsk-(?:ant-)?[A-Za-z0-9\-_]{20,}\b/ },
+  { name: 'Slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
+  { name: 'Google API key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/ },
+  { name: 'Private key block', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/ },
+  { name: 'Hardcoded password=', re: /\bpassword\s*[:=]\s*["'][^"'\s]{6,}["']/i },
+  { name: 'Postgres/Redis URL with password', re: /\b(?:postgres(?:ql)?|redis):\/\/[^\s:@]+:[^\s@]+@[^\s]+/ },
+]
+
+const ENV_LEAK_ALLOWLIST = [
+  /^\.env\.example$/,
+  /^tests\/fixtures\//,
+  /\.test\.ts$/,
+  /\.test\.tsx$/,
+  /^CLAUDE\.md$/,
+  /^prisma\/seed\.ts$/,
+]
 
 async function gh(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
   const proc = Bun.spawn(['gh', ...args], { stdout: 'pipe', stderr: 'pipe' })
@@ -113,6 +135,107 @@ async function pushDeployTag(tagName: string): Promise<{ ok: boolean; message: s
   return { ok: push.ok, message: push.stderr.trim() || push.stdout.trim() }
 }
 
+interface EnvLeakHit {
+  file: string
+  pattern: string
+  line: number
+  preview: string
+}
+
+function isAllowlisted(file: string): boolean {
+  return ENV_LEAK_ALLOWLIST.some((re) => re.test(file))
+}
+
+async function scanEnvLeaks(diffRange: string): Promise<{
+  ok: boolean
+  newDotEnv: string[]
+  hits: EnvLeakHit[]
+  summary: string
+}> {
+  const names = await git(['diff', '--name-only', '--diff-filter=AM', diffRange])
+  if (!names.ok) {
+    return {
+      ok: false,
+      newDotEnv: [],
+      hits: [],
+      summary: `git diff --name-only failed: ${names.stderr || names.stdout}`,
+    }
+  }
+  const files = names.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const newDotEnv = files.filter((f) => /(^|\/)\.env(\.|$)/.test(f) && !/\.env\.example$/.test(f))
+
+  const hits: EnvLeakHit[] = []
+  for (const file of files) {
+    if (isAllowlisted(file)) continue
+    if (!/\.(ts|tsx|js|jsx|json|yml|yaml|toml|md|env|sh|prisma)$/i.test(file) && !/Dockerfile$/i.test(file)) continue
+    const diff = await git(['diff', '--unified=0', diffRange, '--', file])
+    if (!diff.ok) continue
+    const lines = diff.stdout.split('\n')
+    let lineNo = 0
+    for (const line of lines) {
+      const h = /^@@ .* \+(\d+)(?:,\d+)? @@/.exec(line)
+      if (h) {
+        lineNo = Number.parseInt(h[1], 10)
+        continue
+      }
+      if (!line.startsWith('+') || line.startsWith('+++')) {
+        if (line.startsWith(' ')) lineNo++
+        continue
+      }
+      const added = line.slice(1)
+      for (const p of ENV_LEAK_PATTERNS) {
+        if (p.re.test(added)) {
+          hits.push({
+            file,
+            pattern: p.name,
+            line: lineNo,
+            preview: added.length > 160 ? `${added.slice(0, 157)}...` : added,
+          })
+        }
+      }
+      lineNo++
+    }
+  }
+
+  const ok = newDotEnv.length === 0 && hits.length === 0
+  const parts: string[] = []
+  if (newDotEnv.length) parts.push(`${newDotEnv.length} .env file(s) added: ${newDotEnv.join(', ')}`)
+  if (hits.length) parts.push(`${hits.length} credential pattern match(es)`)
+  const summary = ok ? 'no env leaks detected' : parts.join('; ')
+  return { ok, newDotEnv, hits, summary }
+}
+
+async function fetchStgVersion(): Promise<{
+  ok: boolean
+  status: number
+  url: string
+  body: { name?: string; version?: string; commit?: string | null; builtAt?: string | null; env?: string } | null
+  error: string | null
+}> {
+  const url = `${STG_BASE_URL}/api/version`
+  try {
+    const ctrl = AbortSignal.timeout(10_000)
+    const r = await fetch(url, { signal: ctrl, headers: { accept: 'application/json' } })
+    if (!r.ok) {
+      return { ok: false, status: r.status, url, body: null, error: `HTTP ${r.status}` }
+    }
+    const body = (await r.json()) as {
+      name?: string
+      version?: string
+      commit?: string | null
+      builtAt?: string | null
+      env?: string
+    }
+    return { ok: true, status: r.status, url, body, error: null }
+  } catch (e) {
+    return { ok: false, status: 0, url, body: null, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 function jsonText(data: unknown) {
   return {
     content: [
@@ -138,7 +261,7 @@ async function latestRun(workflow: string) {
   return (arr[0] as Record<string, unknown>) ?? null
 }
 
-const server = new McpServer({ name: 'deploy', version: '0.1.0' })
+const server = new McpServer({ name: 'deploy-stg', version: '0.2.0' })
 
 server.registerTool(
   'publish_docker',
@@ -295,27 +418,41 @@ server.registerTool(
 server.registerTool(
   'deploy_stg',
   {
-    title: 'Full stg deploy (publish → wait → re-pull → wait)',
+    title: 'Full stg deploy (preflight → publish → re-pull → verify)',
     description:
-      'Runs Publish for stg using the version from local package.json, waits for success, triggers Re-Pull, and tags the commit stg-v<version> on origin. Rejects if the version was already deployed (unless force=true). Bump first with bump_version.',
+      'End-to-end stg deploy guarded by preflight checks. Flow: env-leak scan + branch/clean/sync/migration-drift/version-tag guards → dispatch Publish workflow (tag = package.json version) → wait → dispatch Re-Pull workflow → wait → verify stg /api/version reports the new version → push stg-v<version> git tag on origin. Rejects if version was already deployed (unless force=true). Bump first with bump_version.',
     inputSchema: {
       stack_name: z.string().default('pm-dashboard').optional(),
       publish_timeout_seconds: z.number().int().min(60).max(1800).default(900).optional(),
       repull_timeout_seconds: z.number().int().min(60).max(1800).default(600).optional(),
+      verify_timeout_seconds: z.number().int().min(10).max(600).default(180).optional(),
       force: z.boolean().default(false).optional().describe('Skip version-already-deployed guard.'),
       skip_migration_check: z
         .boolean()
         .default(false)
         .optional()
         .describe('Skip the prisma schema↔migrations drift guard (emergency only).'),
+      skip_env_leak_check: z
+        .boolean()
+        .default(false)
+        .optional()
+        .describe('Skip the env/credential leak scan against origin/stg (emergency only).'),
+      skip_verify: z
+        .boolean()
+        .default(false)
+        .optional()
+        .describe('Skip the post-deploy /api/version check (e.g. if stg is unreachable from dev machine).'),
     },
   },
   async ({
     stack_name = 'pm-dashboard',
     publish_timeout_seconds = 900,
     repull_timeout_seconds = 600,
+    verify_timeout_seconds = 180,
     force = false,
     skip_migration_check = false,
+    skip_env_leak_check = false,
+    skip_verify = false,
   }) => {
     const branch = await currentBranch()
     if (branch !== 'stg') return errText(`must be on branch "stg" to deploy stg (current: "${branch}")`)
@@ -332,6 +469,25 @@ server.registerTool(
       return errText(
         `local stg is not in sync with origin/stg — push first.\n  local:  ${sync.local}\n  remote: ${sync.remote}`,
       )
+    }
+
+    if (!skip_env_leak_check) {
+      const leak = await scanEnvLeaks('origin/stg...HEAD')
+      if (!leak.ok) {
+        const lines: string[] = [`env-leak scan blocked deploy — ${leak.summary}`]
+        if (leak.newDotEnv.length) lines.push(`\nNew .env files added:\n  - ${leak.newDotEnv.join('\n  - ')}`)
+        if (leak.hits.length) {
+          lines.push('\nCredential-pattern matches:')
+          for (const h of leak.hits.slice(0, 20)) {
+            lines.push(`  - ${h.file}:${h.line} [${h.pattern}] ${h.preview}`)
+          }
+          if (leak.hits.length > 20) lines.push(`  … ${leak.hits.length - 20} more`)
+        }
+        lines.push(
+          '\nIf these are false positives (e.g. test fixtures), add them to ENV_LEAK_ALLOWLIST in scripts/mcp-deploy/server.ts. Pass skip_env_leak_check: true to bypass (emergency only).',
+        )
+        return errText(lines.join('\n'))
+      }
     }
 
     if (!skip_migration_check) {
@@ -401,13 +557,58 @@ server.registerTool(
       await Bun.sleep(10000)
     }
 
-    const tagged = repullFinal.conclusion === 'success' ? await pushDeployTag(tagName) : { ok: false, message: 'skipped (re-pull did not succeed)' }
+    let verify: {
+      ok: boolean
+      skipped?: boolean
+      expected: string
+      remote?: unknown
+      url?: string
+      lastResponse?: unknown
+      timedOut?: boolean
+      hint?: string
+    } = { ok: false, skipped: true, expected: version }
+
+    if (repullFinal.conclusion === 'success' && !skip_verify) {
+      const verifyDeadline = Date.now() + verify_timeout_seconds * 1000
+      let last: Awaited<ReturnType<typeof fetchStgVersion>> | null = null
+      while (Date.now() < verifyDeadline) {
+        last = await fetchStgVersion()
+        if (last.ok && last.body?.version === version) {
+          verify = { ok: true, expected: version, remote: last.body, url: last.url }
+          break
+        }
+        await Bun.sleep(10_000)
+      }
+      if (!verify.ok) {
+        verify = {
+          ok: false,
+          expected: version,
+          lastResponse: last ?? undefined,
+          timedOut: true,
+          hint:
+            last?.body?.version && last.body.version !== version
+              ? `stg still reporting v${last.body.version} — image rollout may be slow or the new image failed to start`
+              : 'stg /api/version unreachable or not returning JSON',
+        }
+      }
+    } else if (skip_verify) {
+      verify = { ok: true, skipped: true, expected: version }
+    }
+
+    const canTag = repullFinal.conclusion === 'success' && (skip_verify || verify.ok)
+    const tagged = canTag
+      ? await pushDeployTag(tagName)
+      : {
+          ok: false,
+          message: repullFinal.conclusion !== 'success' ? 'skipped (re-pull did not succeed)' : 'skipped (verify_stg did not confirm new version)',
+        }
 
     return jsonText({
       stage: 'done',
       version,
       publish: { run_id: pubId, ...pubFinal },
       re_pull: { run_id: repullId, ...repullFinal },
+      verify,
       deploy_tag: { name: tagName, pushed: tagged.ok, message: tagged.message },
     })
   },
@@ -484,6 +685,125 @@ server.registerTool(
     }
 
     return jsonText({ bumped: true, previous: prev, next, branch, pushed })
+  },
+)
+
+server.registerTool(
+  'preflight_check',
+  {
+    title: 'Pre-deploy checks (env leak / branch / clean / sync / migrations / version)',
+    description:
+      'One-shot safety net before deploying. Verifies: (1) no new .env files or credential patterns in staged+unpushed changes, (2) currently on the target branch, (3) working tree clean, (4) local in sync with origin, (5) prisma schema ↔ migrations has no drift, (6) stg-v<version> tag does not already exist on origin. Returns ok=false with per-check reasons when any fail. Safe to call anytime; does not mutate state.',
+    inputSchema: {
+      target_branch: z.enum(['stg', 'prod', 'main']).default('stg').optional(),
+      skip_migration_check: z.boolean().default(false).optional(),
+      skip_env_leak_check: z.boolean().default(false).optional(),
+    },
+  },
+  async ({ target_branch = 'stg', skip_migration_check = false, skip_env_leak_check = false }) => {
+    const checks: Record<string, unknown> = {}
+    let ok = true
+    const problems: string[] = []
+
+    const branch = await currentBranch()
+    checks.branch = { current: branch, expected: target_branch, ok: branch === target_branch }
+    if (branch !== target_branch) {
+      ok = false
+      problems.push(`branch "${branch}" ≠ "${target_branch}"`)
+    }
+
+    const tree = await workingTreeClean()
+    checks.workingTree = { clean: tree.clean, detail: tree.clean ? '' : tree.detail }
+    if (!tree.clean) {
+      ok = false
+      problems.push('working tree dirty')
+    }
+
+    const sync = await localIsPushed(target_branch)
+    checks.inSync = sync
+    if (!sync.pushed) {
+      ok = false
+      problems.push(`local ${target_branch} not pushed`)
+    }
+
+    if (!skip_env_leak_check) {
+      const base = `origin/${target_branch}`
+      const leak = await scanEnvLeaks(`${base}...HEAD`)
+      checks.envLeak = leak
+      if (!leak.ok) {
+        ok = false
+        problems.push(`env leak: ${leak.summary}`)
+      }
+    } else {
+      checks.envLeak = { skipped: true }
+    }
+
+    if (!skip_migration_check) {
+      const drift = await checkMigrationDrift()
+      checks.migrations = drift
+      if (!drift.ok) {
+        ok = false
+        problems.push(`migrations: ${drift.summary}`)
+      }
+    } else {
+      checks.migrations = { skipped: true }
+    }
+
+    const version = await readLocalVersion()
+    const tagName = deployTagName(target_branch === 'prod' ? 'prod' : target_branch === 'main' ? 'dev' : 'stg', version)
+    const tagExists = await stgTagExists(tagName)
+    checks.version = { local: version, deployTag: tagName, tagExists }
+    if (tagExists) {
+      ok = false
+      problems.push(`deploy tag ${tagName} already exists — bump version first`)
+    }
+
+    return jsonText({ ok, problems, checks })
+  },
+)
+
+server.registerTool(
+  'verify_stg',
+  {
+    title: 'Verify stg /api/version matches local package.json',
+    description:
+      'Polls https://<STG_BASE_URL>/api/version until the reported version equals local package.json (default up to 120s, poll every 10s). Use after deploy_stg to confirm the new image is actually live. Returns ok=true + remote body on match; ok=false with last response on timeout.',
+    inputSchema: {
+      expected_version: z
+        .string()
+        .regex(/^\d+\.\d+\.\d+$/)
+        .optional()
+        .describe('Explicit X.Y.Z to match. Defaults to local package.json.'),
+      timeout_seconds: z.number().int().min(10).max(600).default(120).optional(),
+      poll_seconds: z.number().int().min(2).max(30).default(10).optional(),
+    },
+  },
+  async ({ expected_version, timeout_seconds = 120, poll_seconds = 10 }) => {
+    const expected = expected_version ?? (await readLocalVersion())
+    const deadline = Date.now() + timeout_seconds * 1000
+    let last: Awaited<ReturnType<typeof fetchStgVersion>> | null = null
+    while (Date.now() < deadline) {
+      last = await fetchStgVersion()
+      if (last.ok && last.body?.version === expected) {
+        return jsonText({
+          ok: true,
+          expected,
+          remote: last.body,
+          url: last.url,
+        })
+      }
+      await Bun.sleep(poll_seconds * 1000)
+    }
+    return jsonText({
+      ok: false,
+      expected,
+      lastResponse: last,
+      timedOut: true,
+      hint:
+        last?.body?.version && last.body.version !== expected
+          ? `stg still reporting v${last.body.version} — image rollout may be slow or the new image failed to start`
+          : 'stg /api/version unreachable or not returning JSON',
+    })
   },
 )
 

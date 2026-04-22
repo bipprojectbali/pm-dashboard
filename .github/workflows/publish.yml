@@ -74,6 +74,15 @@ jobs:
             type=raw,value=${{ github.event.inputs.stack_env }}-${{ github.event.inputs.tag }}
             type=raw,value=${{ github.event.inputs.stack_env }}-latest
 
+      - name: Compute build timestamp
+        id: buildtime
+        run: echo "iso=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source commit
+        id: srccommit
+        working-directory: ${{ github.workspace }}
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -83,6 +92,9 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ steps.srccommit.outputs.sha }}
+            BUILT_AT=${{ steps.buildtime.outputs.iso }}
           no-cache: true
 
       - name: Notify success

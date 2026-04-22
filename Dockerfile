@@ -28,7 +28,11 @@ COPY --from=builder /app/src ./src
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 
-ENV NODE_ENV=production
+ARG GIT_COMMIT=""
+ARG BUILT_AT=""
+ENV NODE_ENV=production \
+    GIT_COMMIT=${GIT_COMMIT} \
+    BUILT_AT=${BUILT_AT}
 EXPOSE 3000
 
 CMD ["bun", "src/index.tsx"]

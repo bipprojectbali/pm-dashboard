@@ -31,6 +31,7 @@ import {
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import type { ProjectListItem, ProjectPriority, ProjectStatus } from '../ProjectsPanel'
+import { QcSelfProjectCard } from './QcSelfProjectCard'
 
 const PAGE_SIZE = 25
 
@@ -146,6 +147,8 @@ export function ProjectsOverviewPanel() {
           </ActionIcon>
         </Tooltip>
       </Group>
+
+      <QcSelfProjectCard />
 
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
         <StatCard

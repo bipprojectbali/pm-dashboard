@@ -27,7 +27,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `ActivityEvent` (id, agentId, bucketId, eventId, timestamp, duration, data, createdAt) — raw AW events, unique per (agentId, bucketId, eventId)
   - `WebhookToken` (id, name, tokenHash, tokenPrefix, status, expiresAt, lastUsedAt, createdById, timestamps) — DB-backed webhook auth tokens
   - `WebhookRequestLog` (id, tokenId?, agentId?, statusCode, reason, ip, eventsIn, createdAt) — audit trail for `/webhooks/aw`
-  - `Project` (id, name, description, ownerId, status, priority, startsAt, endsAt, originalEndAt, archivedAt, githubRepo?, timestamps) — `githubRepo` unique, normalized `owner/repo`
+  - `Project` (id, name, description, ownerId, status, priority, startsAt, endsAt, originalEndAt, archivedAt, githubRepo?, isSelf, timestamps) — `githubRepo` unique, normalized `owner/repo`; `isSelf` marks the one QC "self-project" (see QC Tickets section)
   - `ProjectGithubEvent` (id, projectId, kind, actorLogin, actorEmail?, matchedUserId?, title, url, sha?, prNumber?, metadata?, createdAt, ingestedAt) — unique per (projectId, kind, sha, prNumber)
   - `GithubWebhookLog` (id, projectId?, deliveryId?, event, statusCode, reason?, ip?, eventsIn, createdAt) — audit trail for `/webhooks/github`
   - `ProjectMember` (projectId, userId, role) — unique per (projectId, userId)
@@ -193,7 +193,7 @@ Local MCP server lets Claude drive the app remotely. `.mcp.json` registers 4 ser
 Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
-- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `redis`, `tags`, `tasks`, `webhooks` (17 modules, 92 tools). `shared.ts` is a helper, not a tool module.
+- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `qc`, `redis`, `tags`, `tasks`, `tickets`, `webhooks` (19 modules, 106 tools). `shared.ts` is a helper, not a tool module.
 - Agent tools: `agent_list`, `agent_get` (readonly); `agent_approve`, `agent_revoke`, `agent_reassign` (admin)
 - Webhook tools: `webhook_token_list`, `webhook_stats`, `webhook_logs` (readonly); `webhook_token_create` (returns plaintext once), `webhook_token_toggle`, `webhook_token_revoke` (admin)
 - GitHub tools (readonly): `github_summary`, `github_feed`, `github_webhook_logs` — all accept project id, name, or `owner/repo`
@@ -203,6 +203,8 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 - Overview tools (readonly): `admin_overview` (KPIs across users/projects/tasks/agents/webhooks), `project_health` (per-project score A-F from overdue/blocked/extensions/velocity), `team_load` (per-user open/overdue/estimated hours, flags overloaded), `risk_report` (overdue tasks + stale IN_PROGRESS + past-due projects + pending agents + offline agents + missing env, severity rolled up)
 - Effort tools (readonly, in `overview` module): `effort_report` (estimate vs actual for many tasks), `task_effort` (single task detail), `ghost_tasks` (stalled IN_PROGRESS with user-online signal), `phantom_work` (per-user untracked activity)
 - Retro tool (readonly, in `overview` module): `project_retro` (automated retrospective snapshot — markdown by default, JSON optional)
+- Ticket tools (in `tickets` module): `ticket_queue` (readonly — lists open tasks tagged `ai-queue` ordered by priority then age); `ticket_pick` (admin — atomic claim via `updateMany` on highest-priority open/reopened `ai-queue` task → `IN_PROGRESS`, optional `claimerEmail` assigns, returns full ticket incl. `project.githubRepo`), `ticket_submit` (admin — posts PR link as comment + transitions `IN_PROGRESS` → `READY_FOR_QC`). QA/QC flow: tag a ticket with `ai-queue` → Claude runs `ticket_pick` → fix locally → open PR → `ticket_submit`.
+- QC tools (in `qc` module): `qc_self_project_get`, `qc_context`, `qc_ticket_list`, `qc_ticket_get` (readonly); `qc_self_project_set` / `qc_self_project_clear` (admin — atomic self-project swap), `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_comment`, `qc_ticket_evidence_add` (admin). Operates on the one project where `isSelf=true`.
 - HTTP fallback: `POST /mcp` — Bearer `MCP_SECRET`. Response `x-mcp-scope` reflects the effective scope (readonly in prod, admin otherwise).
 
 ## WebSocket
@@ -222,15 +224,41 @@ Two log systems:
 
 | Role | Default Route | Can Access |
 |------|--------------|------------|
-| SUPER_ADMIN | `/admin` | `/dev`, `/admin`, `/pm`, `/settings` |
-| ADMIN | `/admin` | `/admin`, `/pm`, `/settings` |
-| QC | `/pm` | `/pm` (QC-scoped tasks), `/settings` |
+| SUPER_ADMIN | `/admin` | `/dev`, `/admin`, `/qc`, `/pm`, `/settings` |
+| ADMIN | `/admin` | `/admin`, `/qc`, `/pm`, `/settings` |
+| QC | `/qc` | `/qc`, `/settings` |
 | USER | `/pm` | `/pm`, `/settings` |
 
-- `getDefaultRoute(role)` in `src/frontend/hooks/useAuth.ts` — centralized redirect logic (SUPER_ADMIN/ADMIN → `/admin`; QC/USER → `/pm`)
+- `getDefaultRoute(role)` in `src/frontend/hooks/useAuth.ts` — centralized redirect logic (SUPER_ADMIN/ADMIN → `/admin`; QC → `/qc`; USER → `/pm`)
 - Legacy paths `/dashboard` and `/profile` exist as redirect stubs (→ `/admin` and `/settings` respectively)
 - Blocked users are redirected to `/blocked` from all protected routes
 - Tab state persisted in URL search params (`?tab=`) for `/dev`, `/admin`, and `/pm`
+
+## QC Tickets (self-project)
+
+QC is a dedicated app for filing bugs/tickets **against pm-dashboard itself**, not against every project the team manages. The feature keys off a single "self-project" flag; exactly one project is the self-project at a time, and all QC tickets live there tagged `ai-queue` so Claude can pick them up via the existing `ticket_queue` / `ticket_pick` flow.
+
+- **Schema**: `Project.isSelf Boolean @default(false)` (+ index). Only one row should be `true` at a time — enforced by the atomic swap in `setSelfProject()`, not a DB constraint.
+- **Helper**: `src/lib/self-project.ts` — `getSelfProject()`, `setSelfProject(projectId)` (clears old + sets new + upserts `ai-queue` tag in a transaction), `clearSelfProject()`, `ensureAiQueueTag(projectId)`. Exports `AI_QUEUE_TAG = 'ai-queue'`.
+- **Admin API** (SUPER_ADMIN only):
+  - `GET /api/admin/self-project` — returns current self-project or `null`
+  - `PUT /api/admin/self-project` body `{ projectId }` — atomic swap
+  - `DELETE /api/admin/self-project` — clears
+- **QC API** (QC + ADMIN + SUPER_ADMIN; bypasses project membership — QC role implicitly grants access to the self-project only):
+  - `GET /api/qc/context` — `{ selfProject, canWrite, stats }` with status groupBy counts
+  - `GET /api/qc/tickets?status=&priority=` — list tickets in self-project tagged `ai-queue`
+  - `POST /api/qc/tickets` — create (kind `BUG`, auto-tagged `ai-queue`, optional `evidenceUrls[]`)
+  - `GET /api/qc/tickets/:id` — full detail (reporter, assignee, tags, evidence, comments, checklist, statusChanges)
+  - `PATCH /api/qc/tickets/:id` — update title/description/priority/status/route; writes `TaskStatusChange` on status change
+  - `DELETE /api/qc/tickets/:id` — permanent delete (ADMIN + SUPER_ADMIN only; QC role can close but not delete). Cascades to comments/evidence/checklist/statusChanges/tag links.
+  - `POST /api/qc/tickets/:id/comments` — `authorTag` stamped with the user's `role`
+  - `POST /api/qc/tickets/:id/evidence` — body `{ url, note? }`, kind hard-coded to `LINK`
+- **Frontend**: `/qc` route (`src/frontend/routes/qc.tsx`) — AppShell with stats card sidebar, SegmentedControl for status filter (open/in-progress/ready/closed/all), ticket table, create modal (title/description/priority/route/evidence URLs newline-separated), and Drawer detail via `?ticketId=` search param. Drawer supports inline edit mode (title/description/route via Edit → Simpan/Batal) and Delete button (ADMIN/SUPER_ADMIN only, confirm modal). Status + priority Select always-editable, evidence add form, comments thread + add, Timeline of status changes. `beforeLoad` gates: unauth → `/login`, blocked → `/blocked`, non-QC/ADMIN/SUPER_ADMIN → `/pm`.
+- **Self-project picker UI**: `QcSelfProjectCard` at the top of `/admin?tab=projects` — shows current self-project with Ganti/Hapus buttons (both SUPER_ADMIN-only), empty state otherwise. Modal picks from the user's visible projects and saves via `PUT /api/admin/self-project`.
+- **MCP tools** (`scripts/mcp/tools/qc.ts`):
+  - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list`, `qc_ticket_get`
+  - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`
+- **Existing ticket MCP** (`scripts/mcp/tools/tickets.ts`) still works against any project — `ticket_queue` / `ticket_pick` / `ticket_submit` match any task tagged `ai-queue` regardless of self-project. In practice those will only find QC tickets since `ai-queue` tag only gets auto-created on the self-project.
 
 ## Frontend
 
@@ -244,6 +272,7 @@ React 19 + Vite 8 (middleware mode in dev). File-based routing with TanStack Rou
   - `login.tsx` — Login page (email/password + Google OAuth, theme toggle top-right)
   - `dev.tsx` — Dev console with AppShell sidebar (SUPER_ADMIN only): Overview, Users, Agents, Webhook Tokens, Webhook Monitor, App Logs, User Logs, Database (React Flow ER diagram), Project (10 sub-views — all React Flow with auto-save)
   - `admin.tsx` — Admin console (ADMIN + SUPER_ADMIN) — 9 tabs: overview, users, audit-logs, projects, tasks (triage), effort, analytics, sessions, health
+  - `qc.tsx` — QC ticket shell (QC + ADMIN + SUPER_ADMIN) — filters tickets in the self-project tagged `ai-queue`, with create modal and detail drawer
   - `pm.tsx` — Project management shell (all authenticated users) — overview, projects, tasks, activity, team tabs
   - `settings.tsx` — Profile/device/notification settings (all authenticated users)
   - `dashboard.tsx` — Legacy redirect stub → `/admin`
@@ -334,20 +363,23 @@ bun run test:integration  # tests/integration/ — API endpoints via app.handle(
 
 ## Deployment
 
-Container image → GHCR → Portainer stack → Traefik TLS. Two-step flow driven by GitHub Actions, wrapped in the `deploy` MCP server for hands-off ops.
+Container image → GHCR → Portainer stack → Traefik TLS. Two-step flow driven by GitHub Actions, wrapped in the `deploy-stg` MCP server for hands-off ops.
 
-- **Dockerfile** — multi-stage `oven/bun:1` build: `deps` (install) → `prisma` (client generate) → `builder` (Vite build) → `runner` (copies `node_modules`, `generated/`, `prisma/`, `scripts/`, `src/`, `dist/`, `package.json`). Sets `NODE_ENV=production`, exposes `3000`, runs `bun src/index.tsx`. Runner **must** include `generated/` and `scripts/` — prior builds missed them and crashed on `require('../../generated/prisma')`.
+- **Dockerfile** — multi-stage `oven/bun:1` build: `deps` (install) → `prisma` (client generate) → `builder` (Vite build) → `runner` (copies `node_modules`, `generated/`, `prisma/`, `scripts/`, `src/`, `dist/`, `package.json`). Sets `NODE_ENV=production`, accepts build args `GIT_COMMIT` + `BUILT_AT` and sets them as env so `/api/version` can report them. Exposes `3000`, runs `bun src/index.tsx`. Runner **must** include `generated/` and `scripts/` — prior builds missed them and crashed on `require('../../generated/prisma')`.
 - **.dockerignore** — excludes `node_modules`, `dist`, `generated`, `.git`, `.env*` (allows `.env.example`), tests, IDE junk, `compose.yml`, `Dockerfile`, docs.
 - **compose.yml** (stg stack) — two services:
   - `pm-dashboard` — app container, `restart: unless-stopped`, networks: `public-net` (Traefik) + `postgres-net-stg` + `redis-net`. Traefik labels: `Host('pm-dashboard.wibudev.com')`, entrypoint `websecure`, TLS via `letsencrypt` certresolver, routes to container port 3000.
   - `migrate` — one-shot sidecar, `restart: "no"`, `entrypoint: bun prisma migrate deploy`. Uses `DIRECT_URL` (bypass PgBouncer) for migrations. **No seed** — seed belongs to local dev only.
 - **GitHub Actions** (`.github/workflows/`):
-  - `publish.yml` — `workflow_dispatch` with `stack_env` (dev/stg/prod) and `tag`. Builds `linux/amd64` with Buildx, pushes to GHCR as `ghcr.io/<repo>:<env>-<tag>` + `<env>-latest`. Checks out branch matching `stack_env`.
+  - `publish.yml` — `workflow_dispatch` with `stack_env` (dev/stg/prod) and `tag`. Builds `linux/amd64` with Buildx, passes `GIT_COMMIT=<github.sha>` + `BUILT_AT=<ISO-8601 UTC>` as build args, pushes to GHCR as `ghcr.io/<repo>:<env>-<tag>` + `<env>-latest`. Checks out branch matching `stack_env`.
   - `re-pull.yml` — `workflow_dispatch` with `stack_name` + `stack_env`. Calls Portainer API (`PORTAINER_*` secrets) to redeploy the stack against `<stack_name>-<stack_env>`. Migrate sidecar runs first; app container restarts on new image. One-shot sidecar showing `Exited (0)` is normal — Portainer's "failure" label on it is a false positive.
-- **deploy MCP** (`scripts/mcp-deploy/server.ts`) — Bun stdio server wrapping `gh` CLI. Tools: `publish_docker`, `re_pull`, `run_status`, `run_wait`, `run_logs`, `run_list`, `bump_version`, `check_migrations`, and `deploy_stg` (publish → wait → re-pull → wait → tag `stg-v<version>`). `GH_DEPLOY_REPO` env sets target repo (default `bipprojectbali/pm-dashboard`).
-- **Version gate**: `deploy_stg` derives the image tag from `package.json` `version` and refuses if `stg-v<version>` already exists on origin. Bump first via `bump_version({ level })` (or `version`), which commits `chore(release): vX.Y.Z` and pushes. `deploy_stg` also enforces branch = `stg`, clean working tree, and local in sync with `origin/stg`. Pass `force: true` to redeploy the same version for emergency hotfixes.
+- **deploy-stg MCP** (`scripts/mcp-deploy/server.ts`) — Bun stdio server wrapping `gh` CLI. Registered as `deploy-stg` in `.mcp.json`. Tools: `publish_docker`, `re_pull`, `run_status`, `run_wait`, `run_logs`, `run_list`, `bump_version`, `check_migrations`, `preflight_check`, `verify_stg`, `deploy_stg` (preflight → publish → re-pull → verify → tag `stg-v<version>`). Env: `GH_DEPLOY_REPO` (default `bipprojectbali/pm-dashboard`), `STG_BASE_URL` (default `https://pm-dashboard.wibudev.com` — used by `verify_stg`).
+- **`/api/version` endpoint** — returns `{ name, version, commit, builtAt, env }`. `commit` + `builtAt` are `null` in dev (only populated when image is built by CI with the build args above). `verify_stg` polls this endpoint to confirm a new image is live.
+- **`preflight_check` tool**: one-shot safety net combining env-leak scan (git diff `origin/<branch>...HEAD` for added `.env*` files and regex patterns for AWS/GitHub/OpenAI/Slack/Google keys, private key blocks, hardcoded passwords, DB URLs with embedded creds) + branch check + clean working tree + in-sync with origin + migration drift + deploy-tag-not-exists. Allowlist: `.env.example`, `tests/fixtures/`, `*.test.ts(x)`, `CLAUDE.md`, `prisma/seed.ts`.
+- **`verify_stg` tool**: polls `${STG_BASE_URL}/api/version` until reported `version` equals local `package.json` (default 120s timeout / 10s poll). Use standalone after any manual deploy or as the final step of `deploy_stg`.
+- **Version gate**: `deploy_stg` derives the image tag from `package.json` `version` and refuses if `stg-v<version>` already exists on origin. Bump first via `bump_version({ level })` (or `version`), which commits `chore(release): vX.Y.Z` and pushes. `deploy_stg` also enforces branch = `stg`, clean working tree, local in sync with `origin/stg`, **env-leak scan clean**, and (post-deploy) `/api/version` on stg matches the new version before pushing the git tag. Pass `force: true` to redeploy the same version for emergency hotfixes; `skip_env_leak_check`, `skip_migration_check`, `skip_verify` are emergency bypasses.
 - **Migration drift gate**: `deploy_stg` runs `prisma migrate diff --from-migrations --to-schema-datamodel --exit-code` before publish. If `prisma/schema.prisma` has changes not captured in `prisma/migrations`, deploy is refused — run `bun run db:migrate --name <desc>` locally to generate the migration, commit, then deploy. Needs `SHADOW_DATABASE_URL` set (throwaway empty DB — e.g. `postgresql://user:pass@localhost:5432/pm_shadow`). Standalone tool `check_migrations` runs the same diff. Pass `skip_migration_check: true` to bypass (emergency only — the migrate sidecar won't auto-generate a missing migration). CI also enforces this via `.github/workflows/check-migrations.yml` on push/PR to `main`/`stg`/`prod`.
-- **Pre-deploy checks**: ensure working tree is pushed to the target branch (`stg`/`prod`), typecheck passes, Portainer stack already exists (first-time creation is manual).
+- **Pre-deploy checks**: ensure working tree is pushed to the target branch (`stg`/`prod`), typecheck passes, Portainer stack already exists (first-time creation is manual). In practice just run `preflight_check` — it bundles all of these.
 - **PgBouncer note**: stg uses PgBouncer in `transaction` mode. `DATABASE_URL` must include `?pgbouncer=true` so Prisma disables prepared statements; `DIRECT_URL` points at Postgres directly and is used by the migrate sidecar (PgBouncer rejects `ALTER USER` etc.). Both `DATABASE_URL` and `DIRECT_URL` must use the same username PgBouncer knows about (`DB_USER`).
 
 ## APIs

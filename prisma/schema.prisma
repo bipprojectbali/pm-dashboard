@@ -218,6 +218,7 @@ model Project {
   status         ProjectStatus   @default(ACTIVE)
   priority       ProjectPriority @default(MEDIUM)
   visibility     ProjectVisibility @default(INTERNAL)
+  isSelf         Boolean         @default(false)
   startsAt       DateTime?
   endsAt         DateTime?
   originalEndAt  DateTime?
@@ -239,6 +240,7 @@ model Project {
   @@index([archivedAt])
   @@index([status])
   @@index([endsAt])
+  @@index([isSelf])
   @@map("project")
 }
 

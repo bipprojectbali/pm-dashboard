@@ -171,9 +171,7 @@ export function ProjectDetailView({
   const detailQ = useQuery({
     queryKey: ['project', projectId],
     queryFn: () =>
-      api<{ project: ProjectDetail; myRole: string | null; canWrite: boolean }>(
-        `/api/projects/${projectId}`,
-      ),
+      api<{ project: ProjectDetail; myRole: string | null; canWrite: boolean }>(`/api/projects/${projectId}`),
   })
 
   const project = detailQ.data?.project

@@ -278,7 +278,11 @@ function ReportPage() {
   const navigate = useNavigate()
   const search = Route.useSearch()
   const [preset, setPreset] = useState<string>(search.preset ?? 'month')
-  const [pdfState, setPdfState] = useState<{ busy: boolean; progress?: { done: number; total: number }; error?: string }>({
+  const [pdfState, setPdfState] = useState<{
+    busy: boolean
+    progress?: { done: number; total: number }
+    error?: string
+  }>({
     busy: false,
   })
 
@@ -302,9 +306,7 @@ function ReportPage() {
     try {
       const { generateReportPdf } = await import('@/frontend/lib/report-pdf')
       const filename = `portfolio-report-${preset}-${new Date().toISOString().slice(0, 10)}.pdf`
-      await generateReportPdf(root, filename, (done, total) =>
-        setPdfState({ busy: true, progress: { done, total } }),
-      )
+      await generateReportPdf(root, filename, (done, total) => setPdfState({ busy: true, progress: { done, total } }))
       setPdfState({ busy: false })
     } catch (err) {
       setPdfState({ busy: false, error: err instanceof Error ? err.message : String(err) })
@@ -326,10 +328,7 @@ function ReportPage() {
         <Container size="xl" py="sm">
           <Group justify="space-between">
             <Group gap="xs">
-              <ActionIcon
-                variant="subtle"
-                onClick={() => navigate({ to: '/admin', search: { tab: 'overview' } })}
-              >
+              <ActionIcon variant="subtle" onClick={() => navigate({ to: '/admin', search: { tab: 'overview' } })}>
                 <TbArrowLeft size={18} />
               </ActionIcon>
               <ThemeIcon variant="light" color="violet" size="md" radius="md">
@@ -412,9 +411,7 @@ function PdfOverlay({
           <Loader size="xs" />
           <Text size="sm" fw={600}>
             Membuat PDF
-            {state.progress && state.progress.total > 0
-              ? ` (${state.progress.done}/${state.progress.total})`
-              : '…'}
+            {state.progress && state.progress.total > 0 ? ` (${state.progress.done}/${state.progress.total})` : '…'}
           </Text>
         </Group>
       )}
@@ -487,13 +484,43 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 function ExecutiveSummary({ data }: { data: ReportPayload }) {
   const k = data.kpis
   const openTasks = k.tasks.total - (k.tasks.byStatus.CLOSED ?? 0)
-  const items: Array<{ label: string; value: string | number; sub?: string; color: string; icon: typeof TbUsersGroup }> = [
-    { label: 'Total Pengguna', value: k.users.total, sub: `${k.users.blocked} diblokir`, color: 'violet', icon: TbUsersGroup },
-    { label: 'Proyek Aktif', value: k.projects.active, sub: `dari ${Object.values(k.projects.byStatus).reduce((a, b) => a + b, 0)} total`, color: 'blue', icon: TbTarget },
+  const items: Array<{
+    label: string
+    value: string | number
+    sub?: string
+    color: string
+    icon: typeof TbUsersGroup
+  }> = [
+    {
+      label: 'Total Pengguna',
+      value: k.users.total,
+      sub: `${k.users.blocked} diblokir`,
+      color: 'violet',
+      icon: TbUsersGroup,
+    },
+    {
+      label: 'Proyek Aktif',
+      value: k.projects.active,
+      sub: `dari ${Object.values(k.projects.byStatus).reduce((a, b) => a + b, 0)} total`,
+      color: 'blue',
+      icon: TbTarget,
+    },
     { label: 'Task Terbuka', value: openTasks, sub: `${k.tasks.overdueOpen} overdue`, color: 'red', icon: TbListCheck },
     { label: 'Agent Live', value: k.agents.live, sub: `${k.agents.pending} pending`, color: 'teal', icon: TbHeartbeat },
-    { label: 'Task Selesai (periode)', value: data.taskSnapshot.closedInPeriod, sub: `${data.taskSnapshot.createdInPeriod} dibuat`, color: 'green', icon: TbListCheck },
-    { label: 'Extensions 7h', value: k.velocity.extensions7d, sub: 'deadline dipush', color: 'orange', icon: TbClockHour3 },
+    {
+      label: 'Task Selesai (periode)',
+      value: data.taskSnapshot.closedInPeriod,
+      sub: `${data.taskSnapshot.createdInPeriod} dibuat`,
+      color: 'green',
+      icon: TbListCheck,
+    },
+    {
+      label: 'Extensions 7h',
+      value: k.velocity.extensions7d,
+      sub: 'deadline dipush',
+      color: 'orange',
+      icon: TbClockHour3,
+    },
   ]
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
@@ -632,7 +659,10 @@ function RiskRadarSection({ data }: { data: ReportPayload }) {
                     {t.priority}
                   </Badge>
                   <Text size="xs" style={{ flex: 1 }} truncate>
-                    {t.title} <Text span c="dimmed">({t.project})</Text>
+                    {t.title}{' '}
+                    <Text span c="dimmed">
+                      ({t.project})
+                    </Text>
                   </Text>
                   <Text size="xs" c="red">
                     {t.daysOverdue ?? 0}d
@@ -655,7 +685,10 @@ function RiskRadarSection({ data }: { data: ReportPayload }) {
               {r.pastDueProjects.slice(0, 5).map((p) => (
                 <Group key={p.id} gap="xs" wrap="nowrap">
                   <Text size="xs" style={{ flex: 1 }} truncate>
-                    {p.name} <Text span c="dimmed">({p.owner})</Text>
+                    {p.name}{' '}
+                    <Text span c="dimmed">
+                      ({p.owner})
+                    </Text>
                   </Text>
                   <Text size="xs" c="red">
                     {p.daysOverdue ?? 0}d
@@ -700,9 +733,7 @@ function TimelineSection({ data }: { data: ReportPayload }) {
     const min = rows
       .map((p) => (p.startsAt ? new Date(p.startsAt).getTime() : null))
       .filter((n): n is number => n !== null)
-    const max = rows
-      .map((p) => (p.endsAt ? new Date(p.endsAt).getTime() : null))
-      .filter((n): n is number => n !== null)
+    const max = rows.map((p) => (p.endsAt ? new Date(p.endsAt).getTime() : null)).filter((n): n is number => n !== null)
     const xMin = min.length > 0 ? Math.min(...min, now) : now - 30 * 86_400_000
     const xMax = max.length > 0 ? Math.max(...max, now) : now + 30 * 86_400_000
     const bars = rows.map((p, idx) => {
@@ -759,7 +790,12 @@ function TimelineSection({ data }: { data: ReportPayload }) {
 
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
-      <SectionHeader icon={TbTimeline} color="indigo" title="Timeline Portfolio" subtitle="Gantt proyek aktif · warna = priority" />
+      <SectionHeader
+        icon={TbTimeline}
+        color="indigo"
+        title="Timeline Portfolio"
+        subtitle="Gantt proyek aktif · warna = priority"
+      />
       {!option ? (
         <Text size="sm" c="dimmed">
           Belum ada proyek aktif dengan jadwal.
@@ -805,11 +841,28 @@ function DistributionSection({ data }: { data: ReportPayload }) {
   })
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
-      <SectionHeader icon={TbChartBar} color="grape" title="Distribusi Status & Prioritas" subtitle="Snapshot project, task, priority" />
+      <SectionHeader
+        icon={TbChartBar}
+        color="grape"
+        title="Distribusi Status & Prioritas"
+        subtitle="Snapshot project, task, priority"
+      />
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mt="sm">
-        {projectPie.length > 0 ? <EChart option={buildOption(projectPie, 'Project')} height={220} renderer="svg" /> : <EmptyMini label="Project" />}
-        {taskPie.length > 0 ? <EChart option={buildOption(taskPie, 'Task')} height={220} renderer="svg" /> : <EmptyMini label="Task" />}
-        {priorityPie.length > 0 ? <EChart option={buildOption(priorityPie, 'Priority Task')} height={220} renderer="svg" /> : <EmptyMini label="Priority" />}
+        {projectPie.length > 0 ? (
+          <EChart option={buildOption(projectPie, 'Project')} height={220} renderer="svg" />
+        ) : (
+          <EmptyMini label="Project" />
+        )}
+        {taskPie.length > 0 ? (
+          <EChart option={buildOption(taskPie, 'Task')} height={220} renderer="svg" />
+        ) : (
+          <EmptyMini label="Task" />
+        )}
+        {priorityPie.length > 0 ? (
+          <EChart option={buildOption(priorityPie, 'Priority Task')} height={220} renderer="svg" />
+        ) : (
+          <EmptyMini label="Priority" />
+        )}
       </SimpleGrid>
     </Card>
   )
@@ -1111,7 +1164,12 @@ function GithubActivitySection({ data }: { data: ReportPayload }) {
 function AuditHighlightsSection({ data }: { data: ReportPayload }) {
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
-      <SectionHeader icon={TbHistory} color="gray" title="Highlight Audit" subtitle={`${data.audit.length} event terbaru non-login`} />
+      <SectionHeader
+        icon={TbHistory}
+        color="gray"
+        title="Highlight Audit"
+        subtitle={`${data.audit.length} event terbaru non-login`}
+      />
       {data.audit.length === 0 ? (
         <Text size="sm" c="dimmed">
           Tidak ada aktivitas audit di periode ini.
@@ -1160,7 +1218,8 @@ function FooterSection({ data }: { data: ReportPayload }) {
   return (
     <div style={{ textAlign: 'center', padding: '16px 0' }}>
       <Text size="xs" c="dimmed">
-        Dibuat otomatis oleh pm-dashboard · {new Date(data.generatedAt).toLocaleString('id-ID')} · {data.generatedBy.email}
+        Dibuat otomatis oleh pm-dashboard · {new Date(data.generatedAt).toLocaleString('id-ID')} ·{' '}
+        {data.generatedBy.email}
       </Text>
     </div>
   )
@@ -1193,4 +1252,3 @@ function SectionHeader({
     </Group>
   )
 }
-

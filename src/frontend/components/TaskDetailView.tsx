@@ -41,6 +41,7 @@ import {
   TbCloudUpload,
   TbCopy,
   TbDeviceDesktop,
+  TbEdit,
   TbLink,
   TbListCheck,
   TbLock,
@@ -240,9 +241,24 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   const myRole = projectQ.data?.myRole ?? null
   const canWrite = myRole !== null && myRole !== 'VIEWER'
 
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [draftDescription, setDraftDescription] = useState('')
+
+  useEffect(() => {
+    if (!editingTitle && task) setDraftTitle(task.title)
+  }, [editingTitle, task])
+  useEffect(() => {
+    if (!editingDescription && task) setDraftDescription(task.description ?? '')
+  }, [editingDescription, task])
+
   const update = useMutation({
     mutationFn: (
       body: Partial<Pick<TaskDetail, 'status' | 'priority'>> & {
+        title?: string
+        description?: string
+        route?: string | null
         assigneeId?: string | null
         startsAt?: string | null
         dueAt?: string | null
@@ -256,13 +272,43 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['task', taskId] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
       notifySuccess({ message: 'Task diperbarui.' })
+      if ('title' in variables) setEditingTitle(false)
+      if ('description' in variables) setEditingDescription(false)
     },
     onError: (err) => notifyError(err),
   })
+
+  const saveTitle = () => {
+    if (!task) return
+    const title = draftTitle.trim()
+    if (!title) {
+      notifyError({ message: 'Title wajib diisi.' })
+      return
+    }
+    if (title.length > 500) {
+      notifyError({ message: 'Title maksimum 500 karakter.' })
+      return
+    }
+    if (title === task.title) {
+      setEditingTitle(false)
+      return
+    }
+    update.mutate({ title })
+  }
+
+  const saveDescription = () => {
+    if (!task) return
+    const description = draftDescription
+    if (description === (task.description ?? '')) {
+      setEditingDescription(false)
+      return
+    }
+    update.mutate({ description })
+  }
 
   const tagsQ = useQuery({
     queryKey: ['tags', task?.projectId],
@@ -494,9 +540,45 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                 )}
               </ThemeIcon>
               <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-                <Title order={2} style={{ lineHeight: 1.2 }}>
-                  {task.title}
-                </Title>
+                {editingTitle ? (
+                  <Group gap="xs" wrap="nowrap" align="flex-start">
+                    <TextInput
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.currentTarget.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveTitle()
+                        } else if (e.key === 'Escape') {
+                          setEditingTitle(false)
+                        }
+                      }}
+                      size="md"
+                      maxLength={500}
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                    <ActionIcon variant="light" color="blue" onClick={saveTitle} loading={update.isPending}>
+                      <TbCheck size={16} />
+                    </ActionIcon>
+                    <ActionIcon variant="subtle" onClick={() => setEditingTitle(false)} disabled={update.isPending}>
+                      <TbX size={16} />
+                    </ActionIcon>
+                  </Group>
+                ) : (
+                  <Group gap="xs" wrap="nowrap" align="flex-start">
+                    <Title order={2} style={{ lineHeight: 1.2, flex: 1, wordBreak: 'break-word' }}>
+                      {task.title}
+                    </Title>
+                    {canWrite && (
+                      <Tooltip label="Edit title">
+                        <ActionIcon variant="subtle" size="sm" onClick={() => setEditingTitle(true)}>
+                          <TbEdit size={14} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
+                )}
                 <Text size="xs" c="dimmed">
                   #{task.id.slice(0, 8)} · {task.project.name} · dilaporkan oleh {task.reporter.name} ·{' '}
                   {new Date(task.createdAt).toLocaleString()}
@@ -596,16 +678,57 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
           )}
 
           <Card withBorder padding="md" radius="md">
-            <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={6}>
-              Description
-            </Text>
-            <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {task.description || (
-                <Text span c="dimmed" fs="italic">
-                  No description
-                </Text>
+            <Group justify="space-between" mb={6} wrap="nowrap">
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                Description
+              </Text>
+              {canWrite && !editingDescription && (
+                <Tooltip label="Edit description">
+                  <ActionIcon variant="subtle" size="sm" onClick={() => setEditingDescription(true)}>
+                    <TbEdit size={14} />
+                  </ActionIcon>
+                </Tooltip>
               )}
-            </Text>
+            </Group>
+            {editingDescription ? (
+              <Stack gap="xs">
+                <Textarea
+                  value={draftDescription}
+                  onChange={(e) => setDraftDescription(e.currentTarget.value)}
+                  autosize
+                  minRows={4}
+                  placeholder="Tulis deskripsi, steps to reproduce, expected vs actual, dsb."
+                  autoFocus
+                />
+                <Group justify="flex-end" gap="xs">
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    leftSection={<TbX size={14} />}
+                    onClick={() => setEditingDescription(false)}
+                    disabled={update.isPending}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    size="xs"
+                    leftSection={<TbCheck size={14} />}
+                    onClick={saveDescription}
+                    loading={update.isPending}
+                  >
+                    Simpan
+                  </Button>
+                </Group>
+              </Stack>
+            ) : (
+              <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                {task.description || (
+                  <Text span c="dimmed" fs="italic">
+                    No description
+                  </Text>
+                )}
+              </Text>
+            )}
           </Card>
 
           {canWrite && (

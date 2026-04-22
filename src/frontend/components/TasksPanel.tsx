@@ -313,20 +313,12 @@ export function TasksPanel({
                   ? 'Tidak ada proyek yang bisa ditulis'
                   : ''
             }
-            disabled={
-              !(
-                (activeProjectId && canWriteOverride === false) ||
-                writableProjects.length === 0
-              )
-            }
+            disabled={!((activeProjectId && canWriteOverride === false) || writableProjects.length === 0)}
           >
             <Button
               leftSection={<TbPlus size={16} />}
               onClick={() => setCreateOpen(true)}
-              disabled={
-                writableProjects.length === 0 ||
-                (activeProjectId ? canWriteOverride === false : false)
-              }
+              disabled={writableProjects.length === 0 || (activeProjectId ? canWriteOverride === false : false)}
             >
               New Task
             </Button>
@@ -516,9 +508,7 @@ export function TasksPanel({
         <TasksKanbanView
           tasks={tasks}
           canWrite={
-            activeProjectId
-              ? canWriteOverride !== false && writableProjects.length > 0
-              : writableProjects.length > 0
+            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
           }
           onSelect={(id) => openTask(id)}
           onMove={(id, status) =>

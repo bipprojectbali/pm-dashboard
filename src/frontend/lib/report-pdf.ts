@@ -62,16 +62,7 @@ export async function generateReportPdf(
       if (pageStarted) pdf.addPage()
       fillPage()
       pageStarted = true
-      pdf.addImage(
-        dataUrl,
-        'PNG',
-        margin + (contentW - wDraw) / 2,
-        margin,
-        wDraw,
-        hDraw,
-        undefined,
-        'FAST',
-      )
+      pdf.addImage(dataUrl, 'PNG', margin + (contentW - wDraw) / 2, margin, wDraw, hDraw, undefined, 'FAST')
       yCursor = margin + contentH + gap
       onProgress?.(i + 1, sections.length)
       continue

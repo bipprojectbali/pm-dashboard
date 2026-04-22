@@ -13,6 +13,7 @@ export interface User {
 
 export function getDefaultRoute(role: Role): string {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') return '/admin'
+  if (role === 'QC') return '/qc'
   return '/pm'
 }
 

@@ -1,9 +1,9 @@
 import { ActionIcon, Group, Stack, Text, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core'
 import { useNavigate } from '@tanstack/react-router'
 import type { IconType } from 'react-icons'
-import { TbCode, TbSettings, TbShieldLock, TbTarget } from 'react-icons/tb'
+import { TbBug, TbCode, TbSettings, TbShieldLock, TbTarget } from 'react-icons/tb'
 
-type AppKey = 'pm' | 'admin' | 'dev' | 'settings'
+type AppKey = 'pm' | 'qc' | 'admin' | 'dev' | 'settings'
 type Role = 'USER' | 'QC' | 'ADMIN' | 'SUPER_ADMIN'
 
 type AppDef = {
@@ -25,6 +25,15 @@ const APPS: AppDef[] = [
     color: 'blue',
     roles: ['USER', 'QC', 'ADMIN', 'SUPER_ADMIN'],
     navigate: (nav) => nav({ to: '/pm', search: { tab: 'overview' } }),
+  },
+  {
+    key: 'qc',
+    label: 'QC Tickets',
+    description: 'Bug & tiket aplikasi',
+    icon: TbBug,
+    color: 'red',
+    roles: ['QC', 'ADMIN', 'SUPER_ADMIN'],
+    navigate: (nav) => nav({ to: '/qc', search: { status: 'open' } }),
   },
   {
     key: 'admin',

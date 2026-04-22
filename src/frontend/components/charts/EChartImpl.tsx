@@ -126,13 +126,6 @@ export default function EChartImpl({
   }
 
   return (
-    <ReactECharts
-      option={merged}
-      style={style}
-      onEvents={onEvents as never}
-      notMerge
-      lazyUpdate
-      opts={{ renderer }}
-    />
+    <ReactECharts option={merged} style={style} onEvents={onEvents as never} notMerge lazyUpdate opts={{ renderer }} />
   )
 }

@@ -13,9 +13,11 @@ import { overviewReadonly } from './tools/overview'
 import { presenceTools } from './tools/presence'
 import { projectTools } from './tools/project'
 import { projectsReadonly, projectsTools } from './tools/projects'
+import { qcReadonly, qcTools } from './tools/qc'
 import { redisTools } from './tools/redis'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { tasksReadonly, tasksTools } from './tools/tasks'
+import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import { webhooksTools, webhooksReadonly } from './tools/webhooks'
 import type { McpScope, ToolModule } from './tools/shared'
 
@@ -33,9 +35,11 @@ const READONLY_MODULES: ToolModule[] = [
   githubReadonly,
   projectsReadonly,
   tasksReadonly,
+  ticketsReadonly,
   tagsReadonly,
   milestonesReadonly,
   overviewReadonly,
+  qcReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -48,8 +52,10 @@ const ADMIN_MODULES: ToolModule[] = [
   webhooksTools,
   projectsTools,
   tasksTools,
+  ticketsTools,
   tagsTools,
   milestonesTools,
+  qcTools,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {

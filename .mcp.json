@@ -13,11 +13,7 @@
     },
     "deploy-stg": {
       "command": "bun",
-      "args": ["run", "scripts/mcp-deploy/server.ts"],
-      "env": {
-        "GH_DEPLOY_REPO": "bipprojectbali/pm-dashboard",
-        "STG_BASE_URL": "https://pm-dashboard.wibudev.com"
-      }
+      "args": ["run", "scripts/mcp-deploy/server.ts"]
     },
     "pm-dashboard-stg": {
       "type": "http",

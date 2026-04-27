@@ -56,6 +56,8 @@ import {
   TbUpload,
   TbX,
 } from 'react-icons/tb'
+import { modals } from '@mantine/modals'
+import { useSession } from '@/frontend/hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 
@@ -240,6 +242,9 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   })
   const myRole = projectQ.data?.myRole ?? null
   const canWrite = myRole !== null && myRole !== 'VIEWER'
+  const session = useSession()
+  const sessionRole = session.data?.user?.role
+  const canDelete = sessionRole === 'SUPER_ADMIN' || myRole === 'OWNER' || myRole === 'PM'
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
@@ -281,6 +286,30 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
     },
     onError: (err) => notifyError(err),
   })
+
+  const deleteM = useMutation({
+    mutationFn: () => api<{ ok: true }>(`/api/tasks/${taskId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      notifySuccess({ message: 'Task dihapus.' })
+      onBack()
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const confirmDelete = () =>
+    modals.openConfirmModal({
+      title: 'Hapus task?',
+      children: (
+        <Text size="sm">
+          Task beserta comments, evidence, checklist, dependencies, dan timeline status-nya akan dihapus permanen. Aksi
+          ini tidak dapat dibatalkan.
+        </Text>
+      ),
+      labels: { confirm: 'Hapus', cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteM.mutate(),
+    })
 
   const saveTitle = () => {
     if (!task) return
@@ -468,6 +497,20 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
               <TbRefresh size={16} />
             </ActionIcon>
           </Tooltip>
+          {task && canDelete && (
+            <Tooltip label="Hapus task">
+              <ActionIcon
+                variant="light"
+                color="red"
+                size="lg"
+                onClick={confirmDelete}
+                loading={deleteM.isPending}
+                aria-label="Hapus task"
+              >
+                <TbTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 

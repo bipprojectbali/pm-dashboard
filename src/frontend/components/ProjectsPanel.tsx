@@ -24,7 +24,7 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useHotkeys } from '@mantine/hooks'
+import { useHotkeys, useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { EChartsOption } from 'echarts'
@@ -281,15 +281,31 @@ export function ProjectsPanel() {
   const role = session.data?.user?.role
   const canCreateProject = role === 'ADMIN' || role === 'SUPER_ADMIN'
   const [createOpen, setCreateOpen] = useState(false)
-  const [scope, setScope] = useState<'mine' | 'all'>('all')
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null)
-  const [priorityFilter, setPriorityFilter] = useState<ProjectPriority | null>(null)
-  const [roleFilter, setRoleFilter] = useState<MemberRole | null>(null)
+  const [scope, setScope] = useLocalStorage<'mine' | 'all'>({ key: 'pm:projects:scope', defaultValue: 'all' })
+  const [statusFilter, setStatusFilter] = useLocalStorage<ProjectStatus | null>({
+    key: 'pm:projects:statusFilter',
+    defaultValue: null,
+  })
+  const [priorityFilter, setPriorityFilter] = useLocalStorage<ProjectPriority | null>({
+    key: 'pm:projects:priorityFilter',
+    defaultValue: null,
+  })
+  const [roleFilter, setRoleFilter] = useLocalStorage<MemberRole | null>({
+    key: 'pm:projects:roleFilter',
+    defaultValue: null,
+  })
+  const [ownerFilter, setOwnerFilter] = useLocalStorage<string | null>({
+    key: 'pm:projects:ownerFilter',
+    defaultValue: null,
+  })
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<SortKey>('updated')
-  const [view, setView] = useState<'cards' | 'timeline'>('cards')
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
+  const [view, setView] = useLocalStorage<'cards' | 'timeline'>({ key: 'pm:projects:view', defaultValue: 'cards' })
+  const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>({
+    key: 'pm:projects:density',
+    defaultValue: 'comfortable',
+  })
 
   const openProject = (id: string, detailTab: 'overview' | 'settings' = 'overview') => {
     navigate({
@@ -355,6 +371,7 @@ export function ProjectsPanel() {
     if (statusFilter) list = list.filter((p) => p.status === statusFilter)
     if (priorityFilter) list = list.filter((p) => p.priority === priorityFilter)
     if (roleFilter) list = list.filter((p) => p.myRole === roleFilter)
+    if (ownerFilter) list = list.filter((p) => p.ownerId === ownerFilter)
     if (derivedFilter === 'overdue') {
       list = list.filter((p) => computeOverdue(p).overdue)
     } else if (derivedFilter === 'atRisk') {
@@ -368,13 +385,22 @@ export function ProjectsPanel() {
       list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description?.toLowerCase().includes(q) ?? false))
     }
     return sortProjects(list, sort)
-  }, [projects, statusFilter, priorityFilter, roleFilter, derivedFilter, search, sort])
+  }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, derivedFilter, search, sort])
 
-  const hasActiveFilters = !!(statusFilter || priorityFilter || roleFilter || derivedFilter || search.trim())
+  const ownerOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
+    }
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [projects])
+
+  const hasActiveFilters = !!(statusFilter || priorityFilter || roleFilter || ownerFilter || derivedFilter || search.trim())
   const clearFilters = () => {
     setStatusFilter(null)
     setPriorityFilter(null)
     setRoleFilter(null)
+    setOwnerFilter(null)
     setDerivedFilter(null)
     setSearch('')
   }
@@ -544,6 +570,18 @@ export function ProjectsPanel() {
                 onChange={(v) => setRoleFilter(v as MemberRole | null)}
                 data={ROLE_FILTER_OPTIONS}
                 clearable
+              />
+              <Select
+                size="xs"
+                w={170}
+                placeholder="Any owner"
+                value={ownerFilter}
+                onChange={setOwnerFilter}
+                data={ownerOptions}
+                leftSection={<TbUser size={12} />}
+                searchable
+                clearable
+                nothingFoundMessage="No owners"
               />
               <Select
                 size="xs"

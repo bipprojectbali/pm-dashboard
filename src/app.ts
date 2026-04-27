@@ -1357,7 +1357,14 @@ export function createApp() {
             path: '/api/tasks/:id',
             auth: 'authenticated',
             category: 'tasks',
-            description: 'Delete task (OWNER/PM or SUPER_ADMIN)',
+            description: 'Delete task (reporter, OWNER/PM, or SUPER_ADMIN)',
+          },
+          {
+            method: 'POST',
+            path: '/api/tasks/bulk-delete',
+            auth: 'authenticated',
+            category: 'tasks',
+            description: 'Bulk delete tasks (reporter, OWNER/PM, or SUPER_ADMIN per row)',
           },
           {
             method: 'POST',
@@ -4375,17 +4382,69 @@ export function createApp() {
           set.status = 404
           return { error: 'Task not found' }
         }
-        if (auth.role !== 'SUPER_ADMIN') {
+        const isReporter = current.reporterId === auth.userId
+        if (auth.role !== 'SUPER_ADMIN' && !isReporter) {
           const membership = await requireProjectMember(current.projectId, auth.userId)
           if (!membership || (membership.role !== 'OWNER' && membership.role !== 'PM')) {
             set.status = 403
-            return { error: 'Only project OWNER/PM can delete tasks' }
+            return { error: 'Only the reporter or project OWNER/PM can delete tasks' }
           }
         }
         await prisma.task.delete({ where: { id: params.id } })
         audit(auth.userId, 'TASK_DELETED', `#${current.id} "${current.title}"`, getIp(request))
         appLog('info', `Task deleted: #${current.id} by ${auth.userId}`)
         return { ok: true }
+      })
+
+      .post('/api/tasks/bulk-delete', async ({ request, set }) => {
+        const auth = await requireAuth(request)
+        if (!auth) {
+          set.status = 401
+          return { error: 'Unauthorized' }
+        }
+        const body = (await request.json().catch(() => null)) as { ids?: unknown } | null
+        if (!body || !Array.isArray(body.ids) || body.ids.length === 0) {
+          set.status = 400
+          return { error: 'ids[] required' }
+        }
+        const ids = body.ids.filter((v): v is string => typeof v === 'string').slice(0, 500)
+        if (ids.length === 0) {
+          set.status = 400
+          return { error: 'ids[] must contain non-empty strings' }
+        }
+        const candidates = await prisma.task.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, projectId: true, reporterId: true, title: true },
+        })
+        if (candidates.length === 0) return { deleted: 0, denied: 0, deniedIds: [] }
+        const isSuper = auth.role === 'SUPER_ADMIN'
+        let leadProjectIds: Set<string> | null = null
+        if (!isSuper) {
+          const lead = await prisma.projectMember.findMany({
+            where: {
+              userId: auth.userId,
+              projectId: { in: Array.from(new Set(candidates.map((c) => c.projectId))) },
+              role: { in: ['OWNER', 'PM'] },
+            },
+            select: { projectId: true },
+          })
+          leadProjectIds = new Set(lead.map((m) => m.projectId))
+        }
+        const allowedIds: string[] = []
+        const deniedIds: string[] = []
+        for (const c of candidates) {
+          if (isSuper || c.reporterId === auth.userId || leadProjectIds?.has(c.projectId)) {
+            allowedIds.push(c.id)
+          } else {
+            deniedIds.push(c.id)
+          }
+        }
+        if (allowedIds.length > 0) {
+          await prisma.task.deleteMany({ where: { id: { in: allowedIds } } })
+          audit(auth.userId, 'TASK_DELETED', `bulk: ${allowedIds.length} tasks`, getIp(request))
+          appLog('info', `Bulk delete: ${allowedIds.length} tasks by ${auth.userId}`)
+        }
+        return { deleted: allowedIds.length, denied: deniedIds.length, deniedIds }
       })
 
       .post('/api/tasks/:id/comments', async ({ request, params, set }) => {

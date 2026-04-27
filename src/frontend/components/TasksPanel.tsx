@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Divider,
   FileButton,
   Group,
@@ -26,6 +27,7 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
+import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { EChartsOption } from 'echarts'
@@ -44,6 +46,7 @@ import {
   TbRefresh,
   TbSearch,
   TbTag,
+  TbTrash,
   TbUpload,
   TbUserQuestion,
   TbX,
@@ -283,6 +286,17 @@ export function TasksPanel({
     if (typeof p.canWrite === 'boolean') return p.canWrite
     return p.myRole !== null && p.myRole !== 'VIEWER'
   })
+  const currentUserId = session.data?.user?.id ?? null
+  const leadProjectIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of projects) if (p.myRole === 'OWNER' || p.myRole === 'PM') set.add(p.id)
+    return set
+  }, [projects])
+  const canDeleteTask = (t: TaskListItem) => {
+    if (isAdmin) return true
+    if (currentUserId && t.reporter.id === currentUserId) return true
+    return leadProjectIds.has(t.projectId)
+  }
   const rawTasks = tasksQ.data?.tasks ?? []
   const tasks = useMemo(() => {
     const now = Date.now()
@@ -306,6 +320,123 @@ export function TasksPanel({
   const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pagedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set<string>()
+      for (const id of prev) if (taskById.has(id)) next.add(id)
+      return next.size === prev.size ? prev : next
+    })
+  }, [taskById])
+  const deletableTasks = useMemo(() => tasks.filter(canDeleteTask), [tasks, canDeleteTask])
+  const deletableSelected = useMemo(
+    () => Array.from(selectedIds).filter((id) => {
+      const t = taskById.get(id)
+      return t ? canDeleteTask(t) : false
+    }),
+    [selectedIds, taskById, canDeleteTask],
+  )
+  const pagedDeletableIds = useMemo(
+    () => pagedTasks.filter(canDeleteTask).map((t) => t.id),
+    [pagedTasks, canDeleteTask],
+  )
+  const allPagedSelected =
+    pagedDeletableIds.length > 0 && pagedDeletableIds.every((id) => selectedIds.has(id))
+  const somePagedSelected = pagedDeletableIds.some((id) => selectedIds.has(id))
+  const togglePagedSelection = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allPagedSelected) for (const id of pagedDeletableIds) next.delete(id)
+      else for (const id of pagedDeletableIds) next.add(id)
+      return next
+    })
+  }
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const deleteOne = useMutation({
+    mutationFn: (id: string) => api(`/api/tasks/${id}`, { method: 'DELETE' }),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      notifySuccess({ message: 'Task dihapus.' })
+    },
+    onError: (err) => notifyError(err),
+  })
+  const deleteBulk = useMutation({
+    mutationFn: (ids: string[]) =>
+      api<{ deleted: number; denied: number; deniedIds: string[] }>('/api/tasks/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      clearSelection()
+      const tail = res.denied > 0 ? ` (${res.denied} ditolak — bukan kamu yang membuat)` : ''
+      notifySuccess({ message: `${res.deleted} task dihapus${tail}.` })
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const confirmDeleteOne = (t: TaskListItem) => {
+    modals.openConfirmModal({
+      title: 'Hapus task ini?',
+      children: (
+        <Text size="sm">
+          "{t.title}" akan dihapus permanen beserta komentar, evidence, dan checklist-nya. Tidak bisa di-undo.
+        </Text>
+      ),
+      labels: { confirm: 'Hapus', cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteOne.mutate(t.id),
+    })
+  }
+  const confirmDeleteSelected = () => {
+    const ids = deletableSelected
+    if (ids.length === 0) return
+    modals.openConfirmModal({
+      title: `Hapus ${ids.length} task terpilih?`,
+      children: (
+        <Text size="sm">
+          {ids.length} task akan dihapus permanen. Hanya task yang kamu boleh hapus (reporter, OWNER/PM, atau admin)
+          yang ikut terhapus.
+        </Text>
+      ),
+      labels: { confirm: `Hapus ${ids.length}`, cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteBulk.mutate(ids),
+    })
+  }
+  const confirmDeleteAll = () => {
+    const ids = deletableTasks.map((t) => t.id)
+    if (ids.length === 0) return
+    modals.openConfirmModal({
+      title: `Hapus semua ${ids.length} task yang bisa kamu hapus?`,
+      children: (
+        <Text size="sm">
+          Akan menghapus {ids.length} task dari hasil filter saat ini — task yang kamu reporter / OWNER / PM /
+          admin. Task milik orang lain tidak terpengaruh.
+        </Text>
+      ),
+      labels: { confirm: `Hapus ${ids.length}`, cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteBulk.mutate(ids),
+    })
+  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
@@ -578,10 +709,60 @@ export function TasksPanel({
         />
       ) : (
         <Card withBorder padding={0} radius="md">
-          <Table.ScrollContainer minWidth={activeProject ? 1040 : 1180}>
+          {(deletableSelected.length > 0 || deletableTasks.length > 0) && (
+            <Group justify="space-between" px="md" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">
+                  {deletableSelected.length > 0
+                    ? `${deletableSelected.length} terpilih`
+                    : `${deletableTasks.length} task bisa kamu hapus`}
+                </Text>
+                {selectedIds.size > 0 ? (
+                  <Button size="compact-xs" variant="subtle" onClick={clearSelection}>
+                    Bersihkan
+                  </Button>
+                ) : null}
+              </Group>
+              <Group gap="xs">
+                <Button
+                  size="compact-xs"
+                  color="red"
+                  variant="light"
+                  leftSection={<TbTrash size={12} />}
+                  disabled={deletableSelected.length === 0 || deleteBulk.isPending}
+                  loading={deleteBulk.isPending && deletableSelected.length > 0 && deletableSelected.length < deletableTasks.length}
+                  onClick={confirmDeleteSelected}
+                >
+                  Hapus terpilih
+                </Button>
+                <Button
+                  size="compact-xs"
+                  color="red"
+                  variant="filled"
+                  leftSection={<TbTrash size={12} />}
+                  disabled={deletableTasks.length === 0 || deleteBulk.isPending}
+                  loading={deleteBulk.isPending && deletableSelected.length === deletableTasks.length}
+                  onClick={confirmDeleteAll}
+                >
+                  Hapus semua ({deletableTasks.length})
+                </Button>
+              </Group>
+            </Group>
+          )}
+          <Table.ScrollContainer minWidth={activeProject ? 1080 : 1220}>
           <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
             <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
               <Table.Tr>
+                <Table.Th style={{ width: 36 }}>
+                  <Checkbox
+                    size="xs"
+                    aria-label="Select all on page"
+                    checked={allPagedSelected}
+                    indeterminate={!allPagedSelected && somePagedSelected}
+                    onChange={togglePagedSelection}
+                    disabled={pagedDeletableIds.length === 0}
+                  />
+                </Table.Th>
                 <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
                 {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}
                 <Table.Th style={{ width: 90 }}>Kind</Table.Th>
@@ -592,6 +773,7 @@ export function TasksPanel({
                 <Table.Th style={{ width: 90 }}>Hours</Table.Th>
                 <Table.Th style={{ width: 110 }}>Progress</Table.Th>
                 <Table.Th style={{ width: 110 }}>Updated</Table.Th>
+                <Table.Th style={{ width: 40 }} />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -599,8 +781,19 @@ export function TasksPanel({
                 const variance =
                   t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
                 const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
+                const deletable = canDeleteTask(t)
+                const checked = selectedIds.has(t.id)
                 return (
                   <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
+                    <Table.Td onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        size="xs"
+                        aria-label={`Select task ${t.title}`}
+                        checked={checked}
+                        onChange={() => toggleSelection(t.id)}
+                        disabled={!deletable}
+                      />
+                    </Table.Td>
                     <Table.Td style={STICKY_COL_CELL}>
                       <Stack gap={2}>
                         <Group gap={6} wrap="nowrap">
@@ -715,6 +908,21 @@ export function TasksPanel({
                       <Text size="xs" c="dimmed">
                         {new Date(t.updatedAt).toLocaleDateString()}
                       </Text>
+                    </Table.Td>
+                    <Table.Td onClick={(e) => e.stopPropagation()}>
+                      {deletable ? (
+                        <Tooltip label="Hapus task">
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color="red"
+                            onClick={() => confirmDeleteOne(t)}
+                            loading={deleteOne.isPending && deleteOne.variables === t.id}
+                          >
+                            <TbTrash size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                      ) : null}
                     </Table.Td>
                   </Table.Tr>
                 )

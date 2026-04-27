@@ -330,6 +330,7 @@ export function TasksPanel({
     })
   }, [taskById])
   const deletableTasks = useMemo(() => tasks.filter(canDeleteTask), [tasks, canDeleteTask])
+  const deletableIds = useMemo(() => deletableTasks.map((t) => t.id), [deletableTasks])
   const deletableSelected = useMemo(
     () => Array.from(selectedIds).filter((id) => {
       const t = taskById.get(id)
@@ -337,18 +338,14 @@ export function TasksPanel({
     }),
     [selectedIds, taskById, canDeleteTask],
   )
-  const pagedDeletableIds = useMemo(
-    () => pagedTasks.filter(canDeleteTask).map((t) => t.id),
-    [pagedTasks, canDeleteTask],
-  )
-  const allPagedSelected =
-    pagedDeletableIds.length > 0 && pagedDeletableIds.every((id) => selectedIds.has(id))
-  const somePagedSelected = pagedDeletableIds.some((id) => selectedIds.has(id))
-  const togglePagedSelection = () => {
+  const allDeletableSelected =
+    deletableIds.length > 0 && deletableIds.every((id) => selectedIds.has(id))
+  const someDeletableSelected = deletableSelected.length > 0 && !allDeletableSelected
+  const toggleAllSelection = () => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (allPagedSelected) for (const id of pagedDeletableIds) next.delete(id)
-      else for (const id of pagedDeletableIds) next.add(id)
+      if (allDeletableSelected) for (const id of deletableIds) next.delete(id)
+      else for (const id of deletableIds) next.add(id)
       return next
     })
   }
@@ -414,22 +411,6 @@ export function TasksPanel({
         <Text size="sm">
           {ids.length} task akan dihapus permanen. Hanya task yang kamu boleh hapus (reporter, OWNER/PM, atau admin)
           yang ikut terhapus.
-        </Text>
-      ),
-      labels: { confirm: `Hapus ${ids.length}`, cancel: 'Batal' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => deleteBulk.mutate(ids),
-    })
-  }
-  const confirmDeleteAll = () => {
-    const ids = deletableTasks.map((t) => t.id)
-    if (ids.length === 0) return
-    modals.openConfirmModal({
-      title: `Hapus semua ${ids.length} task yang bisa kamu hapus?`,
-      children: (
-        <Text size="sm">
-          Akan menghapus {ids.length} task dari hasil filter saat ini — task yang kamu reporter / OWNER / PM /
-          admin. Task milik orang lain tidak terpengaruh.
         </Text>
       ),
       labels: { confirm: `Hapus ${ids.length}`, cancel: 'Batal' },
@@ -709,44 +690,28 @@ export function TasksPanel({
         />
       ) : (
         <Card withBorder padding={0} radius="md">
-          {(deletableSelected.length > 0 || deletableTasks.length > 0) && (
+          {deletableSelected.length > 0 && (
             <Group justify="space-between" px="md" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
               <Group gap="xs">
                 <Text size="xs" c="dimmed">
-                  {deletableSelected.length > 0
-                    ? `${deletableSelected.length} terpilih`
-                    : `${deletableTasks.length} task bisa kamu hapus`}
+                  {deletableSelected.length} terpilih
+                  {allDeletableSelected && deletableTasks.length > 1 ? ' (semua)' : ''}
                 </Text>
-                {selectedIds.size > 0 ? (
-                  <Button size="compact-xs" variant="subtle" onClick={clearSelection}>
-                    Bersihkan
-                  </Button>
-                ) : null}
-              </Group>
-              <Group gap="xs">
-                <Button
-                  size="compact-xs"
-                  color="red"
-                  variant="light"
-                  leftSection={<TbTrash size={12} />}
-                  disabled={deletableSelected.length === 0 || deleteBulk.isPending}
-                  loading={deleteBulk.isPending && deletableSelected.length > 0 && deletableSelected.length < deletableTasks.length}
-                  onClick={confirmDeleteSelected}
-                >
-                  Hapus terpilih
-                </Button>
-                <Button
-                  size="compact-xs"
-                  color="red"
-                  variant="filled"
-                  leftSection={<TbTrash size={12} />}
-                  disabled={deletableTasks.length === 0 || deleteBulk.isPending}
-                  loading={deleteBulk.isPending && deletableSelected.length === deletableTasks.length}
-                  onClick={confirmDeleteAll}
-                >
-                  Hapus semua ({deletableTasks.length})
+                <Button size="compact-xs" variant="subtle" onClick={clearSelection}>
+                  Bersihkan
                 </Button>
               </Group>
+              <Button
+                size="compact-xs"
+                color="red"
+                variant="filled"
+                leftSection={<TbTrash size={12} />}
+                disabled={deleteBulk.isPending}
+                loading={deleteBulk.isPending}
+                onClick={confirmDeleteSelected}
+              >
+                Hapus terpilih
+              </Button>
             </Group>
           )}
           <Table.ScrollContainer minWidth={activeProject ? 1080 : 1220}>
@@ -754,14 +719,16 @@ export function TasksPanel({
             <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
               <Table.Tr>
                 <Table.Th style={{ width: 36 }}>
-                  <Checkbox
-                    size="xs"
-                    aria-label="Select all on page"
-                    checked={allPagedSelected}
-                    indeterminate={!allPagedSelected && somePagedSelected}
-                    onChange={togglePagedSelection}
-                    disabled={pagedDeletableIds.length === 0}
-                  />
+                  <Tooltip label={allDeletableSelected ? 'Bersihkan pilihan' : `Pilih semua ${deletableTasks.length} task`}>
+                    <Checkbox
+                      size="xs"
+                      aria-label="Pilih semua task"
+                      checked={allDeletableSelected}
+                      indeterminate={someDeletableSelected}
+                      onChange={toggleAllSelection}
+                      disabled={deletableTasks.length === 0}
+                    />
+                  </Tooltip>
                 </Table.Th>
                 <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
                 {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}

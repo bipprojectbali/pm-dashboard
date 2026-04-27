@@ -75,6 +75,14 @@ interface TaskStats {
 
 export type ProjectVisibility = 'PRIVATE' | 'INTERNAL' | 'PUBLIC'
 
+interface ProjectMember {
+  id: string
+  userId: string
+  role: MemberRole
+  joinedAt: string
+  user: ProjectUser & { role: string }
+}
+
 export interface ProjectListItem {
   id: string
   name: string
@@ -91,6 +99,7 @@ export interface ProjectListItem {
   createdAt: string
   updatedAt: string
   owner: ProjectUser
+  members: ProjectMember[]
   _count: { members: number; tasks: number; milestones: number }
   myRole: MemberRole | null
   canWrite: boolean
@@ -99,17 +108,7 @@ export interface ProjectListItem {
   milestoneStats?: { done: number; total: number }
 }
 
-interface ProjectMember {
-  id: string
-  userId: string
-  role: MemberRole
-  joinedAt: string
-  user: ProjectUser & { role: string }
-}
-
-export interface ProjectDetail extends ProjectListItem {
-  members: ProjectMember[]
-}
+export type ProjectDetail = ProjectListItem
 
 interface UserOption {
   id: string
@@ -298,6 +297,10 @@ export function ProjectsPanel() {
     key: 'pm:projects:ownerFilter',
     defaultValue: null,
   })
+  const [userFilter, setUserFilter] = useLocalStorage<string | null>({
+    key: 'pm:projects:userFilter',
+    defaultValue: null,
+  })
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
@@ -372,6 +375,8 @@ export function ProjectsPanel() {
     if (priorityFilter) list = list.filter((p) => p.priority === priorityFilter)
     if (roleFilter) list = list.filter((p) => p.myRole === roleFilter)
     if (ownerFilter) list = list.filter((p) => p.ownerId === ownerFilter)
+    if (userFilter)
+      list = list.filter((p) => p.ownerId === userFilter || p.members.some((m) => m.userId === userFilter))
     if (derivedFilter === 'overdue') {
       list = list.filter((p) => computeOverdue(p).overdue)
     } else if (derivedFilter === 'atRisk') {
@@ -385,7 +390,7 @@ export function ProjectsPanel() {
       list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description?.toLowerCase().includes(q) ?? false))
     }
     return sortProjects(list, sort)
-  }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, derivedFilter, search, sort])
+  }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, userFilter, derivedFilter, search, sort])
 
   const ownerOptions = useMemo(() => {
     const seen = new Map<string, string>()
@@ -395,12 +400,32 @@ export function ProjectsPanel() {
     return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
   }, [projects])
 
-  const hasActiveFilters = !!(statusFilter || priorityFilter || roleFilter || ownerFilter || derivedFilter || search.trim())
+  const userOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
+      for (const m of p.members) {
+        if (!seen.has(m.userId)) seen.set(m.userId, m.user.name || m.user.email || m.userId)
+      }
+    }
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [projects])
+
+  const hasActiveFilters = !!(
+    statusFilter ||
+    priorityFilter ||
+    roleFilter ||
+    ownerFilter ||
+    userFilter ||
+    derivedFilter ||
+    search.trim()
+  )
   const clearFilters = () => {
     setStatusFilter(null)
     setPriorityFilter(null)
     setRoleFilter(null)
     setOwnerFilter(null)
+    setUserFilter(null)
     setDerivedFilter(null)
     setSearch('')
   }
@@ -582,6 +607,18 @@ export function ProjectsPanel() {
                 searchable
                 clearable
                 nothingFoundMessage="No owners"
+              />
+              <Select
+                size="xs"
+                w={180}
+                placeholder="Any user"
+                value={userFilter}
+                onChange={setUserFilter}
+                data={userOptions}
+                leftSection={<TbUsers size={12} />}
+                searchable
+                clearable
+                nothingFoundMessage="No users"
               />
               <Select
                 size="xs"

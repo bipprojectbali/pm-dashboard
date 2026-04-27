@@ -3119,6 +3119,10 @@ export function createApp() {
         const scope = typeof query.scope === 'string' ? query.scope : 'visible'
         const projectInclude = {
           owner: { select: { id: true, name: true, email: true } },
+          members: {
+            include: { user: { select: { id: true, name: true, email: true, role: true } } },
+            orderBy: { joinedAt: 'asc' },
+          },
           _count: { select: { members: true, tasks: true, milestones: true } },
         } as const
         const memberships = await prisma.projectMember.findMany({

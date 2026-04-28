@@ -223,7 +223,6 @@ export function TasksPanel({
   const tasksQ = useQuery({
     queryKey: ['tasks', query],
     queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks${query ? `?${query}` : ''}`),
-    refetchInterval: 30_000,
   })
 
   const create = useMutation({

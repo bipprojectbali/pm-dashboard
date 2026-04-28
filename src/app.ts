@@ -17,7 +17,13 @@ import { computePhantomWork, computeTaskEffort, detectGhostTasks, effortReport }
 import { env } from './lib/env'
 import { normalizeGithubRepo, verifyGithubSignature } from './lib/github'
 import { notifyTaskAssigned, notifyTaskCommented, notifyTaskStatusChanged } from './lib/notifications'
-import { addConnection, broadcastToAdmins, getOnlineUserIds, removeConnection } from './lib/presence'
+import {
+  addConnection,
+  broadcastToAdmins,
+  emitInvalidate,
+  getOnlineUserIds,
+  removeConnection,
+} from './lib/presence'
 import { redis } from './lib/redis'
 import { computeRetro, renderRetroMarkdown } from './lib/retro'
 import { parseSchema } from './lib/schema-parser'
@@ -2754,6 +2760,7 @@ export function createApp() {
         })
         audit(auth.userId, 'QC_TICKET_CREATED', `#${ticket.id} ${ticket.title}`, getIp(request))
         appLog('info', `QC ticket created: ${ticket.title} by ${auth.email}`)
+        emitInvalidate('qc')
         return { ticket }
       })
 
@@ -2843,6 +2850,7 @@ export function createApp() {
           })
         }
         audit(auth.userId, 'QC_TICKET_UPDATED', `#${ticket.id}`, getIp(request))
+        emitInvalidate('qc')
         return { ticket }
       })
 
@@ -2877,6 +2885,7 @@ export function createApp() {
         const comment = await prisma.taskComment.create({
           data: { taskId: params.id, authorId: auth.userId, authorTag: auth.role, body: body.body.trim() },
         })
+        emitInvalidate('qc')
         return { comment }
       })
 
@@ -2916,6 +2925,7 @@ export function createApp() {
             note: body.note ?? null,
           },
         })
+        emitInvalidate('qc')
         return { evidence }
       })
 
@@ -2945,6 +2955,7 @@ export function createApp() {
         await prisma.task.delete({ where: { id: params.id } })
         audit(auth.userId, 'QC_TICKET_DELETED', `#${exists.id} "${exists.title}"`, getIp(request))
         appLog('info', `QC ticket deleted: #${exists.id} by ${auth.email}`)
+        emitInvalidate('qc')
         return { ok: true }
       })
 
@@ -3254,6 +3265,7 @@ export function createApp() {
         })
         audit(auth.userId, 'PROJECT_CREATED', `${project.name} (${project.id})`, getIp(request))
         appLog('info', `Project created: ${project.name} by ${auth.email}`)
+        emitInvalidate('projects')
         return { project }
       })
 
@@ -3368,6 +3380,7 @@ export function createApp() {
         try {
           const project = await prisma.project.update({ where: { id: params.id }, data })
           audit(auth.userId, 'PROJECT_UPDATED', `${project.id} ${Object.keys(data).join(',')}`, getIp(request))
+          emitInvalidate('projects', { projectId: project.id })
           return { project }
         } catch (e) {
           const err = e as { code?: string }
@@ -3400,6 +3413,8 @@ export function createApp() {
         }
         await prisma.project.delete({ where: { id: params.id } })
         audit(auth.userId, 'PROJECT_DELETED', `${project.id} ${project.name}`, getIp(request))
+        emitInvalidate('projects', { projectId: project.id })
+        emitInvalidate('tasks', { projectId: project.id })
         return { ok: true }
       })
 
@@ -3578,6 +3593,7 @@ export function createApp() {
           include: { user: { select: { id: true, name: true, email: true, role: true } } },
         })
         audit(auth.userId, 'PROJECT_MEMBER_ADDED', `${params.id} ← ${body.userId} (${role})`, getIp(request))
+        emitInvalidate('projects', { projectId: params.id })
         return { member }
       })
 
@@ -3643,6 +3659,7 @@ export function createApp() {
           `${params.id} ${existing.endsAt?.toISOString() ?? 'null'} → ${newEnd.toISOString()}${body.reason ? ` (${body.reason})` : ''}`,
           getIp(request),
         )
+        emitInvalidate('projects', { projectId: params.id })
         return { extension, project }
       })
 
@@ -3737,6 +3754,7 @@ export function createApp() {
           },
         })
         audit(auth.userId, 'MILESTONE_CREATED', `${params.id} ${milestone.title}`, getIp(request))
+        emitInvalidate('milestones', { projectId: params.id })
         return { milestone }
       })
 
@@ -3779,6 +3797,7 @@ export function createApp() {
           `${existing.projectId}/${params.id} ${Object.keys(data).join(',')}`,
           getIp(request),
         )
+        emitInvalidate('milestones', { projectId: existing.projectId })
         return { milestone }
       })
 
@@ -3803,6 +3822,7 @@ export function createApp() {
         }
         await prisma.projectMilestone.delete({ where: { id: params.id } })
         audit(auth.userId, 'MILESTONE_DELETED', `${existing.projectId}/${params.id} ${existing.title}`, getIp(request))
+        emitInvalidate('milestones', { projectId: existing.projectId })
         return { ok: true }
       })
 
@@ -3838,6 +3858,7 @@ export function createApp() {
           include: { user: { select: { id: true, name: true, email: true, role: true } } },
         })
         audit(auth.userId, 'PROJECT_MEMBER_ROLE_CHANGED', `${params.id} ${params.userId} → ${role}`, getIp(request))
+        emitInvalidate('projects', { projectId: params.id })
         return { member: updated }
       })
 
@@ -3861,6 +3882,7 @@ export function createApp() {
           where: { projectId_userId: { projectId: params.id, userId: params.userId } },
         })
         audit(auth.userId, 'PROJECT_MEMBER_REMOVED', `${params.id} ← ${params.userId}`, getIp(request))
+        emitInvalidate('projects', { projectId: params.id })
         return { ok: true }
       })
 
@@ -4116,6 +4138,7 @@ export function createApp() {
         )
         audit(auth.userId, 'TASK_BULK_CREATED', `project=${body.projectId} count=${created.length}`, getIp(request))
         appLog('info', `Tasks bulk-created: ${created.length} on ${body.projectId} by ${auth.email}`)
+        emitInvalidate('tasks', { projectId: body.projectId! })
         return { count: created.length, ids: created.map((t) => t.id) }
       })
 
@@ -4197,6 +4220,7 @@ export function createApp() {
             actorName: actor?.name ?? 'Someone',
           }).catch(() => {})
         }
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { task }
       })
 
@@ -4368,6 +4392,7 @@ export function createApp() {
             toStatus: statusTransition.to,
           }).catch(() => {})
         }
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { task }
       })
 
@@ -4393,6 +4418,7 @@ export function createApp() {
         await prisma.task.delete({ where: { id: params.id } })
         audit(auth.userId, 'TASK_DELETED', `#${current.id} "${current.title}"`, getIp(request))
         appLog('info', `Task deleted: #${current.id} by ${auth.userId}`)
+        emitInvalidate('tasks', { projectId: current.projectId })
         return { ok: true }
       })
 
@@ -4443,6 +4469,7 @@ export function createApp() {
           await prisma.task.deleteMany({ where: { id: { in: allowedIds } } })
           audit(auth.userId, 'TASK_DELETED', `bulk: ${allowedIds.length} tasks`, getIp(request))
           appLog('info', `Bulk delete: ${allowedIds.length} tasks by ${auth.userId}`)
+          emitInvalidate('tasks')
         }
         return { deleted: allowedIds.length, denied: deniedIds.length, deniedIds }
       })
@@ -4491,6 +4518,7 @@ export function createApp() {
           actorName: comment.author?.name ?? 'Someone',
           commentSnippet: snippet,
         }).catch(() => {})
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { comment }
       })
 
@@ -4518,6 +4546,7 @@ export function createApp() {
         const evidence = await prisma.taskEvidence.create({
           data: { taskId: params.id, kind: body.kind, url: body.url, note: body.note ?? null },
         })
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { evidence }
       })
 
@@ -4585,6 +4614,7 @@ export function createApp() {
           },
         })
         audit(auth.userId, 'EVIDENCE_UPLOADED', `task=${params.id} file=${file.name} size=${file.size}`, getIp(request))
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { evidence }
       })
 
@@ -4677,6 +4707,7 @@ export function createApp() {
           return { error: 'Tag with that name already exists' }
         }
         audit(auth.userId, 'TAG_CREATED', `${params.id} ← ${tag.name}`, getIp(request))
+        emitInvalidate('tags', { projectId: params.id })
         return { tag }
       })
 
@@ -4701,6 +4732,7 @@ export function createApp() {
         if (body.name !== undefined) data.name = body.name.trim()
         if (body.color !== undefined) data.color = body.color
         const updated = await prisma.tag.update({ where: { id: params.id }, data })
+        emitInvalidate('tags', { projectId: tag.projectId })
         return { tag: updated }
       })
 
@@ -4722,6 +4754,8 @@ export function createApp() {
         }
         await prisma.tag.delete({ where: { id: params.id } })
         audit(auth.userId, 'TAG_DELETED', `${tag.projectId} ← ${tag.name}`, getIp(request))
+        emitInvalidate('tags', { projectId: tag.projectId })
+        emitInvalidate('tasks', { projectId: tag.projectId })
         return { ok: true }
       })
 
@@ -4785,6 +4819,7 @@ export function createApp() {
           set.status = 409
           return { error: 'Dependency already exists' }
         }
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { dependency: dep }
       })
 
@@ -4807,6 +4842,7 @@ export function createApp() {
         await prisma.taskDependency.delete({
           where: { taskId_blockedById: { taskId: params.id, blockedById: params.blockedById } },
         })
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { ok: true }
       })
 
@@ -4844,6 +4880,7 @@ export function createApp() {
             order: (last?.order ?? -1) + 1,
           },
         })
+        emitInvalidate('tasks', { projectId: task.projectId })
         return { item }
       })
 
@@ -4872,6 +4909,7 @@ export function createApp() {
         if (body.done !== undefined) data.done = body.done
         if (body.order !== undefined) data.order = body.order
         const item = await prisma.taskChecklistItem.update({ where: { id: params.id }, data })
+        emitInvalidate('tasks', { projectId: existing.task.projectId })
         return { item }
       })
 
@@ -4895,6 +4933,7 @@ export function createApp() {
           return { error: 'Not a writable project member' }
         }
         await prisma.taskChecklistItem.delete({ where: { id: params.id } })
+        emitInvalidate('tasks', { projectId: existing.task.projectId })
         return { ok: true }
       })
 

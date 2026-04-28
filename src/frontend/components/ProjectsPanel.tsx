@@ -321,7 +321,6 @@ export function ProjectsPanel() {
   const projectsQ = useQuery({
     queryKey: ['projects', scope],
     queryFn: () => api<{ projects: ProjectListItem[] }>(`/api/projects?scope=${scope}`),
-    refetchInterval: 30_000,
   })
 
   const create = useMutation({

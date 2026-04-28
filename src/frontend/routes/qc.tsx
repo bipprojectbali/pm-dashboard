@@ -133,7 +133,6 @@ function QcPage() {
   const ctxQ = useQuery({
     queryKey: ['qc', 'context'],
     queryFn: () => fetch('/api/qc/context', { credentials: 'include' }).then((r) => r.json() as Promise<Context>),
-    refetchInterval: 30_000,
   })
   const ticketsQ = useQuery({
     queryKey: ['qc', 'tickets', status],
@@ -141,7 +140,6 @@ function QcPage() {
       fetch(`/api/qc/tickets?status=${status}`, { credentials: 'include' }).then(
         (r) => r.json() as Promise<{ tickets: Ticket[]; selfProject: SelfProject | null }>,
       ),
-    refetchInterval: 15_000,
     enabled: !!ctxQ.data?.selfProject,
   })
 

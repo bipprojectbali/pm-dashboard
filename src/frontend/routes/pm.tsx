@@ -473,7 +473,6 @@ function OverviewPanel({
   const myTasksQ = useQuery<{ tasks: OverviewTask[] }>({
     queryKey: ['tasks', 'mine=1', 'overview'],
     queryFn: () => fetch('/api/tasks?mine=1&limit=300', { credentials: 'include' }).then((r) => r.json()),
-    refetchInterval: 60_000,
   })
   const notifsQ = useQuery<{ notifications: OverviewNotification[] }>({
     queryKey: ['me', 'notifications', 'overview'],

@@ -576,7 +576,7 @@ export function ProjectsPanel() {
                   { value: 'all', label: 'Semua proyek' },
                 ]}
               />
-              <Select
+              {/* <Select
                 size="xs"
                 w={150}
                 placeholder="Any status"
@@ -587,7 +587,7 @@ export function ProjectsPanel() {
                   label: `${s.label} · ${statusCounts[s.value]}`,
                 }))}
                 clearable
-              />
+              /> */}
               <Select
                 size="xs"
                 w={140}

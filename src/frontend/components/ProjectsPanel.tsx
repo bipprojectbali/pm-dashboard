@@ -597,7 +597,7 @@ export function ProjectsPanel() {
                 data={PRIORITY_OPTIONS}
                 clearable
               />
-              <Select
+              {/* <Select
                 size="xs"
                 w={130}
                 placeholder="Any role"
@@ -605,8 +605,8 @@ export function ProjectsPanel() {
                 onChange={(v) => setRoleFilter(v as MemberRole | null)}
                 data={ROLE_FILTER_OPTIONS}
                 clearable
-              />
-              <Select
+              /> */}
+              {/* <Select
                 size="xs"
                 w={170}
                 placeholder="Any owner"
@@ -617,7 +617,7 @@ export function ProjectsPanel() {
                 searchable
                 clearable
                 nothingFoundMessage="No owners"
-              />
+              /> */}
               <Select
                 size="xs"
                 w={180}

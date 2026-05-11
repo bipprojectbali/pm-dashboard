@@ -51,3 +51,4 @@ uploads/
 # QA session cookies (contain live session tokens)
 qa/*/cookies/
 
+tasks.csv

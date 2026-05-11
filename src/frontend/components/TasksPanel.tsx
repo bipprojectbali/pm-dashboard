@@ -32,7 +32,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { EChartsOption } from 'echarts'
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -1572,9 +1572,19 @@ function TasksKanbanView({
   onSelect: (id: string) => void
   onMove: (id: string, status: TaskStatus) => void
 }) {
-  // Client-side column order — task IDs in preferred order per status.
-  // Populated by same-column reorder; cross-column moves use onMove API.
-  const [colOrder, setColOrder] = useState<Partial<Record<TaskStatus, string[]>>>({})
+  // Optimistic local task list — mirrors `tasks` prop but applies
+  // immediate drag results before server refetch arrives.
+  // Keyed by a snapshot of tasks so stale optimistic state never
+  // survives a server refetch.
+  const [localTasks, setLocalTasks] = useState<TaskListItem[]>(tasks)
+  const prevTasksRef = useRef(tasks)
+  useEffect(() => {
+    // When server data changes (refetch), sync local state
+    if (prevTasksRef.current !== tasks) {
+      prevTasksRef.current = tasks
+      setLocalTasks(tasks)
+    }
+  }, [tasks])
 
   // Per-column show-more limit
   const [colLimit, setColLimit] = useState<Record<TaskStatus, number>>({
@@ -1591,60 +1601,76 @@ function TasksKanbanView({
     key: 'pm:kanban:col-max', defaultValue: {},
   })
 
-  // draggingTaskId — tracked via onDragStart so we can compute allowed targets
+  // draggingTaskId — tracked via onDragStart to compute allowed targets
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
-  const draggingTask = draggingTaskId ? tasks.find((t) => t.id === draggingTaskId) : null
+  const draggingTask = draggingTaskId ? localTasks.find((t) => t.id === draggingTaskId) : null
   const allowedTargets = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
   const toggleHidden = (s: TaskStatus) => setColHidden((p) => ({ ...p, [s]: !p[s] }))
   const toggleMax    = (s: TaskStatus) => setColMax((p) => ({ ...p, [s]: !p[s] }))
 
-  // Ordered task list per status, with client-side reorder applied
+  // Group localTasks by status — stable order = insertion order from localTasks
   const byStatus = useMemo(() => {
     const map: Record<TaskStatus, TaskListItem[]> = {
       OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
     }
-    for (const t of tasks) map[t.status].push(t)
-    for (const status of Object.keys(map) as TaskStatus[]) {
-      const order = colOrder[status]
-      if (!order) continue
-      const byId = new Map(map[status].map((t) => [t.id, t]))
-      const ordered = order.map((id) => byId.get(id)).filter(Boolean) as TaskListItem[]
-      const rest = map[status].filter((t) => !order.includes(t.id))
-      map[status] = [...ordered, ...rest]
-    }
+    for (const t of localTasks) map[t.status].push(t)
     return map
-  }, [tasks, colOrder])
+  }, [localTasks])
 
   const handleDragEnd = useCallback((result: import('@hello-pangea/dnd').DropResult) => {
     setDraggingTaskId(null)
     const { source, destination, draggableId, reason } = result
 
-    // Dropped outside any droppable or cancelled
     if (reason === 'CANCEL' || !destination) return
-    // No movement
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
     const srcStatus = source.droppableId as TaskStatus
     const dstStatus = destination.droppableId as TaskStatus
-    const task = tasks.find((t) => t.id === draggableId)
+    const task = localTasks.find((t) => t.id === draggableId)
     if (!task) return
 
     if (srcStatus === dstStatus) {
-      // Same-column reorder — update client-side order only
-      const ids = byStatus[srcStatus].map((t) => t.id)
-      const next = [...ids]
-      next.splice(source.index, 1)
-      next.splice(destination.index, 0, draggableId)
-      setColOrder((prev) => ({ ...prev, [srcStatus]: next }))
+      // Same-column reorder: splice in localTasks
+      setLocalTasks((prev) => {
+        const next = [...prev]
+        // Remove from old position
+        const fromIdx = next.findIndex((t) => t.id === draggableId)
+        if (fromIdx === -1) return prev
+        const [moved] = next.splice(fromIdx, 1)
+        // Find insertion position: destination.index counts within the column
+        const colItems = next.filter((t) => t.status === srcStatus)
+        const insertAfter = colItems[destination.index - 1]
+        const insertIdx = insertAfter
+          ? next.findIndex((t) => t.id === insertAfter.id) + 1
+          : next.findIndex((t) => t.status === srcStatus)
+        next.splice(insertIdx < 0 ? next.length : insertIdx, 0, moved)
+        return next
+      })
       return
     }
 
-    // Cross-column move — validate transition rule, then call API
+    // Cross-column: validate rule, then optimistic update + API call
     const allowed = kanbanAllowed(srcStatus, task.kind)
     if (!allowed.includes(dstStatus)) return
+
+    // Optimistic: change status in localTasks and move to destination.index in target column
+    setLocalTasks((prev) => {
+      const next = prev.filter((t) => t.id !== draggableId)
+      const updated = { ...task, status: dstStatus }
+      // Find insertion point in destination column
+      const dstItems = next.filter((t) => t.status === dstStatus)
+      const insertAfter = dstItems[destination.index - 1]
+      const insertIdx = insertAfter
+        ? next.findIndex((t) => t.id === insertAfter.id) + 1
+        : next.findIndex((t) => t.status === dstStatus)
+      next.splice(insertIdx < 0 ? next.length : insertIdx, 0, updated)
+      return next
+    })
+
+    // Call API — on success invalidation will sync localTasks via useEffect
     onMove(draggableId, dstStatus)
-  }, [tasks, byStatus, onMove])
+  }, [localTasks, onMove])
 
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'

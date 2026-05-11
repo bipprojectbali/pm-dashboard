@@ -43,7 +43,7 @@ import {
   TbClock,
   TbDownload,
 
-  TbEyeOff,
+  TbChevronLeft,
   TbFileImport,
   TbFilter,
   TbListCheck,
@@ -1717,9 +1717,9 @@ function TasksKanbanView({
                         {isMax ? <TbArrowsMinimize size={12} /> : <TbArrowsMaximize size={12} />}
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip label="Sembunyikan kolom">
+                    <Tooltip label="Ciutkan kolom">
                       <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
-                        <TbEyeOff size={12} />
+                        <TbChevronLeft size={12} />
                       </ActionIcon>
                     </Tooltip>
                   </Group>

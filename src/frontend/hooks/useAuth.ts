@@ -42,7 +42,7 @@ export function useSession() {
     queryFn: () => apiFetch<{ user: User | null }>('/api/auth/session'),
     retry: false,
     staleTime: 30_000,
-    refetchInterval: 5 * 60 * 1000,   // poll tiap 5 menit
+    refetchInterval: 10 * 60 * 1000,  // poll tiap 10 menit
     refetchIntervalInBackground: false, // jangan poll kalau tab tidak aktif
   })
 }
@@ -72,7 +72,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => apiFetch<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
     onSuccess: () => {
-      queryClient.setQueryData(['auth', 'session'], { user: null })
+      queryClient.removeQueries({ queryKey: ['auth', 'session'] })
       navigate({ to: '/login' })
     },
   })

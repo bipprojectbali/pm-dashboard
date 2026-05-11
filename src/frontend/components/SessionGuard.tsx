@@ -20,11 +20,11 @@ export function SessionGuard() {
   useEffect(() => {
     if (AUTH_PATHS.has(pathname) || redirecting.current) return
 
-    const expired =
-      error instanceof UnauthorizedError ||
-      (data !== undefined && data?.user === null)
-
-    if (!expired) return
+    // Only redirect on explicit 401 (UnauthorizedError from apiFetch).
+    // Intentionally NOT redirecting on data.user === null — that path is
+    // only hit when logout runs (which already navigates) or when the
+    // session endpoint returns 200 with no user (handled by beforeLoad).
+    if (!(error instanceof UnauthorizedError)) return
 
     redirecting.current = true
     qc.clear()

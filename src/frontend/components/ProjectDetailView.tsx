@@ -3,12 +3,14 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Button,
   Card,
   Code,
   CopyButton,
   Group,
   Loader,
+  Menu,
   Progress,
   Select,
   SimpleGrid,
@@ -35,6 +37,7 @@ import {
   TbChecks,
   TbClock,
   TbCopy,
+  TbDots,
   TbFlag,
   TbHistory,
   TbListCheck,
@@ -276,42 +279,87 @@ export function ProjectDetailView({
         <>
           <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} />
 
-          <Tabs value={tab} onChange={(v) => v && onTabChange(v as ProjectDetailTab)} keepMounted={false}>
-            <Tabs.List>
-              <Tabs.Tab value="overview" leftSection={<TbTarget size={14} />}>
-                Overview
-              </Tabs.Tab>
-              <Tabs.Tab
-                value="tasks"
-                leftSection={<TbListCheck size={14} />}
-                rightSection={<TabCount value={tabCounts?.tasks} />}
-              >
-                Tasks
-              </Tabs.Tab>
-              <Tabs.Tab
-                value="team"
-                leftSection={<TbUsers size={14} />}
-                rightSection={<TabCount value={tabCounts?.members} />}
-              >
-                Team
-              </Tabs.Tab>
-              <Tabs.Tab
-                value="milestones"
-                leftSection={<TbFlag size={14} />}
-                rightSection={<TabCount value={tabCounts?.milestones} />}
-              >
-                Milestones
-              </Tabs.Tab>
-              <Tabs.Tab value="extensions" leftSection={<TbHistory size={14} />}>
-                Extensions
-              </Tabs.Tab>
-              <Tabs.Tab value="retro" leftSection={<TbReport size={14} />}>
-                Retro
-              </Tabs.Tab>
-              <Tabs.Tab value="settings" leftSection={<TbSettings size={14} />}>
-                Settings
-              </Tabs.Tab>
-            </Tabs.List>
+          <Tabs value={tab} onChange={(v) => v && onTabChange(v as ProjectDetailTab)} keepMounted={false} variant="pills">
+            {/* Primary tabs + secondary overflow menu */}
+            <Group gap={4} mb="md" wrap="nowrap" align="center">
+              <Tabs.List style={{ gap: 4, flexWrap: 'nowrap' }}>
+                <Tabs.Tab value="overview" leftSection={<TbTarget size={14} />}>
+                  Overview
+                </Tabs.Tab>
+                <Tabs.Tab value="tasks" leftSection={<TbListCheck size={14} />} rightSection={<TabCount value={tabCounts?.tasks} />}>
+                  Tasks
+                </Tabs.Tab>
+                <Tabs.Tab value="team" leftSection={<TbUsers size={14} />} rightSection={<TabCount value={tabCounts?.members} />}>
+                  Team
+                </Tabs.Tab>
+                <Tabs.Tab value="milestones" leftSection={<TbFlag size={14} />} rightSection={<TabCount value={tabCounts?.milestones} />}>
+                  Milestones
+                </Tabs.Tab>
+              </Tabs.List>
+
+              {/* Secondary tabs — overflow menu */}
+              <Menu shadow="md" radius="md" position="bottom-end">
+                <Menu.Target>
+                  <ActionIcon
+                    variant={['extensions', 'retro', 'settings'].includes(tab) ? 'filled' : 'subtle'}
+                    color={['extensions', 'retro', 'settings'].includes(tab) ? 'blue' : 'gray'}
+                    size="sm"
+                    radius="md"
+                  >
+                    <TbDots size={14} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Lainnya</Menu.Label>
+                  <Menu.Item
+                    leftSection={<TbHistory size={14} />}
+                    onClick={() => onTabChange('extensions')}
+                    style={{ fontWeight: tab === 'extensions' ? 700 : undefined }}
+                  >
+                    Extensions
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<TbReport size={14} />}
+                    onClick={() => onTabChange('retro')}
+                    style={{ fontWeight: tab === 'retro' ? 700 : undefined }}
+                  >
+                    Retro
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    leftSection={<TbSettings size={14} />}
+                    onClick={() => onTabChange('settings')}
+                    style={{ fontWeight: tab === 'settings' ? 700 : undefined }}
+                    color="dimmed"
+                  >
+                    Settings
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+
+              {/* Active secondary tab indicator */}
+              {(['extensions', 'retro', 'settings'] as const).includes(tab as 'extensions' | 'retro' | 'settings') && (
+                <Box
+                  px="sm"
+                  py={4}
+                  style={{
+                    borderRadius: 'var(--mantine-radius-md)',
+                    background: 'var(--mantine-color-blue-light)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: 'var(--mantine-color-blue-filled)',
+                  }}
+                >
+                  {tab === 'extensions' && <TbHistory size={13} />}
+                  {tab === 'retro' && <TbReport size={13} />}
+                  {tab === 'settings' && <TbSettings size={13} />}
+                  {tab === 'extensions' ? 'Extensions' : tab === 'retro' ? 'Retro' : 'Settings'}
+                </Box>
+              )}
+            </Group>
 
             <Tabs.Panel value="overview" pt="md">
               <OverviewTab project={project} onOpenTasks={() => onTabChange('tasks')} />

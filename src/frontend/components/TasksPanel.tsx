@@ -1573,6 +1573,10 @@ function TasksKanbanView({
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null)
+  // Vertical reorder: track insertion index within a column while dragging
+  const [overIndex, setOverIndex] = useState<{ status: TaskStatus; index: number } | null>(null)
+  // Client-side column order overrides (task IDs in preferred order per status)
+  const [colOrder, setColOrder] = useState<Partial<Record<TaskStatus, string[]>>>({})
   // Per-column "show more" limit
   const [colLimit, setColLimit] = useState<Record<TaskStatus, number>>({
     OPEN: KANBAN_PAGE,
@@ -1601,21 +1605,40 @@ function TasksKanbanView({
 
   const byStatus = useMemo(() => {
     const map: Record<TaskStatus, TaskListItem[]> = {
-      OPEN: [],
-      IN_PROGRESS: [],
-      READY_FOR_QC: [],
-      REOPENED: [],
-      CLOSED: [],
+      OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
     }
     for (const t of tasks) map[t.status].push(t)
+    // Apply client-side column ordering
+    for (const status of Object.keys(map) as TaskStatus[]) {
+      const order = colOrder[status]
+      if (!order) continue
+      const byId = new Map(map[status].map((t) => [t.id, t]))
+      const ordered = order.map((id) => byId.get(id)).filter(Boolean) as TaskListItem[]
+      const rest = map[status].filter((t) => !order.includes(t.id))
+      map[status] = [...ordered, ...rest]
+    }
     return map
-  }, [tasks])
+  }, [tasks, colOrder])
 
-  const handleDrop = (status: TaskStatus) => {
+  const handleDrop = (status: TaskStatus, insertIndex?: number) => {
     if (!draggingTask) return
     setOverStatus(null)
+    setOverIndex(null)
     setDraggingId(null)
-    if (draggingTask.status === status) return
+
+    if (draggingTask.status === status) {
+      // Same-column reorder
+      if (insertIndex === undefined) return
+      const col = byStatus[status].map((t) => t.id)
+      const from = col.indexOf(draggingTask.id)
+      if (from === -1 || from === insertIndex) return
+      const next = [...col]
+      next.splice(from, 1)
+      next.splice(insertIndex > from ? insertIndex - 1 : insertIndex, 0, draggingTask.id)
+      setColOrder((prev) => ({ ...prev, [status]: next }))
+      return
+    }
+
     if (!allowedForDrag.includes(status)) return
     onMove(draggingTask.id, status)
   }
@@ -1651,16 +1674,21 @@ function TasksKanbanView({
               overflow: 'hidden',
             }}
             onDragOver={(e) => {
-              if (!canDrop) return
+              if (!draggingTask) return
+              // Allow same-column reorder too
+              if (!canDrop && draggingTask.status !== col.status) return
               e.preventDefault()
               if (overStatus !== col.status) setOverStatus(col.status)
             }}
-            onDragLeave={() => {
-              if (overStatus === col.status) setOverStatus(null)
+            onDragLeave={(e) => {
+              if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+                if (overStatus === col.status) setOverStatus(null)
+                if (overIndex?.status === col.status) setOverIndex(null)
+              }
             }}
             onDrop={(e) => {
               e.preventDefault()
-              handleDrop(col.status)
+              handleDrop(col.status, overIndex?.status === col.status ? overIndex.index : undefined)
             }}
           >
             <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
@@ -1717,22 +1745,39 @@ function TasksKanbanView({
                   {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
                 </Text>
               ) : (
-                visible.map((t) => (
+                visible.map((t, idx) => {
+                  const isDropAbove =
+                    overIndex?.status === col.status && overIndex.index === idx && draggingId !== t.id
+                  return (<div key={t.id}>
+                    {isDropAbove && (
+                      <div style={{
+                        height: 3, borderRadius: 2, margin: '2px 0',
+                        background: 'var(--mantine-color-blue-5)',
+                        boxShadow: '0 0 6px var(--mantine-color-blue-4)',
+                      }} />
+                    )}
                   <Card
-                    key={t.id}
                     withBorder
                     padding="xs"
                     radius="sm"
                     draggable={canWrite}
-                    onDragStart={() => setDraggingId(t.id)}
-                    onDragEnd={() => {
-                      setDraggingId(null)
-                      setOverStatus(null)
+                    onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id) }}
+                    onDragEnd={() => { setDraggingId(null); setOverStatus(null); setOverIndex(null) }}
+                    onDragOver={(e) => {
+                      if (!draggingId) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      const mid = rect.top + rect.height / 2
+                      const insertAt = e.clientY < mid ? idx : idx + 1
+                      if (overIndex?.status !== col.status || overIndex.index !== insertAt)
+                        setOverIndex({ status: col.status, index: insertAt })
                     }}
                     onClick={() => onSelect(t.id)}
                     style={{
                       cursor: canWrite ? 'grab' : 'pointer',
-                      opacity: draggingId === t.id ? 0.5 : 1,
+                      opacity: draggingId === t.id ? 0.4 : 1,
+                      transition: 'opacity 120ms ease',
                     }}
                   >
                     <Stack gap={4}>
@@ -1790,7 +1835,16 @@ function TasksKanbanView({
                       </Group>
                     </Stack>
                   </Card>
-                ))
+                  </div>)
+                })
+              )}
+              {/* Drop indicator at end of column */}
+              {overIndex?.status === col.status && overIndex.index >= visible.length && draggingTask?.status === col.status && (
+                <div style={{
+                  height: 3, borderRadius: 2, margin: '2px 0',
+                  background: 'var(--mantine-color-blue-5)',
+                  boxShadow: '0 0 6px var(--mantine-color-blue-4)',
+                }} />
               )}
               {hidden > 0 && (
                 <Button

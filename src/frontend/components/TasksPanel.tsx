@@ -192,7 +192,7 @@ export function TasksPanel({
   const [status, setStatus] = useState<string | null>(null)
   const [kind, setKind] = useState<string | null>(null)
   const [mine, setMine] = useState(false)
-  const [showCharts, setShowCharts] = useState(true)
+  const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')

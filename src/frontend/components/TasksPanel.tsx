@@ -1560,6 +1560,118 @@ function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
 
 const KANBAN_PAGE = 20
 
+function KanbanCardList({
+  items,
+  colStatus,
+  draggingId,
+  draggingTask,
+  overIndex,
+  canWrite,
+  onSelect,
+  setDraggingId,
+  setOverStatus,
+  setOverIndex,
+}: {
+  items: TaskListItem[]
+  colStatus: TaskStatus
+  draggingId: string | null
+  draggingTask: TaskListItem | null | undefined
+  overIndex: { status: TaskStatus; index: number } | null
+  canWrite: boolean
+  onSelect: (id: string) => void
+  setDraggingId: (id: string | null) => void
+  setOverStatus: (s: TaskStatus | null) => void
+  setOverIndex: (v: { status: TaskStatus; index: number } | null) => void
+}) {
+  const sameCol = draggingTask?.status === colStatus
+  const ghostIdx = overIndex?.status === colStatus ? overIndex.index : null
+
+  // Build display list: exclude dragged card from original slot, insert ghost at target
+  const displayItems: Array<{ type: 'card'; task: TaskListItem; origIdx: number } | { type: 'ghost' }> = []
+  items.forEach((t, idx) => {
+    if (ghostIdx === idx) displayItems.push({ type: 'ghost' })
+    if (sameCol && t.id === draggingId) return // hidden at original pos
+    displayItems.push({ type: 'card', task: t, origIdx: idx })
+  })
+  if (ghostIdx !== null && ghostIdx >= items.length) displayItems.push({ type: 'ghost' })
+
+  return (
+    <>
+      {displayItems.map((item, ri) => {
+        if (item.type === 'ghost') {
+          return (
+            <div
+              key="__ghost__"
+              style={{
+                border: '2px dashed var(--mantine-color-blue-5)',
+                borderRadius: 'var(--mantine-radius-sm)',
+                minHeight: 52,
+                background: 'var(--mantine-color-blue-light)',
+                opacity: 0.55,
+              }}
+            />
+          )
+        }
+        const t = item.task
+        const idx = item.origIdx
+        return (
+          <Card
+            key={t.id}
+            withBorder
+            padding="xs"
+            radius="sm"
+            draggable={canWrite}
+            onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id) }}
+            onDragEnd={() => { setDraggingId(null); setOverStatus(null); setOverIndex(null) }}
+            onDragOver={(e) => {
+              if (!draggingId) return
+              e.preventDefault()
+              e.stopPropagation()
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              const insertAt = e.clientY < rect.top + rect.height / 2 ? idx : idx + 1
+              if (overIndex?.status !== colStatus || overIndex.index !== insertAt)
+                setOverIndex({ status: colStatus, index: insertAt })
+            }}
+            onClick={() => onSelect(t.id)}
+            style={{ cursor: canWrite ? 'grab' : 'pointer' }}
+          >
+            <Stack gap={4}>
+              <Group gap={4} wrap="wrap">
+                <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">{t.kind}</Badge>
+                <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">{t.priority}</Badge>
+              </Group>
+              <Text size="sm" fw={500} lineClamp={2}>{t.title}</Text>
+              {t.tags.length > 0 && (
+                <Group gap={4} wrap="wrap">
+                  {t.tags.slice(0, 3).map((tg) => (
+                    <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>{tg.tag.name}</Badge>
+                  ))}
+                </Group>
+              )}
+              {t.progressPercent != null && t.progressPercent > 0 && (
+                <div style={{ height: 4, background: 'var(--mantine-color-gray-2)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${t.progressPercent}%`, height: '100%',
+                    background: t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
+                  }} />
+                </div>
+              )}
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name : 'Unassigned'}</Text>
+                {t.dueAt && (
+                  <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
+                    {new Date(t.dueAt).toLocaleDateString()}
+                  </Text>
+                )}
+              </Group>
+            </Stack>
+          </Card>
+        )
+      })}
+    </>
+  )
+}
+
 function TasksKanbanView({
   tasks,
   canWrite,
@@ -1620,8 +1732,9 @@ function TasksKanbanView({
     return map
   }, [tasks, colOrder])
 
-  const handleDrop = (status: TaskStatus, insertIndex?: number) => {
+  const handleDrop = (status: TaskStatus) => {
     if (!draggingTask) return
+    const insertIndex = overIndex?.status === status ? overIndex.index : undefined
     setOverStatus(null)
     setOverIndex(null)
     setDraggingId(null)
@@ -1629,12 +1742,16 @@ function TasksKanbanView({
     if (draggingTask.status === status) {
       // Same-column reorder
       if (insertIndex === undefined) return
-      const col = byStatus[status].map((t) => t.id)
-      const from = col.indexOf(draggingTask.id)
-      if (from === -1 || from === insertIndex) return
-      const next = [...col]
+      const ids = byStatus[status].map((t) => t.id)
+      const from = ids.indexOf(draggingTask.id)
+      if (from === -1) return
+      // Remove from current position, insert at target
+      const next = [...ids]
       next.splice(from, 1)
-      next.splice(insertIndex > from ? insertIndex - 1 : insertIndex, 0, draggingTask.id)
+      // After removing, target slot shifts by -1 if target was after source
+      const to = insertIndex > from ? insertIndex - 1 : insertIndex
+      if (from === to) return
+      next.splice(to, 0, draggingTask.id)
       setColOrder((prev) => ({ ...prev, [status]: next }))
       return
     }
@@ -1675,7 +1792,6 @@ function TasksKanbanView({
             }}
             onDragOver={(e) => {
               if (!draggingTask) return
-              // Allow same-column reorder too
               if (!canDrop && draggingTask.status !== col.status) return
               e.preventDefault()
               if (overStatus !== col.status) setOverStatus(col.status)
@@ -1688,7 +1804,7 @@ function TasksKanbanView({
             }}
             onDrop={(e) => {
               e.preventDefault()
-              handleDrop(col.status, overIndex?.status === col.status ? overIndex.index : undefined)
+              handleDrop(col.status)
             }}
           >
             <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
@@ -1745,106 +1861,18 @@ function TasksKanbanView({
                   {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
                 </Text>
               ) : (
-                visible.map((t, idx) => {
-                  const isDropAbove =
-                    overIndex?.status === col.status && overIndex.index === idx && draggingId !== t.id
-                  return (<div key={t.id}>
-                    {isDropAbove && (
-                      <div style={{
-                        height: 3, borderRadius: 2, margin: '2px 0',
-                        background: 'var(--mantine-color-blue-5)',
-                        boxShadow: '0 0 6px var(--mantine-color-blue-4)',
-                      }} />
-                    )}
-                  <Card
-                    withBorder
-                    padding="xs"
-                    radius="sm"
-                    draggable={canWrite}
-                    onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id) }}
-                    onDragEnd={() => { setDraggingId(null); setOverStatus(null); setOverIndex(null) }}
-                    onDragOver={(e) => {
-                      if (!draggingId) return
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                      const mid = rect.top + rect.height / 2
-                      const insertAt = e.clientY < mid ? idx : idx + 1
-                      if (overIndex?.status !== col.status || overIndex.index !== insertAt)
-                        setOverIndex({ status: col.status, index: insertAt })
-                    }}
-                    onClick={() => onSelect(t.id)}
-                    style={{
-                      cursor: canWrite ? 'grab' : 'pointer',
-                      opacity: draggingId === t.id ? 0.4 : 1,
-                      transition: 'opacity 120ms ease',
-                    }}
-                  >
-                    <Stack gap={4}>
-                      <Group gap={4} wrap="wrap">
-                        <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">
-                          {t.kind}
-                        </Badge>
-                        <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">
-                          {t.priority}
-                        </Badge>
-                      </Group>
-                      <Text size="sm" fw={500} lineClamp={2}>
-                        {t.title}
-                      </Text>
-                      {t.tags.length > 0 && (
-                        <Group gap={4} wrap="wrap">
-                          {t.tags.slice(0, 3).map((tg) => (
-                            <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>
-                              {tg.tag.name}
-                            </Badge>
-                          ))}
-                        </Group>
-                      )}
-                      {t.progressPercent != null && t.progressPercent > 0 && (
-                        <div
-                          style={{
-                            height: 4,
-                            background: 'var(--mantine-color-gray-2)',
-                            borderRadius: 2,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${t.progressPercent}%`,
-                              height: '100%',
-                              background:
-                                t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
-                            }}
-                          />
-                        </div>
-                      )}
-                      <Group justify="space-between" wrap="nowrap">
-                        <Text size="xs" c="dimmed" truncate>
-                          {t.assignee ? t.assignee.name : 'Unassigned'}
-                        </Text>
-                        {t.dueAt && (
-                          <Text
-                            size="xs"
-                            c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}
-                          >
-                            {new Date(t.dueAt).toLocaleDateString()}
-                          </Text>
-                        )}
-                      </Group>
-                    </Stack>
-                  </Card>
-                  </div>)
-                })
-              )}
-              {/* Drop indicator at end of column */}
-              {overIndex?.status === col.status && overIndex.index >= visible.length && draggingTask?.status === col.status && (
-                <div style={{
-                  height: 3, borderRadius: 2, margin: '2px 0',
-                  background: 'var(--mantine-color-blue-5)',
-                  boxShadow: '0 0 6px var(--mantine-color-blue-4)',
-                }} />
+                <KanbanCardList
+                  items={visible}
+                  colStatus={col.status}
+                  draggingId={draggingId}
+                  draggingTask={draggingTask}
+                  overIndex={overIndex}
+                  canWrite={canWrite}
+                  onSelect={onSelect}
+                  setDraggingId={setDraggingId}
+                  setOverStatus={setOverStatus}
+                  setOverIndex={setOverIndex}
+                />
               )}
               {hidden > 0 && (
                 <Button

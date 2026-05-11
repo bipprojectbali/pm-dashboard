@@ -349,6 +349,7 @@ model Task {
   dueAt           DateTime?
   estimateHours   Float?
   progressPercent Int?
+  kanbanOrder     Int          @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   closedAt        DateTime?
@@ -370,6 +371,7 @@ model Task {
   @@index([reporterId])
   @@index([assigneeId])
   @@index([createdAt])
+  @@index([status, kanbanOrder])
   @@map("task")
 }
 

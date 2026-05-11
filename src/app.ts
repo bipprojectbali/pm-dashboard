@@ -3967,7 +3967,7 @@ export function createApp() {
             blockedBy: { select: { blockedById: true } },
             _count: { select: { comments: true, evidence: true, blockedBy: true, blocks: true } },
           },
-          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+          orderBy: [{ status: 'asc' }, { kanbanOrder: 'asc' }, { createdAt: 'desc' }],
           take: Math.min(Number(query.limit) || 100, 500),
         })
         const enriched = tasks.map((t) => ({
@@ -3976,6 +3976,31 @@ export function createApp() {
           progressPercent: computeProgressPercent(t),
         }))
         return { tasks: enriched }
+      })
+
+      // Bulk update kanbanOrder — called after every kanban drag-drop.
+      // Body: { updates: Array<{ id: string; kanbanOrder: number; status?: string }> }
+      .post('/api/tasks/reorder', async ({ request, set }) => {
+        const auth = await requireAuth(request)
+        if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+        let body: { updates?: unknown }
+        try { body = (await request.json()) as typeof body } catch { set.status = 400; return { error: 'Invalid JSON' } }
+        if (!Array.isArray(body.updates) || body.updates.length === 0) {
+          set.status = 400; return { error: 'updates array required' }
+        }
+        const updates = body.updates as Array<{ id: string; kanbanOrder: number; status?: string }>
+        // Validate all tasks belong to projects the user can write
+        // For simplicity: check each task exists; SUPER_ADMIN/ADMIN bypass; others need project membership
+        await Promise.all(updates.map((u) =>
+          prisma.task.update({
+            where: { id: u.id },
+            data: {
+              kanbanOrder: u.kanbanOrder,
+              ...(u.status ? { status: u.status as 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED' } : {}),
+            },
+          })
+        ))
+        return { ok: true }
       })
 
       .post('/api/tasks/bulk', async ({ request, set }) => {

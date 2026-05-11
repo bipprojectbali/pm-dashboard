@@ -683,15 +683,6 @@ export function TasksPanel({
             activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
           }
           onSelect={(id) => openTask(id)}
-          onMove={(id, status) =>
-            api(`/api/tasks/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status }),
-            })
-              .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-              .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] })) as Promise<void>
-          }
         />
       ) : (
         <Card withBorder padding={0} radius="md">
@@ -1565,34 +1556,31 @@ function TasksKanbanView({
   tasks,
   canWrite,
   onSelect,
-  onMove,
 }: {
   tasks: TaskListItem[]
   canWrite: boolean
   onSelect: (id: string) => void
-  onMove: (id: string, status: TaskStatus) => Promise<void> | void
 }) {
-  // State per kolom — array terpisah per status, indeks = persis apa yang di-render.
-  // Ini source of truth untuk kanban. Sync dari server saat tidak ada drag.
-  const initCols = (): Record<TaskStatus, TaskListItem[]> => {
+  const qc = useQueryClient()
+  // cols: per-kolom array, persis apa yang di-render.
+  // Di-init dan di-sync dari tasks prop (server data sudah terurut by kanbanOrder).
+  // Tidak perlu optimistic state — setelah drop kita langsung update DB,
+  // lalu refetch mengembalikan urutan yang sudah tersimpan.
+  const buildCols = (src: TaskListItem[]): Record<TaskStatus, TaskListItem[]> => {
     const m: Record<TaskStatus, TaskListItem[]> = {
       OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
     }
-    for (const t of tasks) m[t.status].push(t)
+    for (const t of src) m[t.status].push(t)
     return m
   }
-  const [cols, setCols] = useState<Record<TaskStatus, TaskListItem[]>>(initCols)
-  const prevTasksRef = useRef(tasks)
-  const pendingMovesRef = useRef(0)
+  const [cols, setCols] = useState<Record<TaskStatus, TaskListItem[]>>(() => buildCols(tasks))
 
+  // Sync cols from server whenever tasks prop changes (after refetch)
+  const prevTasksRef = useRef(tasks)
   useEffect(() => {
     if (prevTasksRef.current === tasks) return
     prevTasksRef.current = tasks
-    // Sync dari server hanya saat tidak ada drag in-flight
-    if (pendingMovesRef.current === 0) {
-      setCols(initCols())
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCols(buildCols(tasks))
   }, [tasks])
 
   // Per-column show-more limit
@@ -1627,58 +1615,61 @@ function TasksKanbanView({
     const srcStatus = source.droppableId as TaskStatus
     const dstStatus = destination.droppableId as TaskStatus
 
+    // 1. Update cols state optimistically (immediate visual feedback)
+    let newCols: Record<TaskStatus, TaskListItem[]> | null = null
     setCols((prev) => {
-      const next = {
+      const next: Record<TaskStatus, TaskListItem[]> = {
         OPEN: [...prev.OPEN],
         IN_PROGRESS: [...prev.IN_PROGRESS],
         READY_FOR_QC: [...prev.READY_FOR_QC],
         REOPENED: [...prev.REOPENED],
         CLOSED: [...prev.CLOSED],
       }
-
-      // Ambil item dari sumber berdasarkan index — persis sama dengan yang di-render
       const [moved] = next[srcStatus].splice(source.index, 1)
       if (!moved) return prev
 
-      if (srcStatus === dstStatus) {
-        // Same-column: cukup insert di destination.index
-        next[dstStatus].splice(destination.index, 0, moved)
-      } else {
-        // Cross-column: validasi transisi, update status, insert
+      if (srcStatus !== dstStatus) {
         const allowed = kanbanAllowed(srcStatus, moved.kind)
         if (!allowed.includes(dstStatus)) {
-          // Kembalikan item ke posisi asal
           next[srcStatus].splice(source.index, 0, moved)
           return prev
         }
         next[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
+      } else {
+        next[dstStatus].splice(destination.index, 0, moved)
       }
 
+      newCols = next
       return next
     })
 
-    // Cross-column: panggil API setelah state update
-    if (srcStatus !== dstStatus) {
-      pendingMovesRef.current += 1
-      const settle = () => {
-        pendingMovesRef.current -= 1
-        if (pendingMovesRef.current === 0) {
-          // Sync dari server setelah semua drag selesai
-          const m: Record<TaskStatus, TaskListItem[]> = {
-            OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
-          }
-          for (const t of prevTasksRef.current) m[t.status].push(t)
-          setCols(m)
-        }
+    // 2. Persist new order to server — assign kanbanOrder = array index
+    setTimeout(() => {
+      if (!newCols) return
+      const updates: Array<{ id: string; kanbanOrder: number; status?: string }> = []
+
+      // Collect all tasks from affected columns with their new index as kanbanOrder
+      const affectedStatuses = srcStatus === dstStatus ? [srcStatus] : [srcStatus, dstStatus]
+      for (const status of affectedStatuses) {
+        newCols[status].forEach((t, idx) => {
+          updates.push({
+            id: t.id,
+            kanbanOrder: idx,
+            ...(t.id === draggableId && srcStatus !== dstStatus ? { status: dstStatus } : {}),
+          })
+        })
       }
-      const moveResult = onMove(draggableId, dstStatus)
-      if (moveResult && typeof (moveResult as Promise<void>).finally === 'function') {
-        ;(moveResult as Promise<void>).finally(settle)
-      } else {
-        settle()
-      }
-    }
-  }, [onMove])
+
+      api('/api/tasks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+        .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
+        .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
+    }, 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qc, cols])
 
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'

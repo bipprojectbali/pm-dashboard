@@ -155,6 +155,15 @@ const STATUS_COLOR: Record<ProjectStatus, string> = {
   CANCELLED: 'dark',
 }
 
+const STATUS_ACCENT: Record<ProjectStatus, string> = {
+  DRAFT:     '#868e96',
+  ACTIVE:    '#228be6',
+  ON_HOLD:   '#fab005',
+  COMPLETED: '#40c057',
+  CANCELLED: '#495057',
+}
+const OVERDUE_ACCENT = '#fa5252'
+
 const PRIORITY_COLOR: Record<ProjectPriority, string> = {
   LOW: 'gray',
   MEDIUM: 'blue',
@@ -838,12 +847,8 @@ function ProjectListRow({
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        borderColor: overdue
-          ? 'var(--mantine-color-red-6)'
-          : hover && onOpen
-            ? 'var(--mantine-color-blue-5)'
-            : undefined,
-        transition: 'border-color 120ms ease, box-shadow 120ms ease',
+        borderLeft: `3px solid ${overdue ? OVERDUE_ACCENT : STATUS_ACCENT[p.status]}`,
+        transition: 'box-shadow 120ms ease',
         boxShadow: hover && onOpen ? '0 2px 8px rgba(0,0,0,0.06)' : undefined,
       }}
       onClick={onOpen}
@@ -851,17 +856,6 @@ function ProjectListRow({
       <Group gap="sm" wrap="nowrap" justify="space-between">
         {/* Left: name + badges */}
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Box
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              flexShrink: 0,
-              background: overdue
-                ? 'var(--mantine-color-red-6)'
-                : STATUS_DOT[p.status] ?? 'var(--mantine-color-gray-5)',
-            }}
-          />
           <Text fw={600} size="sm" truncate style={{ minWidth: 0, flex: '0 1 auto', maxWidth: 260 }}>
             {p.name}
           </Text>
@@ -968,11 +962,7 @@ function ProjectCard({
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        borderColor: overdue
-          ? 'var(--mantine-color-red-6)'
-          : hover && onOpen
-            ? 'var(--mantine-color-blue-5)'
-            : undefined,
+        borderLeft: `3px solid ${overdue ? OVERDUE_ACCENT : STATUS_ACCENT[p.status]}`,
         transform: hover && onOpen ? 'translateY(-1px)' : undefined,
         boxShadow: hover && onOpen ? '0 4px 12px rgba(0,0,0,0.08)' : undefined,
         transition: 'all 120ms ease',

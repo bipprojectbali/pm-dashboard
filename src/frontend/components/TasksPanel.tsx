@@ -1560,6 +1560,10 @@ function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
 
 const KANBAN_PAGE = 20
 
+// Tracks whether a drag gesture is actually in progress.
+// Prevents the queued onClick from firing after dragEnd.
+let _isDragging = false
+
 function KanbanCardList({
   items,
   colStatus,
@@ -1586,18 +1590,18 @@ function KanbanCardList({
   const sameCol = draggingTask?.status === colStatus
   const ghostIdx = overIndex?.status === colStatus ? overIndex.index : null
 
-  // Build display list: exclude dragged card from original slot, insert ghost at target
+  // Build display list: hide dragged card from original slot, insert ghost at target
   const displayItems: Array<{ type: 'card'; task: TaskListItem; origIdx: number } | { type: 'ghost' }> = []
   items.forEach((t, idx) => {
     if (ghostIdx === idx) displayItems.push({ type: 'ghost' })
-    if (sameCol && t.id === draggingId) return // hidden at original pos
+    if (sameCol && t.id === draggingId) return
     displayItems.push({ type: 'card', task: t, origIdx: idx })
   })
   if (ghostIdx !== null && ghostIdx >= items.length) displayItems.push({ type: 'ghost' })
 
   return (
     <>
-      {displayItems.map((item, ri) => {
+      {displayItems.map((item) => {
         if (item.type === 'ghost') {
           return (
             <div
@@ -1605,9 +1609,9 @@ function KanbanCardList({
               style={{
                 border: '2px dashed var(--mantine-color-blue-5)',
                 borderRadius: 'var(--mantine-radius-sm)',
-                minHeight: 52,
+                minHeight: 56,
                 background: 'var(--mantine-color-blue-light)',
-                opacity: 0.55,
+                opacity: 0.6,
               }}
             />
           )
@@ -1621,10 +1625,24 @@ function KanbanCardList({
             padding="xs"
             radius="sm"
             draggable={canWrite}
-            onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id) }}
-            onDragEnd={() => { setDraggingId(null); setOverStatus(null); setOverIndex(null) }}
+            onDragStart={(e) => {
+              // Required for Firefox — without setData, dragover/drop won't fire
+              e.dataTransfer.setData('text/plain', t.id)
+              e.dataTransfer.effectAllowed = 'move'
+              e.stopPropagation()
+              _isDragging = true
+              setDraggingId(t.id)
+            }}
+            onDragEnd={(e) => {
+              e.stopPropagation()
+              _isDragging = false
+              setDraggingId(null)
+              setOverStatus(null)
+              setOverIndex(null)
+            }}
             onDragOver={(e) => {
-              if (!draggingId) return
+              // Use e.dataTransfer check instead of state (avoids async race)
+              if (!e.dataTransfer.types.includes('text/plain')) return
               e.preventDefault()
               e.stopPropagation()
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -1632,7 +1650,12 @@ function KanbanCardList({
               if (overIndex?.status !== colStatus || overIndex.index !== insertAt)
                 setOverIndex({ status: colStatus, index: insertAt })
             }}
-            onClick={() => onSelect(t.id)}
+            onClick={(e) => {
+              // Block click if a drag just ended — browser queues click after dragEnd
+              if (_isDragging) { e.preventDefault(); return }
+              e.stopPropagation()
+              onSelect(t.id)
+            }}
             style={{ cursor: canWrite ? 'grab' : 'pointer' }}
           >
             <Stack gap={4}>
@@ -1790,20 +1813,31 @@ function TasksKanbanView({
               minHeight: isHidden ? 0 : 240,
               overflow: 'hidden',
             }}
+            onDragEnter={(e) => {
+              if (!e.dataTransfer.types.includes('text/plain')) return
+              e.preventDefault()
+            }}
             onDragOver={(e) => {
-              if (!draggingTask) return
-              if (!canDrop && draggingTask.status !== col.status) return
+              if (!e.dataTransfer.types.includes('text/plain')) return
+              // Allow same-column reorder + cross-column drop
+              if (!canDrop && draggingId == null) return
               e.preventDefault()
               if (overStatus !== col.status) setOverStatus(col.status)
             }}
             onDragLeave={(e) => {
-              if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+              // Use bounding box instead of relatedTarget — more reliable cross-browser
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              const outside =
+                e.clientX < rect.left || e.clientX > rect.right ||
+                e.clientY < rect.top  || e.clientY > rect.bottom
+              if (outside) {
                 if (overStatus === col.status) setOverStatus(null)
                 if (overIndex?.status === col.status) setOverIndex(null)
               }
             }}
             onDrop={(e) => {
               e.preventDefault()
+              e.stopPropagation()
               handleDrop(col.status)
             }}
           >

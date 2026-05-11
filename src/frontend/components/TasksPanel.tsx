@@ -42,7 +42,7 @@ import {
   TbChevronRight,
   TbClock,
   TbDownload,
-  TbEye,
+
   TbEyeOff,
   TbFileImport,
   TbFilter,
@@ -1706,9 +1706,9 @@ function TasksKanbanView({
               <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
                 <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
                   <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
-                    {isHidden ? items.length : col.label}
+                    {col.label}
                   </Badge>
-                  {!isHidden && <Text size="xs" c="dimmed">{items.length}</Text>}
+                  <Text size="xs" c="dimmed">{items.length}</Text>
                 </Group>
                 {!isHidden && (
                   <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
@@ -1727,7 +1727,7 @@ function TasksKanbanView({
                 {isHidden && (
                   <Tooltip label={`Tampilkan ${col.label}`} position="right">
                     <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
-                      <TbEye size={12} />
+                      <TbChevronRight size={12} />
                     </ActionIcon>
                   </Tooltip>
                 )}

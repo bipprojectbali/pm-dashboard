@@ -1700,17 +1700,26 @@ function TasksKanbanView({
               withBorder
               padding="xs"
               radius="md"
-              style={{ minHeight: isHidden ? 0 : 240, overflow: 'hidden' }}
+              style={{ minHeight: isHidden ? 0 : 240, overflow: 'visible' }}
             >
-              {/* Column header */}
-              <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
-                <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-                  <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
-                    {isHidden ? items.length : col.label}
-                  </Badge>
-                  {!isHidden && <Text size="xs" c="dimmed">{items.length}</Text>}
-                </Group>
-                {!isHidden && (
+              {/* Column header — minimized: vertical stack */}
+              {isHidden ? (
+                <Stack align="center" gap={4}>
+                  <Text size="xs" fw={700} c="dimmed">{items.length}</Text>
+                  <Tooltip label={`Tampilkan ${col.label}`} position="right">
+                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
+                      <TbChevronRight size={12} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Stack>
+              ) : (
+                <Group justify="space-between" mb={6} wrap="nowrap">
+                  <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+                    <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
+                      {col.label}
+                    </Badge>
+                    <Text size="xs" c="dimmed">{items.length}</Text>
+                  </Group>
                   <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
                     <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
                       <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleMax(col.status)}>
@@ -1723,15 +1732,8 @@ function TasksKanbanView({
                       </ActionIcon>
                     </Tooltip>
                   </Group>
-                )}
-                {isHidden && (
-                  <Tooltip label={`Tampilkan ${col.label}`} position="right">
-                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
-                      <TbChevronRight size={12} />
-                    </ActionIcon>
-                  </Tooltip>
-                )}
-              </Group>
+                </Group>
+              )}
 
               {/* Cards */}
               {!isHidden && (

@@ -1868,23 +1868,30 @@ function ProjectsGanttView({
           type: 'custom',
           encode: { x: [1, 2], y: 0 },
           data,
-          renderItem: (_params: unknown, apiRef: unknown) => {
+          renderItem: (paramsRef: unknown, apiRef: unknown) => {
+            const params = paramsRef as { coordSys: { x: number; y: number; width: number; height: number } }
             const api = apiRef as {
               value: (i: number) => number
               coord: (pt: [number, number]) => [number, number]
               size: (v: [number, number]) => [number, number]
-              style: (opts?: Record<string, unknown>) => Record<string, unknown>
               visual: (key: string) => string
             }
             const yIdx = api.value(0)
             const start = api.coord([api.value(1), yIdx])
             const end = api.coord([api.value(2), yIdx])
-            const height = api.size([0, 1])[1] * 0.5
-            const width = Math.max(2, end[0] - start[0])
+            const barH = api.size([0, 1])[1] * 0.5
             const color = api.visual('color') || '#228be6'
+
+            // Clamp bar to plot area so it never bleeds into the label column
+            const plotLeft = params.coordSys.x
+            const plotRight = params.coordSys.x + params.coordSys.width
+            const rectX = Math.max(start[0], plotLeft)
+            const rectRight = Math.min(end[0], plotRight)
+            const rectW = Math.max(2, rectRight - rectX)
+
             return {
               type: 'rect',
-              shape: { x: start[0], y: start[1] - height / 2, width, height },
+              shape: { x: rectX, y: start[1] - barH / 2, width: rectW, height: barH },
               style: { fill: color, opacity: 0.9 },
             }
           },

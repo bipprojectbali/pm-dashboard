@@ -51,6 +51,7 @@ import {
   TbUserQuestion,
   TbX,
 } from 'react-icons/tb'
+import { useLocalStorage } from '@mantine/hooks'
 import { useSession } from '../hooks/useAuth'
 import { downloadSampleCsv, parseTaskCsv, TASK_CSV_HEADERS, type RowError } from '../lib/csv'
 import { notifyError, notifySuccess } from '../lib/notify'
@@ -188,7 +189,7 @@ export function TasksPanel({
   const [mine, setMine] = useState(false)
   const [showCharts, setShowCharts] = useState(true)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
-  const [view, setView] = useState<'table' | 'gantt' | 'kanban'>('table')
+  const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | null>(null)
   const [page, setPage] = useState(1)

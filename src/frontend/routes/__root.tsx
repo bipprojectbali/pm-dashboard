@@ -4,6 +4,7 @@ import { CommandPalette } from '@/frontend/components/CommandPalette'
 import { ErrorPage } from '@/frontend/components/ErrorPage'
 import { GlobalTaskModal } from '@/frontend/components/GlobalTaskModal'
 import { NotFound } from '@/frontend/components/NotFound'
+import { SessionGuard } from '@/frontend/components/SessionGuard'
 
 interface RouterContext {
   queryClient: QueryClient
@@ -18,6 +19,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
   return (
     <>
+      <SessionGuard />
       <Outlet />
       <GlobalTaskModal />
       <CommandPalette />

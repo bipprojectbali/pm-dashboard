@@ -6,6 +6,7 @@ import { ModalsProvider } from '@mantine/modals'
 import { Notifications } from '@mantine/notifications'
 import { keepPreviousData, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
+import { UnauthorizedError } from './hooks/useAuth'
 import { useRealtimeInvalidate } from './hooks/useRealtimeInvalidate'
 import { routeTree } from './routeTree.gen'
 import { appTheme, cssVariablesResolver } from './theme'
@@ -14,7 +15,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      // Never retry a 401 — session is gone, redirect is the right action
+      retry: (failureCount, error) => {
+        if (error instanceof UnauthorizedError) return false
+        return failureCount < 1
+      },
       placeholderData: keepPreviousData,
       refetchOnWindowFocus: false,
     },

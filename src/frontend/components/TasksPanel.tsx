@@ -690,7 +690,7 @@ export function TasksPanel({
               body: JSON.stringify({ status }),
             })
               .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-              .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
+              .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] })) as Promise<void>
           }
         />
       ) : (
@@ -1570,18 +1570,22 @@ function TasksKanbanView({
   tasks: TaskListItem[]
   canWrite: boolean
   onSelect: (id: string) => void
-  onMove: (id: string, status: TaskStatus) => void
+  onMove: (id: string, status: TaskStatus) => Promise<void> | void
 }) {
-  // Optimistic local task list — mirrors `tasks` prop but applies
-  // immediate drag results before server refetch arrives.
-  // Keyed by a snapshot of tasks so stale optimistic state never
-  // survives a server refetch.
+  // Optimistic local task list — immediate drag results applied here,
+  // server refetch syncs back only when no drag is in-flight.
   const [localTasks, setLocalTasks] = useState<TaskListItem[]>(tasks)
   const prevTasksRef = useRef(tasks)
+  // Track how many cross-column moves are still waiting for server ACK.
+  // While pendingMoves > 0, server refetch data is ignored so it doesn't
+  // overwrite the optimistic order the user just produced.
+  const pendingMovesRef = useRef(0)
+
   useEffect(() => {
-    // When server data changes (refetch), sync local state
-    if (prevTasksRef.current !== tasks) {
-      prevTasksRef.current = tasks
+    if (prevTasksRef.current === tasks) return
+    prevTasksRef.current = tasks
+    // Only sync from server when nothing is pending
+    if (pendingMovesRef.current === 0) {
       setLocalTasks(tasks)
     }
   }, [tasks])
@@ -1658,7 +1662,6 @@ function TasksKanbanView({
     setLocalTasks((prev) => {
       const next = prev.filter((t) => t.id !== draggableId)
       const updated = { ...task, status: dstStatus }
-      // Find insertion point in destination column
       const dstItems = next.filter((t) => t.status === dstStatus)
       const insertAfter = dstItems[destination.index - 1]
       const insertIdx = insertAfter
@@ -1668,8 +1671,20 @@ function TasksKanbanView({
       return next
     })
 
-    // Call API — on success invalidation will sync localTasks via useEffect
-    onMove(draggableId, dstStatus)
+    // Block server-refetch sync while API is in-flight
+    pendingMovesRef.current += 1
+    const settle = () => {
+      pendingMovesRef.current -= 1
+      if (pendingMovesRef.current === 0) {
+        setLocalTasks(prevTasksRef.current)
+      }
+    }
+    const moveResult = onMove(draggableId, dstStatus)
+    if (moveResult && typeof (moveResult as Promise<void>).finally === 'function') {
+      ;(moveResult as Promise<void>).finally(settle)
+    } else {
+      settle()
+    }
   }, [localTasks, onMove])
 
   const gridCols = KANBAN_COLUMNS.map((col) =>

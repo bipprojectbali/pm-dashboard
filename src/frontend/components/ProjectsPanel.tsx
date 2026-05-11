@@ -40,6 +40,8 @@ import {
   TbFlag,
   TbFolder,
   TbHistory,
+  TbLayoutGrid,
+  TbLayoutList,
   TbPencil,
   TbPlus,
   TbRefresh,
@@ -304,7 +306,7 @@ export function ProjectsPanel() {
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
-  const [view, setView] = useLocalStorage<'cards' | 'timeline'>({ key: 'pm:projects:view', defaultValue: 'cards' })
+  const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({ key: 'pm:projects:view', defaultValue: 'grid' })
   const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>({
     key: 'pm:projects:density',
     defaultValue: 'comfortable',
@@ -637,15 +639,38 @@ export function ProjectsPanel() {
                   { value: 'compact', label: 'Dense' },
                 ]}
               />
-              <SegmentedControl
-                size="xs"
-                value={view}
-                onChange={(v) => setView(v as 'cards' | 'timeline')}
-                data={[
-                  { value: 'cards', label: 'Cards' },
-                  { value: 'timeline', label: 'Timeline' },
-                ]}
-              />
+              <Group gap={2}>
+                <Tooltip label="Grid view">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'grid' ? 'filled' : 'subtle'}
+                    color={view === 'grid' ? 'blue' : 'gray'}
+                    onClick={() => setView('grid')}
+                  >
+                    <TbLayoutGrid size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="List view">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'list' ? 'filled' : 'subtle'}
+                    color={view === 'list' ? 'blue' : 'gray'}
+                    onClick={() => setView('list')}
+                  >
+                    <TbLayoutList size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Timeline">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'timeline' ? 'filled' : 'subtle'}
+                    color={view === 'timeline' ? 'blue' : 'gray'}
+                    onClick={() => setView('timeline')}
+                  >
+                    <TbCalendarEvent size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
             </Group>
             {hasActiveFilters && (
               <Group justify="space-between" gap="xs">
@@ -700,6 +725,18 @@ export function ProjectsPanel() {
         </Card>
       ) : view === 'timeline' ? (
         <ProjectsGanttView projects={filtered} onSelect={(p) => openProject(p.id)} />
+      ) : view === 'list' ? (
+        <Stack gap="xs">
+          {filtered.map((p) => (
+            <ProjectListRow
+              key={p.id}
+              project={p}
+              isSystemAdmin={canCreateProject}
+              onOpen={() => openProject(p.id)}
+              onEdit={() => openProject(p.id, 'settings')}
+            />
+          ))}
+        </Stack>
       ) : (
         <SimpleGrid
           cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }}
@@ -772,6 +809,133 @@ function PortfolioStat({
       </Group>
     </Card>
   )
+}
+
+function ProjectListRow({
+  project: p,
+  isSystemAdmin: isAdmin,
+  onOpen,
+  onEdit,
+}: {
+  project: ProjectListItem
+  isSystemAdmin: boolean
+  onOpen?: () => void
+  onEdit: () => void
+}) {
+  const { overdue, daysOver } = computeOverdue(p)
+  const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
+  const taskDone = p.taskStats && p.taskStats.total > 0
+    ? Math.round((p.taskStats.closed / p.taskStats.total) * 100)
+    : null
+  const [hover, setHover] = useState(false)
+
+  return (
+    <Card
+      withBorder
+      padding="sm"
+      radius="md"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        cursor: onOpen ? 'pointer' : 'default',
+        borderColor: overdue
+          ? 'var(--mantine-color-red-6)'
+          : hover && onOpen
+            ? 'var(--mantine-color-blue-5)'
+            : undefined,
+        transition: 'border-color 120ms ease, box-shadow 120ms ease',
+        boxShadow: hover && onOpen ? '0 2px 8px rgba(0,0,0,0.06)' : undefined,
+      }}
+      onClick={onOpen}
+    >
+      <Group gap="sm" wrap="nowrap" justify="space-between">
+        {/* Left: name + badges */}
+        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          <Box
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              flexShrink: 0,
+              background: overdue
+                ? 'var(--mantine-color-red-6)'
+                : STATUS_DOT[p.status] ?? 'var(--mantine-color-gray-5)',
+            }}
+          />
+          <Text fw={600} size="sm" truncate style={{ minWidth: 0, flex: '0 1 auto', maxWidth: 260 }}>
+            {p.name}
+          </Text>
+          <Group gap={4} wrap="nowrap" visibleFrom="sm">
+            <Badge color={STATUS_COLOR[p.status]} variant="light" size="xs">
+              {p.status.replace('_', ' ')}
+            </Badge>
+            <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
+              {p.priority}
+            </Badge>
+            {overdue && (
+              <Badge color="red" variant="filled" size="xs">
+                Overdue {daysOver}d
+              </Badge>
+            )}
+          </Group>
+        </Group>
+
+        {/* Middle: progress + dates */}
+        <Group gap="lg" wrap="nowrap" visibleFrom="md" style={{ flexShrink: 0 }}>
+          {taskDone !== null && (
+            <Group gap={6} wrap="nowrap">
+              <Box style={{ width: 80 }}>
+                <Progress value={taskDone} size="xs" color={taskDone === 100 ? 'green' : 'blue'} />
+              </Box>
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {taskDone}%
+              </Text>
+            </Group>
+          )}
+          {(p.startsAt || p.endsAt) && (
+            <Group gap={4} wrap="nowrap">
+              <TbCalendarEvent size={12} color="var(--mantine-color-dimmed)" />
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {formatDate(p.endsAt) ?? '—'}
+              </Text>
+            </Group>
+          )}
+          <Group gap={4} wrap="nowrap">
+            <TbUsers size={12} color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">{p._count.members}</Text>
+          </Group>
+          <Text size="xs" c="dimmed" truncate style={{ maxWidth: 120 }}>
+            {p.owner.name}
+          </Text>
+        </Group>
+
+        {/* Right: edit action */}
+        {canEdit && (
+          <Tooltip label="Edit project">
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              style={{ flexShrink: 0 }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}
+            >
+              <TbPencil size={14} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </Group>
+    </Card>
+  )
+}
+
+const STATUS_DOT: Record<string, string> = {
+  ACTIVE:    'var(--mantine-color-blue-5)',
+  DRAFT:     'var(--mantine-color-gray-5)',
+  ON_HOLD:   'var(--mantine-color-yellow-5)',
+  COMPLETED: 'var(--mantine-color-green-5)',
+  CANCELLED: 'var(--mantine-color-red-5)',
 }
 
 function ProjectCard({

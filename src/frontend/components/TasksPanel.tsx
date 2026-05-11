@@ -1706,7 +1706,7 @@ function TasksKanbanView({
               <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
                 <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
                   <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
-                    {col.label}
+                    {isHidden ? items.length : col.label}
                   </Badge>
                   {!isHidden && <Text size="xs" c="dimmed">{items.length}</Text>}
                 </Group>

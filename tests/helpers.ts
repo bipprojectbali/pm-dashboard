@@ -25,7 +25,7 @@ export async function createTestSession(userId: string, expiresAt?: Date) {
     data: {
       token,
       userId,
-      expiresAt: expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
+      expiresAt: expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   })
   return token

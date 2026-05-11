@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { EChartsOption } from 'echarts'
 import { useMemo, useState } from 'react'
 import { TbActivity, TbAlertTriangle, TbChartBar, TbCheck, TbRefresh, TbShieldOff } from 'react-icons/tb'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 import { EChart } from './charts/EChart'
 
 type Status = 'all' | 'ok' | 'fail' | 'auth'
@@ -404,23 +405,24 @@ export function WebhookMonitorPanel() {
             ]}
           />
         </Group>
-        <Table striped highlightOnHover>
+        <Table.ScrollContainer minWidth={1000}>
+        <Table striped highlightOnHover layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>When</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Reason</Table.Th>
-              <Table.Th>Token</Table.Th>
-              <Table.Th>Agent</Table.Th>
-              <Table.Th>IP</Table.Th>
-              <Table.Th>Events</Table.Th>
+              <Table.Th style={stickyFirstHeader(160)}>When</Table.Th>
+              <Table.Th style={{ width: 90 }}>Status</Table.Th>
+              <Table.Th style={{ width: 200 }}>Reason</Table.Th>
+              <Table.Th style={{ width: 220 }}>Token</Table.Th>
+              <Table.Th style={{ width: 220 }}>Agent</Table.Th>
+              <Table.Th style={{ width: 130 }}>IP</Table.Th>
+              <Table.Th style={{ width: 90 }}>Events</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {pagedLogs.length ? (
               pagedLogs.map((row) => (
                 <Table.Tr key={row.id}>
-                  <Table.Td>{formatRelative(row.createdAt)}</Table.Td>
+                  <Table.Td style={stickyFirstCell(160)}>{formatRelative(row.createdAt)}</Table.Td>
                   <Table.Td>
                     <Badge color={statusColor(row.statusCode)} size="sm">
                       {row.statusCode}
@@ -472,6 +474,7 @@ export function WebhookMonitorPanel() {
             )}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
         {logs.length > PAGE_SIZE && (
           <Group justify="space-between" mt="sm">
             <Text size="xs" c="dimmed">

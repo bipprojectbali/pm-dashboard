@@ -25,7 +25,7 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import {
   TbActivity,
   TbAlertTriangle,
@@ -43,6 +43,7 @@ import {
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
 import { LoadingBlock } from '@/frontend/components/shared/LoadingState'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 const PAGE_SIZE = 25
 
@@ -493,24 +494,33 @@ export function AgentsPanel() {
         </Stack>
       ) : (
         <Card withBorder padding={0} radius="md">
-          <Table striped highlightOnHover verticalSpacing="sm">
+          <Table.ScrollContainer minWidth={1100}>
+          <Table striped highlightOnHover verticalSpacing="sm" layout="fixed">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ width: 140 }}>Status</Table.Th>
-                <Table.Th>Host</Table.Th>
-                <Table.Th style={{ width: 220 }}>Agent ID</Table.Th>
-                <Table.Th style={{ width: 200 }}>Assigned to</Table.Th>
+                <Table.Th style={stickyFirstHeader(160)}>Status</Table.Th>
+                <Table.Th style={{ width: 200 }}>Host</Table.Th>
+                <Table.Th style={{ width: 240 }}>Agent ID</Table.Th>
+                <Table.Th style={{ width: 220 }}>Assigned to</Table.Th>
                 <Table.Th style={{ width: 90 }}>Events</Table.Th>
-                <Table.Th style={{ width: 150 }}>Last seen</Table.Th>
-                <Table.Th style={{ width: 180 }}></Table.Th>
+                <Table.Th style={{ width: 160 }}>Last seen</Table.Th>
+                <Table.Th style={{ width: 200 }}></Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pagedAgents.map((a) => (
-                <AgentRowTr key={a.id} agent={a} showAssignee onApprove={openApprove} onRevoke={openRevoke} />
+                <AgentRowTr
+                  key={a.id}
+                  agent={a}
+                  showAssignee
+                  onApprove={openApprove}
+                  onRevoke={openRevoke}
+                  firstColStyle={stickyFirstCell(160)}
+                />
               ))}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
           {agents.length > PAGE_SIZE && (
             <Group justify="space-between" p="md">
               <Text size="xs" c="dimmed">
@@ -530,16 +540,18 @@ function AgentRowTr({
   showAssignee,
   onApprove,
   onRevoke,
+  firstColStyle,
 }: {
   agent: AgentRow
   showAssignee: boolean
   onApprove: (a: AgentRow) => void
   onRevoke: (a: AgentRow) => void
+  firstColStyle?: CSSProperties
 }) {
   const live = getLiveness(a.status, a.lastSeenAt)
   return (
     <Table.Tr>
-      <Table.Td>
+      <Table.Td style={firstColStyle}>
         <Group gap={6} wrap="nowrap">
           <Indicator inline processing={live.processing} color={live.color} size={8} position="middle-center">
             <span style={{ display: 'inline-block', width: 0 }} />

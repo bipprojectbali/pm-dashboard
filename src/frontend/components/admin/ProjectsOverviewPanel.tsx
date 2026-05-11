@@ -17,7 +17,7 @@ import {
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import {
   TbAlertTriangle,
   TbCheck,
@@ -34,6 +34,26 @@ import type { ProjectListItem, ProjectPriority, ProjectStatus } from '../Project
 import { QcSelfProjectCard } from './QcSelfProjectCard'
 
 const PAGE_SIZE = 25
+
+const STICKY_PROJECT_HEADER: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 3,
+  background: 'var(--mantine-color-body)',
+  minWidth: 220,
+  width: 220,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
+
+const STICKY_PROJECT_CELL: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  background: 'var(--mantine-color-body)',
+  minWidth: 220,
+  width: 220,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
 
 const STATUS_COLOR: Record<ProjectStatus, string> = {
   DRAFT: 'gray',
@@ -245,26 +265,27 @@ export function ProjectsOverviewPanel() {
       </Card>
 
       <Card withBorder padding={0} radius="md">
-        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+        <Table.ScrollContainer minWidth={1100}>
+        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Project</Table.Th>
-              <Table.Th>Owner</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Priority</Table.Th>
-              <Table.Th>
+              <Table.Th style={STICKY_PROJECT_HEADER}>Project</Table.Th>
+              <Table.Th style={{ width: 180 }}>Owner</Table.Th>
+              <Table.Th style={{ width: 120 }}>Status</Table.Th>
+              <Table.Th style={{ width: 110 }}>Priority</Table.Th>
+              <Table.Th style={{ width: 150 }}>
                 <Tooltip label="Jumlah task CLOSED / total task + bar progress. 100% bar berubah hijau.">
                   <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Tasks</span>
                 </Tooltip>
               </Table.Th>
-              <Table.Th>
+              <Table.Th style={{ width: 110 }}>
                 <Tooltip label="Milestone = sub-deadline dalam project. Format done / total. '—' = project belum punya milestone.">
                   <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Milestones</span>
                 </Tooltip>
               </Table.Th>
-              <Table.Th>Members</Table.Th>
-              <Table.Th>Deadline</Table.Th>
-              <Table.Th style={{ width: 40 }} />
+              <Table.Th style={{ width: 90 }}>Members</Table.Th>
+              <Table.Th style={{ width: 160 }}>Deadline</Table.Th>
+              <Table.Th style={{ width: 60 }} />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -297,7 +318,7 @@ export function ProjectsOverviewPanel() {
                 p.originalEndAt && p.endsAt && new Date(p.endsAt).getTime() !== new Date(p.originalEndAt).getTime()
               return (
                 <Table.Tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openProject(p.id)}>
-                  <Table.Td>
+                  <Table.Td style={STICKY_PROJECT_CELL}>
                     <Stack gap={2}>
                       <Text size="sm" fw={500} lineClamp={1}>
                         {p.name}
@@ -385,6 +406,7 @@ export function ProjectsOverviewPanel() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
         {filtered.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">
             <Text size="xs" c="dimmed">

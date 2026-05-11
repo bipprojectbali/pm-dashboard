@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TbActivity, TbClock, TbDevices, TbRefresh, TbSearch, type TbUsers, TbWifi } from 'react-icons/tb'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 const PAGE_SIZE = 25
 
@@ -236,14 +237,15 @@ export function SessionsPanel() {
       </Card>
 
       <Card withBorder padding={0} radius="md">
-        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+        <Table.ScrollContainer minWidth={850}>
+        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>User</Table.Th>
-              <Table.Th>Role</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Started</Table.Th>
-              <Table.Th>Expires</Table.Th>
+              <Table.Th style={stickyFirstHeader(240)}>User</Table.Th>
+              <Table.Th style={{ width: 130 }}>Role</Table.Th>
+              <Table.Th style={{ width: 160 }}>Status</Table.Th>
+              <Table.Th style={{ width: 160 }}>Started</Table.Th>
+              <Table.Th style={{ width: 160 }}>Expires</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -267,12 +269,12 @@ export function SessionsPanel() {
             )}
             {pagedFiltered.map((s) => (
               <Table.Tr key={s.id} opacity={s.isExpired ? 0.5 : 1}>
-                <Table.Td>
+                <Table.Td style={stickyFirstCell(240)}>
                   <Stack gap={2}>
-                    <Text size="sm" fw={500}>
+                    <Text size="sm" fw={500} lineClamp={1}>
                       {s.userName}
                     </Text>
-                    <Text size="xs" c="dimmed">
+                    <Text size="xs" c="dimmed" lineClamp={1}>
                       {s.userEmail}
                     </Text>
                   </Stack>
@@ -322,6 +324,7 @@ export function SessionsPanel() {
             ))}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
         {filtered.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">
             <Text size="xs" c="dimmed">

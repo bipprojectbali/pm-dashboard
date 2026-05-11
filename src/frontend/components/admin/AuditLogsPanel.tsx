@@ -33,6 +33,7 @@ import { EChart } from '@/frontend/components/charts/EChart'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 
 interface AdminUser {
@@ -356,14 +357,15 @@ export function AuditLogsPanel() {
       </Group>
 
       <Card withBorder radius="md" p={0}>
-        <Table highlightOnHover>
+        <Table.ScrollContainer minWidth={900}>
+        <Table highlightOnHover layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={180}>Waktu</Table.Th>
-              <Table.Th>User</Table.Th>
-              <Table.Th>Action</Table.Th>
-              <Table.Th>Detail</Table.Th>
-              <Table.Th w={120}>IP</Table.Th>
+              <Table.Th style={stickyFirstHeader(180)}>Waktu</Table.Th>
+              <Table.Th style={{ width: 220 }}>User</Table.Th>
+              <Table.Th style={{ width: 160 }}>Action</Table.Th>
+              <Table.Th style={{ width: 220 }}>Detail</Table.Th>
+              <Table.Th style={{ width: 130 }}>IP</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -393,7 +395,7 @@ export function AuditLogsPanel() {
               const badge = actionBadge[log.action] ?? { color: 'gray', label: log.action }
               return (
                 <Table.Tr key={log.id}>
-                  <Table.Td>
+                  <Table.Td style={stickyFirstCell(180)}>
                     <Text size="xs" ff="monospace" c="dimmed">
                       {new Date(log.createdAt).toLocaleString('id-ID', { hour12: false })}
                     </Text>
@@ -434,6 +436,7 @@ export function AuditLogsPanel() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Card>
 
       {filteredLogs.length > PAGE_SIZE && (

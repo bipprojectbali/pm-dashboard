@@ -33,6 +33,7 @@ import {
 } from 'react-icons/tb'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 type TokenStatus = 'ACTIVE' | 'DISABLED' | 'REVOKED'
 
@@ -278,15 +279,16 @@ export function WebhookTokensPanel() {
       {err && <Alert color="red">{err.message}</Alert>}
 
       <Card withBorder padding={0} radius="md">
-        <Table striped highlightOnHover>
+        <Table.ScrollContainer minWidth={1000}>
+        <Table striped highlightOnHover layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th style={{ width: 100 }}>Status</Table.Th>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Prefix</Table.Th>
-              <Table.Th style={{ width: 160 }}>Created by</Table.Th>
-              <Table.Th style={{ width: 120 }}>Expires</Table.Th>
-              <Table.Th style={{ width: 120 }}>Last used</Table.Th>
+              <Table.Th style={stickyFirstHeader(220)}>Name</Table.Th>
+              <Table.Th style={{ width: 110 }}>Status</Table.Th>
+              <Table.Th style={{ width: 160 }}>Prefix</Table.Th>
+              <Table.Th style={{ width: 200 }}>Created by</Table.Th>
+              <Table.Th style={{ width: 130 }}>Expires</Table.Th>
+              <Table.Th style={{ width: 130 }}>Last used</Table.Th>
               <Table.Th style={{ width: 50 }}></Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -313,15 +315,15 @@ export function WebhookTokensPanel() {
               const expiry = formatExpiry(t.expiresAt)
               return (
                 <Table.Tr key={t.id}>
+                  <Table.Td style={stickyFirstCell(220)}>
+                    <Text size="sm" fw={500} lineClamp={1}>
+                      {t.name}
+                    </Text>
+                  </Table.Td>
                   <Table.Td>
                     <Badge size="sm" color={STATUS_COLOR[t.status]} variant="light">
                       {t.status}
                     </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" fw={500}>
-                      {t.name}
-                    </Text>
                   </Table.Td>
                   <Table.Td>
                     <Code style={{ fontSize: 11 }}>{t.tokenPrefix}…</Code>
@@ -394,6 +396,7 @@ export function WebhookTokensPanel() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Card>
     </Stack>
   )

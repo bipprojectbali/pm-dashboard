@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { Elysia } from 'elysia'
 import pkg from '../package.json' with { type: 'json' }
 import { createMcpServer, type McpScope } from '../scripts/mcp/server'
+import { auth } from './lib/auth'
 import {
   computeAdminOverview,
   computeAnalytics,
@@ -46,32 +47,52 @@ function audit(userId: string | null, action: string, detail: string | null, ip:
   prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
 }
 
-// In-memory login throttle: track recent failed attempts per IP.
+// Redis-backed login throttle: survives server restarts.
 // Limit: 10 failed attempts per 15 minutes. Successful login clears the counter.
-const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_RATE_WINDOW_SEC = 15 * 60
 const LOGIN_RATE_MAX = 10
-const loginAttempts = new Map<string, number[]>()
 
-function loginAttemptsRemaining(ip: string): number {
-  const now = Date.now()
-  const arr = (loginAttempts.get(ip) ?? []).filter((t) => now - t < LOGIN_RATE_WINDOW_MS)
-  loginAttempts.set(ip, arr)
-  return Math.max(0, LOGIN_RATE_MAX - arr.length)
+function loginRateLimitKey(ip: string): string {
+  return `login:fail:${ip}`
 }
 
-function recordLoginFailure(ip: string) {
-  const arr = loginAttempts.get(ip) ?? []
-  arr.push(Date.now())
-  loginAttempts.set(ip, arr)
+async function loginAttemptsRemaining(ip: string): Promise<number> {
+  const val = await redis.get(loginRateLimitKey(ip))
+  const count = val ? parseInt(val, 10) : 0
+  return Math.max(0, LOGIN_RATE_MAX - count)
 }
 
-function clearLoginAttempts(ip: string) {
-  loginAttempts.delete(ip)
+async function recordLoginFailure(ip: string): Promise<void> {
+  const key = loginRateLimitKey(ip)
+  const val = await redis.get(key)
+  const count = val ? parseInt(val, 10) : 0
+  await redis.setex(key, LOGIN_RATE_WINDOW_SEC, String(count + 1))
+}
+
+async function clearLoginAttempts(ip: string): Promise<void> {
+  await redis.del(loginRateLimitKey(ip))
+}
+
+// Session TTL: 7 days. Refresh (sliding expiry) if last activity was > 1 day ago.
+const SESSION_TTL_SEC = 7 * 24 * 60 * 60
+const SESSION_REFRESH_THRESHOLD_SEC = 24 * 60 * 60
+
+// Extract the plain session token from a cookie string, stripping the HMAC
+// signature suffix that Better Auth appends to signed cookies ("<token>.<sig>").
+function extractSessionToken(cookie: string): string | undefined {
+  const raw = cookie.match(/session=([^;]+)/)?.[1]
+  if (!raw) return undefined
+  const decoded = decodeURIComponent(raw)
+  return decoded.includes('.') ? decoded.slice(0, decoded.lastIndexOf('.')) : decoded
 }
 
 function sessionCookie(value: string, maxAgeSec: number): string {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
-  return `session=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${secure}`
+  const isProd = process.env.NODE_ENV === 'production'
+  const secure = isProd ? '; Secure' : ''
+  // SameSite=Strict in production prevents CSRF via top-level navigation.
+  // SameSite=Lax in development keeps OAuth redirects working locally.
+  const sameSite = isProd ? 'Strict' : 'Lax'
+  return `session=${value}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${maxAgeSec}${secure}`
 }
 
 type PMTab = 'overview' | 'projects' | 'tasks' | 'activity' | 'team'
@@ -118,16 +139,68 @@ function sanitizePreferences(input: Record<string, unknown>): UserPreferences {
   }
 }
 
-async function requireAuth(request: Request): Promise<{ userId: string; role: string; email: string } | null> {
+async function requireAuth(
+  request: Request,
+  responseHeaders?: Headers,
+): Promise<{ userId: string; role: string; email: string } | null> {
+  // Use direct DB lookup for sessions created by both custom login endpoint
+  // AND Better Auth sign-in endpoints. Both write to the same `session` table.
+  // Better Auth sessions use signed cookies (HMAC), so we need to attempt both:
+  // 1. Plain UUID token (custom login endpoint)
+  // 2. Better Auth signed token (BA sign-in/email, sign-in/social)
+  let token: string | null = null
+  let isBaSession = false
+
   const cookie = request.headers.get('cookie') ?? ''
-  const token = cookie.match(/session=([^;]+)/)?.[1]
-  if (!token) return null
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { user: { select: { id: true, role: true, email: true, blocked: true } } },
-  })
-  if (!session || session.expiresAt < new Date() || session.user.blocked) return null
-  return { userId: session.user.id, role: session.user.role, email: session.user.email }
+  const rawToken = cookie.match(/session=([^;]+)/)?.[1]
+  if (!rawToken) return null
+  const plainTokenForDb = extractSessionToken(cookie)
+
+  // Attempt 1: treat as plain UUID (custom endpoint session)
+  const plainSession = plainTokenForDb
+    ? await prisma.session.findUnique({
+        where: { token: plainTokenForDb },
+        include: { user: { select: { id: true, role: true, email: true, blocked: true } } },
+      })
+    : null
+  if (plainSession) {
+    token = rawToken
+    if (!plainSession || plainSession.expiresAt < new Date() || plainSession.user.blocked) {
+      if (plainSession) await prisma.session.delete({ where: { id: plainSession.id } }).catch(() => {})
+      return null
+    }
+    // Sliding expiry for custom sessions
+    const secondsUntilExpiry = (plainSession.expiresAt.getTime() - Date.now()) / 1000
+    if (secondsUntilExpiry < SESSION_TTL_SEC - SESSION_REFRESH_THRESHOLD_SEC) {
+      const newExpiry = new Date(Date.now() + SESSION_TTL_SEC * 1000)
+      await prisma.session.update({ where: { id: plainSession.id }, data: { expiresAt: newExpiry } }).catch(() => {})
+      if (responseHeaders) responseHeaders.set('set-cookie', sessionCookie(rawToken, SESSION_TTL_SEC))
+    }
+    // SUPER_ADMIN auto-promotion
+    if (env.SUPER_ADMIN_EMAILS.includes(plainSession.user.email) && plainSession.user.role !== 'SUPER_ADMIN') {
+      await prisma.user.update({ where: { id: plainSession.user.id }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
+      return { userId: plainSession.user.id, role: 'SUPER_ADMIN', email: plainSession.user.email }
+    }
+    return { userId: plainSession.user.id, role: plainSession.user.role, email: plainSession.user.email }
+  }
+
+  // Attempt 2: Better Auth signed token — decode via BA api.getSession()
+  const baSession = await auth.api.getSession({ headers: request.headers })
+  if (!baSession) return null
+  isBaSession = true
+
+  const userRole = ((baSession.user as unknown as { role: string }).role ?? 'USER') as string
+  const isBlocked = (baSession.user as unknown as { blocked: boolean }).blocked ?? false
+  if (isBlocked) return null
+
+  // SUPER_ADMIN auto-promotion for BA sessions
+  if (env.SUPER_ADMIN_EMAILS.includes(baSession.user.email) && userRole !== 'SUPER_ADMIN') {
+    await prisma.user.update({ where: { id: baSession.user.id }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
+    return { userId: baSession.user.id, role: 'SUPER_ADMIN', email: baSession.user.email }
+  }
+
+  void isBaSession // used for future telemetry
+  return { userId: baSession.user.id, role: userRole, email: baSession.user.email }
 }
 
 function getAllowedTaskTransitions(current: string, kind: 'TASK' | 'BUG' | 'QC'): string[] {
@@ -368,10 +441,17 @@ export function createApp() {
       // API routes
       .get('/health', () => ({ status: 'ok' }))
 
+      // ─── Better Auth handler ────────────────────────────
+      // Handles: /api/auth/sign-in/email, /api/auth/sign-in/social,
+      // /api/auth/sign-out, /api/auth/get-session, /api/auth/callback/google, etc.
+      // Elysia resolves more-specific routes first, so the custom routes below
+      // (/api/auth/login, /api/auth/logout, /api/auth/session) take precedence.
+      .all('/api/auth/*', async ({ request }) => auth.handler(request))
+
       // ─── Auth API ──────────────────────────────────────
       .post('/api/auth/login', async ({ request, set }) => {
         const ip = getIp(request)
-        if (loginAttemptsRemaining(ip) === 0) {
+        if ((await loginAttemptsRemaining(ip)) === 0) {
           audit(null, 'LOGIN_THROTTLED', null, ip)
           appLog('warn', `Login throttled from ${ip}`, ip)
           set.status = 429
@@ -392,7 +472,7 @@ export function createApp() {
         }
         let user = await prisma.user.findUnique({ where: { email } })
         if (!user || !(await Bun.password.verify(password, user.password))) {
-          recordLoginFailure(ip)
+          await recordLoginFailure(ip)
           audit(user?.id ?? null, 'LOGIN_FAILED', `email: ${email}`, ip)
           appLog('warn', `Login failed: ${email}`, ip)
           set.status = 401
@@ -408,20 +488,36 @@ export function createApp() {
         if (env.SUPER_ADMIN_EMAILS.includes(user.email) && user.role !== 'SUPER_ADMIN') {
           user = await prisma.user.update({ where: { id: user.id }, data: { role: 'SUPER_ADMIN' } })
         }
-        clearLoginAttempts(ip)
+        await clearLoginAttempts(ip)
         const token = crypto.randomUUID()
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        const expiresAt = new Date(Date.now() + SESSION_TTL_SEC * 1000)
         await prisma.session.create({ data: { token, userId: user.id, expiresAt } })
-        set.headers['set-cookie'] = sessionCookie(token, 86400)
+        set.headers['set-cookie'] = sessionCookie(token, SESSION_TTL_SEC)
         audit(user.id, 'LOGIN', `via email`, ip)
         appLog('info', `Login: ${email} (${user.role})`, ip)
+        // Lazy Account sync: create/update Better Auth credential account row so
+        // existing bcrypt hash is available for BA sign-in/email path.
+        prisma.account
+          .upsert({
+            where: { providerId_accountId: { providerId: 'credential', accountId: user.email } },
+            update: { password: user.password, updatedAt: new Date() },
+            create: {
+              accountId: user.email,
+              providerId: 'credential',
+              userId: user.id,
+              password: user.password,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          })
+          .catch(() => {}) // fire-and-forget, never blocks login
         return { user: { id: user.id, name: user.name, email: user.email, role: user.role } }
       })
 
       .post('/api/auth/logout', async ({ request, set }) => {
         const ip = getIp(request)
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (token) {
           const session = await prisma.session.findUnique({ where: { token }, select: { userId: true } })
           if (session) {
@@ -436,116 +532,39 @@ export function createApp() {
 
       .get('/api/auth/session', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
-        if (!token) {
+        const rawToken = cookie.match(/session=([^;]+)/)?.[1]
+        if (!rawToken) {
           set.status = 401
           return { user: null }
         }
+        // Better Auth signed cookies are URL-encoded and have format "<token>.<HMAC-signature>".
+        // Strip the signature suffix so the plain token UUID can be looked up in the DB.
+        const decoded = decodeURIComponent(rawToken)
+        const token = decoded.includes('.') ? decoded.slice(0, decoded.lastIndexOf('.')) : decoded
         const session = await prisma.session.findUnique({
           where: { token },
           include: { user: { select: { id: true, name: true, email: true, role: true, blocked: true } } },
         })
-        if (!session || session.expiresAt < new Date()) {
-          if (session) await prisma.session.delete({ where: { id: session.id } })
+        if (!session || session.expiresAt < new Date() || session.user.blocked) {
+          if (session) await prisma.session.delete({ where: { id: session.id } }).catch(() => {})
           set.status = 401
           return { user: null }
+        }
+        // Sliding expiry: extend session if it was issued more than 1 day ago.
+        const secondsUntilExpiry = (session.expiresAt.getTime() - Date.now()) / 1000
+        if (secondsUntilExpiry < SESSION_TTL_SEC - SESSION_REFRESH_THRESHOLD_SEC) {
+          const newExpiry = new Date(Date.now() + SESSION_TTL_SEC * 1000)
+          await prisma.session.update({ where: { id: session.id }, data: { expiresAt: newExpiry } }).catch(() => {})
+          set.headers['set-cookie'] = sessionCookie(rawToken, SESSION_TTL_SEC)
         }
         return { user: session.user }
       })
 
-      // ─── Google OAuth ──────────────────────────────────
-      .get('/api/auth/google', ({ request, set }) => {
-        const origin = getPublicOrigin(request)
-        const params = new URLSearchParams({
-          client_id: env.GOOGLE_CLIENT_ID,
-          redirect_uri: `${origin}/api/auth/callback/google`,
-          response_type: 'code',
-          scope: 'openid email profile',
-          access_type: 'offline',
-          prompt: 'consent',
-        })
-        set.status = 302
-        set.headers.location = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
-      })
-
-      .get('/api/auth/callback/google', async ({ request, set }) => {
-        const ip = getIp(request)
-        const url = new URL(request.url)
-        const code = url.searchParams.get('code')
-        const origin = getPublicOrigin(request)
-
-        if (!code) {
-          set.status = 302
-          set.headers.location = '/login?error=google_failed'
-          return
-        }
-
-        // Exchange code for tokens
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            code,
-            client_id: env.GOOGLE_CLIENT_ID,
-            client_secret: env.GOOGLE_CLIENT_SECRET,
-            redirect_uri: `${origin}/api/auth/callback/google`,
-            grant_type: 'authorization_code',
-          }),
-        })
-
-        if (!tokenRes.ok) {
-          appLog('warn', 'Google OAuth token exchange failed', ip)
-          set.status = 302
-          set.headers.location = '/login?error=google_failed'
-          return
-        }
-
-        const tokens = (await tokenRes.json()) as { access_token: string }
-
-        // Get user info
-        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        })
-
-        if (!userInfoRes.ok) {
-          appLog('warn', 'Google OAuth userinfo fetch failed', ip)
-          set.status = 302
-          set.headers.location = '/login?error=google_failed'
-          return
-        }
-
-        const googleUser = (await userInfoRes.json()) as { email: string; name: string }
-
-        // Upsert user (no password for Google users)
-        const isSuperAdmin = env.SUPER_ADMIN_EMAILS.includes(googleUser.email)
-        const user = await prisma.user.upsert({
-          where: { email: googleUser.email },
-          update: { name: googleUser.name, ...(isSuperAdmin ? { role: 'SUPER_ADMIN' } : {}) },
-          create: {
-            email: googleUser.email,
-            name: googleUser.name,
-            password: '',
-            role: isSuperAdmin ? 'SUPER_ADMIN' : 'USER',
-          },
-        })
-
-        // Create session
-        const token = crypto.randomUUID()
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
-        await prisma.session.create({ data: { token, userId: user.id, expiresAt } })
-
-        set.headers['set-cookie'] = sessionCookie(token, 86400)
-        audit(user.id, 'LOGIN', 'via Google OAuth', ip)
-        appLog('info', `Login (Google): ${googleUser.email} (${user.role})`, ip)
-        const defaultRoute = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' ? '/admin' : '/pm'
-        set.status = 302
-        set.headers.location = defaultRoute
-      })
 
       // ─── Admin API (SUPER_ADMIN only) ───────────────────
       .get('/api/admin/users', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -568,7 +587,7 @@ export function createApp() {
       .put('/api/admin/users/:id/role', async ({ request, params, set }) => {
         const ip = getIp(request)
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -608,7 +627,7 @@ export function createApp() {
       .put('/api/admin/users/:id/block', async ({ request, params, set }) => {
         const ip = getIp(request)
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -675,7 +694,7 @@ export function createApp() {
       // ─── Presence REST (for initial load) ──────────────
       .get('/api/admin/presence', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -694,7 +713,7 @@ export function createApp() {
       // ─── Log API (SUPER_ADMIN only) ────────────────────
       .get('/api/admin/logs/app', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -716,7 +735,7 @@ export function createApp() {
 
       .get('/api/admin/logs/audit', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -749,7 +768,7 @@ export function createApp() {
 
       .delete('/api/admin/logs/app', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -769,7 +788,7 @@ export function createApp() {
 
       .delete('/api/admin/logs/audit', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -790,7 +809,7 @@ export function createApp() {
       // ─── Schema API (SUPER_ADMIN only) ──────────────────
       .get('/api/admin/schema', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -817,7 +836,7 @@ export function createApp() {
       // ─── Routes Metadata API (SUPER_ADMIN only) ─────────
       .get('/api/admin/routes', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -913,18 +932,11 @@ export function createApp() {
             description: 'Check current session',
           },
           {
-            method: 'GET',
-            path: '/api/auth/google',
+            method: 'GET/POST',
+            path: '/api/auth/*',
             auth: 'public',
             category: 'auth',
-            description: 'Google OAuth redirect',
-          },
-          {
-            method: 'GET',
-            path: '/api/auth/callback/google',
-            auth: 'public',
-            category: 'auth',
-            description: 'Google OAuth callback',
+            description: 'Better Auth handler (sign-in, sign-out, OAuth callback, session)',
           },
           // Admin
           {
@@ -1573,7 +1585,7 @@ export function createApp() {
       // ─── Project Structure API (SUPER_ADMIN only) ──────
       .get('/api/admin/project-structure', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -1730,7 +1742,7 @@ export function createApp() {
       // ─── Environment Map API (SUPER_ADMIN only) ─────────
       .get('/api/admin/env-map', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -1954,7 +1966,7 @@ export function createApp() {
       // ─── Test Coverage Map API (SUPER_ADMIN only) ──────
       .get('/api/admin/test-coverage', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -2079,7 +2091,7 @@ export function createApp() {
       // ─── Dependencies Graph API (SUPER_ADMIN only) ─────
       .get('/api/admin/dependencies', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -2180,7 +2192,7 @@ export function createApp() {
       // ─── Migrations Timeline API (SUPER_ADMIN only) ────
       .get('/api/admin/migrations', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -2257,7 +2269,7 @@ export function createApp() {
       // ─── Sessions Live API (SUPER_ADMIN only) ──────────
       .get('/api/admin/sessions', async ({ request, set }) => {
         const cookie = request.headers.get('cookie') ?? ''
-        const token = cookie.match(/session=([^;]+)/)?.[1]
+        const token = extractSessionToken(cookie)
         if (!token) {
           set.status = 401
           return { error: 'Unauthorized' }
@@ -5708,7 +5720,7 @@ export function createApp() {
           return { error: 'Unauthorized' }
         }
         const cookie = request.headers.get('cookie') ?? ''
-        const currentToken = cookie.match(/session=([^;]+)/)?.[1] ?? ''
+        const currentToken = extractSessionToken(cookie) ?? ''
         const sessions = await prisma.session.findMany({
           where: { userId: auth.userId, expiresAt: { gt: new Date() } },
           orderBy: { createdAt: 'desc' },
@@ -5730,7 +5742,7 @@ export function createApp() {
           return { error: 'Unauthorized' }
         }
         const cookie = request.headers.get('cookie') ?? ''
-        const currentToken = cookie.match(/session=([^;]+)/)?.[1] ?? ''
+        const currentToken = extractSessionToken(cookie) ?? ''
         const result = await prisma.session.deleteMany({
           where: { userId: auth.userId, token: { not: currentToken } },
         })
@@ -6432,6 +6444,230 @@ export function createApp() {
           },
         })
         return { logs }
+      })
+
+      // ─── Data Sync: Export (Bearer MCP_SECRET) ───────────
+      .get('/api/admin/sync/export', async ({ request, set }) => {
+        if (!env.MCP_SECRET) {
+          set.status = 503
+          return { error: 'MCP_SECRET not configured' }
+        }
+        const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+        if (bearer !== env.MCP_SECRET) {
+          set.status = 401
+          return { error: 'Unauthorized' }
+        }
+        const url = new URL(request.url)
+        const requested = new Set(
+          (url.searchParams.get('entities') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+        )
+        const all = requested.size === 0
+        const want = (k: string) => all || requested.has(k)
+
+        const result: Record<string, unknown> = {}
+
+        if (want('users')) {
+          result.users = await prisma.user.findMany({
+            select: {
+              id: true, name: true, email: true, role: true, blocked: true,
+              preferences: true, emailVerified: true, image: true,
+              createdAt: true, updatedAt: true,
+            },
+          })
+        }
+        if (want('projects')) {
+          result.projects = await prisma.project.findMany({
+            include: {
+              members: true,
+              extensions: true,
+            },
+          })
+        }
+        if (want('tasks')) {
+          result.tasks = await prisma.task.findMany({
+            include: {
+              tags: { select: { tagId: true } },
+              checklist: true,
+              comments: true,
+              evidence: true,
+              statusChanges: true,
+              blockedBy: true,
+            },
+          })
+        }
+        if (want('tags')) {
+          result.tags = await prisma.tag.findMany()
+        }
+        if (want('milestones')) {
+          result.milestones = await prisma.projectMilestone.findMany()
+        }
+        if (want('agents')) {
+          result.agents = await prisma.agent.findMany()
+        }
+        if (want('activityEvents')) {
+          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          result.activityEvents = await prisma.activityEvent.findMany({
+            where: { createdAt: { gte: since } },
+          })
+        }
+        if (want('webhookTokens')) {
+          result.webhookTokens = await prisma.webhookToken.findMany({
+            select: {
+              id: true, name: true, tokenPrefix: true, status: true,
+              expiresAt: true, lastUsedAt: true, createdById: true,
+              createdAt: true, updatedAt: true,
+            },
+          })
+        }
+
+        appLog('info', `Sync export requested (entities: ${[...requested].join(',') || 'all'}) from ${getIp(request)}`)
+        return { exportedAt: new Date().toISOString(), entities: result }
+      })
+
+      // ─── Data Sync: Pull (SUPER_ADMIN session) ────────────
+      .post('/api/admin/sync/pull', async ({ request, set }) => {
+        const cookie = request.headers.get('cookie') ?? ''
+        const token = extractSessionToken(cookie)
+        if (!token) { set.status = 401; return { error: 'Unauthorized' } }
+        const session = await prisma.session.findUnique({
+          where: { token },
+          include: { user: { select: { id: true, role: true } } },
+        })
+        if (!session || session.expiresAt < new Date() || session.user.role !== 'SUPER_ADMIN') {
+          set.status = 403; return { error: 'Forbidden' }
+        }
+
+        let body: { url?: unknown; token?: unknown; entities?: unknown }
+        try { body = (await request.json()) as typeof body } catch { set.status = 400; return { error: 'Invalid JSON' } }
+
+        const remoteUrl = typeof body.url === 'string' ? body.url.replace(/\/+$/, '') : ''
+        const remoteToken = typeof body.token === 'string' ? body.token.trim() : ''
+        const entities: string[] = Array.isArray(body.entities) ? body.entities.filter((e): e is string => typeof e === 'string') : []
+
+        if (!remoteUrl || !remoteToken) {
+          set.status = 400; return { error: 'url dan token wajib diisi' }
+        }
+
+        // Fetch export from remote
+        const exportUrl = `${remoteUrl}/api/admin/sync/export?entities=${entities.join(',')}`
+        let exportRes: Response
+        try {
+          exportRes = await fetch(exportUrl, {
+            headers: { Authorization: `Bearer ${remoteToken}` },
+            signal: AbortSignal.timeout(60_000),
+          })
+        } catch (e) {
+          set.status = 502; return { error: `Tidak bisa terhubung ke ${remoteUrl}: ${(e as Error).message}` }
+        }
+        if (!exportRes.ok) {
+          set.status = 502; return { error: `Remote mengembalikan status ${exportRes.status}` }
+        }
+        const { entities: data } = (await exportRes.json()) as { exportedAt: string; entities: Record<string, unknown[]> }
+
+        const want = (k: string) => entities.length === 0 || entities.includes(k)
+        const summary: Record<string, number> = {}
+
+        // Wipe in FK-safe order (only what was requested)
+        if (want('tasks') || want('projects')) {
+          await prisma.taskStatusChange.deleteMany()
+          await prisma.taskComment.deleteMany()
+          await prisma.taskEvidence.deleteMany()
+          await prisma.taskChecklistItem.deleteMany()
+          await prisma.taskDependency.deleteMany()
+          await prisma.taskTag.deleteMany()
+          await prisma.task.deleteMany()
+        }
+        if (want('tags') || want('projects')) await prisma.tag.deleteMany()
+        if (want('projects')) {
+          await prisma.projectExtension.deleteMany()
+          await prisma.projectMilestone.deleteMany()
+          await prisma.projectMember.deleteMany()
+          await prisma.projectGithubEvent.deleteMany()
+          await prisma.githubWebhookLog.deleteMany()
+          await prisma.project.deleteMany()
+        }
+        if (want('milestones')) await prisma.projectMilestone.deleteMany()
+        if (want('activityEvents')) await prisma.activityEvent.deleteMany()
+        if (want('agents')) {
+          await prisma.activityEvent.deleteMany()
+          await prisma.webhookRequestLog.deleteMany()
+          await prisma.agent.deleteMany()
+        }
+        if (want('webhookTokens')) {
+          await prisma.webhookRequestLog.deleteMany()
+          await prisma.webhookToken.deleteMany()
+        }
+        if (want('users')) {
+          await prisma.notification.deleteMany()
+          await prisma.auditLog.deleteMany()
+          await prisma.session.deleteMany()
+          await prisma.account.deleteMany()
+          await prisma.user.deleteMany()
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ins = (fn: (a: any) => Promise<unknown>, rows: unknown[]) => fn({ data: rows, skipDuplicates: true })
+
+        // Insert data — createMany with skipDuplicates as safety net
+        if (data.users && want('users')) {
+          const rows = (data.users as Array<Record<string, unknown>>).map((u) => ({ ...u, password: '' }))
+          await ins(prisma.user.createMany.bind(prisma.user), rows)
+          summary.users = rows.length
+        }
+        if (data.projects && want('projects')) {
+          type ProjRow = { members?: unknown; extensions?: unknown; [k: string]: unknown }
+          const projects = (data.projects as ProjRow[]).map(({ members: _m, extensions: _e, ...p }) => p)
+          await ins(prisma.project.createMany.bind(prisma.project), projects)
+          summary.projects = projects.length
+          const members = (data.projects as ProjRow[]).flatMap((p) => (p.members as unknown[] | undefined) ?? [])
+          if (members.length) await ins(prisma.projectMember.createMany.bind(prisma.projectMember), members)
+          const exts = (data.projects as ProjRow[]).flatMap((p) => (p.extensions as unknown[] | undefined) ?? [])
+          if (exts.length) await ins(prisma.projectExtension.createMany.bind(prisma.projectExtension), exts)
+        }
+        if (data.tags && want('tags')) {
+          await ins(prisma.tag.createMany.bind(prisma.tag), data.tags as unknown[])
+          summary.tags = (data.tags as unknown[]).length
+        }
+        if (data.milestones && want('milestones')) {
+          await ins(prisma.projectMilestone.createMany.bind(prisma.projectMilestone), data.milestones as unknown[])
+          summary.milestones = (data.milestones as unknown[]).length
+        }
+        if (data.tasks && want('tasks')) {
+          type TaskRow = { tags?: unknown; checklist?: unknown; comments?: unknown; evidence?: unknown; statusChanges?: unknown; blockedBy?: unknown; [k: string]: unknown }
+          const tasks = (data.tasks as TaskRow[]).map(({ tags: _t, checklist: _c, comments: _cm, evidence: _e, statusChanges: _s, blockedBy: _b, ...t }) => t)
+          await ins(prisma.task.createMany.bind(prisma.task), tasks)
+          summary.tasks = tasks.length
+          const taskTags = (data.tasks as TaskRow[]).flatMap((t) => ((t.tags as Array<{ tagId: string }> | undefined) ?? []).map((tt) => ({ taskId: t.id as string, tagId: tt.tagId })))
+          if (taskTags.length) await ins(prisma.taskTag.createMany.bind(prisma.taskTag), taskTags)
+          const checklists = (data.tasks as TaskRow[]).flatMap((t) => (t.checklist as unknown[] | undefined) ?? [])
+          if (checklists.length) await ins(prisma.taskChecklistItem.createMany.bind(prisma.taskChecklistItem), checklists)
+          const comments = (data.tasks as TaskRow[]).flatMap((t) => (t.comments as unknown[] | undefined) ?? [])
+          if (comments.length) await ins(prisma.taskComment.createMany.bind(prisma.taskComment), comments)
+          const evidence = (data.tasks as TaskRow[]).flatMap((t) => (t.evidence as unknown[] | undefined) ?? [])
+          if (evidence.length) await ins(prisma.taskEvidence.createMany.bind(prisma.taskEvidence), evidence)
+          const statusChanges = (data.tasks as TaskRow[]).flatMap((t) => (t.statusChanges as unknown[] | undefined) ?? [])
+          if (statusChanges.length) await ins(prisma.taskStatusChange.createMany.bind(prisma.taskStatusChange), statusChanges)
+          const deps = (data.tasks as TaskRow[]).flatMap((t) => (t.blockedBy as unknown[] | undefined) ?? [])
+          if (deps.length) await ins(prisma.taskDependency.createMany.bind(prisma.taskDependency), deps)
+        }
+        if (data.agents && want('agents')) {
+          await ins(prisma.agent.createMany.bind(prisma.agent), data.agents as unknown[])
+          summary.agents = (data.agents as unknown[]).length
+        }
+        if (data.activityEvents && want('activityEvents')) {
+          await ins(prisma.activityEvent.createMany.bind(prisma.activityEvent), data.activityEvents as unknown[])
+          summary.activityEvents = (data.activityEvents as unknown[]).length
+        }
+        if (data.webhookTokens && want('webhookTokens')) {
+          const rows = (data.webhookTokens as Array<Record<string, unknown>>).map((t) => ({ ...t, tokenHash: `synced-${t.id}` }))
+          await ins(prisma.webhookToken.createMany.bind(prisma.webhookToken), rows)
+          summary.webhookTokens = rows.length
+        }
+
+        const ip = getIp(request)
+        appLog('info', `Sync pull from ${remoteUrl} by userId=${session.user.id} — entities: ${entities.join(',') || 'all'}`, ip)
+        await prisma.auditLog.create({ data: { userId: session.user.id, action: 'SYNC_FROM_STG', detail: remoteUrl, ip } }).catch(() => {})
+        return { ok: true, summary }
       })
 
       // ─── MCP over HTTP ────────────────────────────────

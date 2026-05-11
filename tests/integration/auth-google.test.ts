@@ -20,6 +20,7 @@ describe('GET /api/auth/google', () => {
     expect(location).toContain('redirect_uri=')
     expect(location).toContain('scope=openid+email+profile')
     expect(location).toContain('response_type=code')
+    expect(location).toContain('state=') // CSRF state parameter must be present
   })
 
   test('redirect_uri points to callback endpoint', async () => {
@@ -27,7 +28,8 @@ describe('GET /api/auth/google', () => {
     const location = res.headers.get('location')!
     const url = new URL(location)
     const redirectUri = url.searchParams.get('redirect_uri')
-    expect(redirectUri).toBe('http://localhost/api/auth/callback/google')
+    // redirect_uri must end with the callback path (port may vary based on .env PORT)
+    expect(redirectUri).toMatch(/\/api\/auth\/callback\/google$/)
   })
 })
 

@@ -16,6 +16,8 @@ export const env = {
   REDIS_URL: required('REDIS_URL'),
   GOOGLE_CLIENT_ID: required('GOOGLE_CLIENT_ID'),
   GOOGLE_CLIENT_SECRET: required('GOOGLE_CLIENT_SECRET'),
+  BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET'),
+  BETTER_AUTH_URL: optional('BETTER_AUTH_URL', 'http://localhost:3000'),
   SUPER_ADMIN_EMAILS: optional('SUPER_ADMIN_EMAIL', '')
     .split(',')
     .map((e) => e.trim())

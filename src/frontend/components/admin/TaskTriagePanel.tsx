@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TbAlertTriangle, TbBan, TbClock, TbListCheck, TbRefresh, TbSearch, TbUserQuestion } from 'react-icons/tb'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -341,20 +342,21 @@ export function TaskTriagePanel() {
       </Card>
 
       <Card withBorder padding={0} radius="md">
-        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+        <Table.ScrollContainer minWidth={1100}>
+        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Task</Table.Th>
-              <Table.Th>Project</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Priority</Table.Th>
-              <Table.Th>Assignee</Table.Th>
-              <Table.Th>
+              <Table.Th style={stickyFirstHeader(260)}>Task</Table.Th>
+              <Table.Th style={{ width: 160 }}>Project</Table.Th>
+              <Table.Th style={{ width: 130 }}>Status</Table.Th>
+              <Table.Th style={{ width: 110 }}>Priority</Table.Th>
+              <Table.Th style={{ width: 160 }}>Assignee</Table.Th>
+              <Table.Th style={{ width: 130 }}>
                 <Tooltip label="Deadline task (dueAt). Merah = sudah lewat hari ini.">
                   <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Due</span>
                 </Tooltip>
               </Table.Th>
-              <Table.Th>
+              <Table.Th style={{ width: 110 }}>
                 <Tooltip label="Berapa hari sejak task terakhir diupdate (updatedAt). Kuning = >7 hari tidak bergerak.">
                   <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Age</span>
                 </Tooltip>
@@ -385,7 +387,7 @@ export function TaskTriagePanel() {
               const stale = isStale(t)
               return (
                 <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t)}>
-                  <Table.Td>
+                  <Table.Td style={stickyFirstCell(260)}>
                     <Group gap="xs" wrap="nowrap">
                       <Badge color={KIND_COLOR[t.kind]} variant="dot" size="xs">
                         {t.kind}
@@ -445,6 +447,7 @@ export function TaskTriagePanel() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
         {filtered.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">
             <Text size="xs" c="dimmed">

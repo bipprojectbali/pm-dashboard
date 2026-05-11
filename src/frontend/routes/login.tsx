@@ -5,6 +5,7 @@ import { FcGoogle } from 'react-icons/fc'
 import { TbAlertCircle, TbLock, TbLogin, TbMail } from 'react-icons/tb'
 import { ThemeToggle } from '@/frontend/components/ThemeToggle'
 import { getDefaultRoute, useLogin } from '@/frontend/hooks/useAuth'
+import { authClient } from '@/frontend/lib/authClient'
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): { error?: string } => {
@@ -51,15 +52,6 @@ function LoginPage() {
               Login
             </Title>
 
-            {import.meta.env.DEV && (
-              <Text c="dimmed" size="sm" ta="center">
-                Super Admin: <strong>superadmin@example.com</strong> / <strong>superadmin123</strong>
-                <br />
-                Admin: <strong>admin@example.com</strong> / <strong>admin123</strong>
-                <br />
-                User: <strong>user@example.com</strong> / <strong>user123</strong>
-              </Text>
-            )}
 
             {(login.isError || searchError) && (
               <Alert icon={<TbAlertCircle size={16} />} color="red" variant="light">
@@ -92,11 +84,16 @@ function LoginPage() {
             <Divider label="atau" labelPosition="center" />
 
             <Button
-              component="a"
-              href="/api/auth/google"
               fullWidth
               variant="default"
               leftSection={<FcGoogle size={18} />}
+              onClick={() =>
+                authClient.signIn.social({
+                  provider: 'google',
+                  callbackURL: '/admin',
+                  errorCallbackURL: '/login?error=google_failed',
+                })
+              }
             >
               Login dengan Google
             </Button>

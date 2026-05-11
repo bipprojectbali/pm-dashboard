@@ -35,10 +35,14 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
+  TbArrowsMaximize,
+  TbArrowsMinimize,
   TbChartBar,
   TbChevronRight,
   TbClock,
   TbDownload,
+  TbEye,
+  TbEyeOff,
   TbFileImport,
   TbFilter,
   TbListCheck,
@@ -1577,6 +1581,21 @@ function TasksKanbanView({
     REOPENED: KANBAN_PAGE,
     CLOSED: KANBAN_PAGE,
   })
+  // Per-column hidden (collapsed) state — persisted
+  const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
+    key: 'pm:kanban:col-hidden',
+    defaultValue: {},
+  })
+  // Per-column maximized (extra wide) state — persisted
+  const [colMax, setColMax] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
+    key: 'pm:kanban:col-max',
+    defaultValue: {},
+  })
+
+  const toggleHidden = (status: TaskStatus) =>
+    setColHidden((prev) => ({ ...prev, [status]: !prev[status] }))
+  const toggleMax = (status: TaskStatus) =>
+    setColMax((prev) => ({ ...prev, [status]: !prev[status] }))
   const draggingTask = draggingId ? tasks.find((t) => t.id === draggingId) : null
   const allowedForDrag = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
@@ -1601,20 +1620,20 @@ function TasksKanbanView({
     onMove(draggingTask.id, status)
   }
 
+  // Build dynamic column widths: hidden=auto(compact), max=2fr, normal=1fr
+  const gridCols = KANBAN_COLUMNS.map((col) =>
+    colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'
+  ).join(' ')
+
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${KANBAN_COLUMNS.length}, minmax(240px, 1fr))`,
-        gap: 12,
-        overflowX: 'auto',
-      }}
-    >
+    <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
       {KANBAN_COLUMNS.map((col) => {
         const items = byStatus[col.status]
         const limit = colLimit[col.status]
         const visible = items.slice(0, limit)
         const hidden = items.length - visible.length
+        const isHidden = !!colHidden[col.status]
+        const isMax = !!colMax[col.status]
         const canDrop = !!draggingTask && draggingTask.status !== col.status && allowedForDrag.includes(col.status)
         const isOver = overStatus === col.status
         return (
@@ -1628,7 +1647,8 @@ function TasksKanbanView({
               borderColor: isOver && canDrop ? 'var(--mantine-color-blue-filled)' : undefined,
               borderStyle: draggingTask && !canDrop && draggingTask.status !== col.status ? 'dashed' : undefined,
               opacity: draggingTask && !canDrop && draggingTask.status !== col.status ? 0.55 : 1,
-              minHeight: 240,
+              minHeight: isHidden ? 0 : 240,
+              overflow: 'hidden',
             }}
             onDragOver={(e) => {
               if (!canDrop) return
@@ -1643,17 +1663,55 @@ function TasksKanbanView({
               handleDrop(col.status)
             }}
           >
-            <Group justify="space-between" mb={6}>
-              <Group gap={6}>
-                <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light">
-                  {col.label}
+            <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
+              <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+                <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
+                  {isHidden ? items.length : col.label}
                 </Badge>
-                <Text size="xs" c="dimmed">
-                  {items.length}
-                </Text>
+                {!isHidden && (
+                  <Text size="xs" c="dimmed">
+                    {items.length}
+                  </Text>
+                )}
               </Group>
+              {!isHidden && (
+                <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
+                  <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => toggleMax(col.status)}
+                    >
+                      {isMax ? <TbArrowsMinimize size={12} /> : <TbArrowsMaximize size={12} />}
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Sembunyikan kolom">
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => toggleHidden(col.status)}
+                    >
+                      <TbEyeOff size={12} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              )}
+              {isHidden && (
+                <Tooltip label={`Tampilkan ${col.label}`} position="right">
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => toggleHidden(col.status)}
+                  >
+                    <TbEye size={12} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
             </Group>
-            <Stack gap={6}>
+            {!isHidden && <Stack gap={6}>
               {items.length === 0 ? (
                 <Text size="xs" c="dimmed" ta="center" py="md">
                   {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
@@ -1750,7 +1808,7 @@ function TasksKanbanView({
                   +{hidden} lainnya
                 </Button>
               )}
-            </Stack>
+            </Stack>}
           </Card>
         )
       })}

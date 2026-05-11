@@ -2,38 +2,54 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="PM Dashboard — project, task, dan agent monitoring" />
+    <meta name="description" content="PM Dashboard — project, task, dan agent monitoring untuk tim modern" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0e12" />
     <base href="/" />
     <link rel="icon" type="image/svg+xml" href="/src/logo.svg" />
     <title>PM Dashboard</title>
+
+    <!-- Geist + DM Sans via Bunny Fonts (privacy-friendly, fast CDN) -->
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link href="https://fonts.bunny.net/css?family=geist:300,400,500,600,700,800&family=dm-sans:400,500,600&family=geist-mono:400,500&display=swap" rel="stylesheet" />
+
     <script>
-      // Resolve color scheme before first paint to prevent flash
+      // Resolve color scheme before first paint to prevent FOUC
       (function() {
         var stored = localStorage.getItem('mantine-color-scheme-value');
         var scheme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
         document.documentElement.style.colorScheme = scheme;
-        // Expose for CSS below
         window.__colorScheme = scheme;
       })();
     </script>
     <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
       html, body {
         margin: 0;
         padding: 0;
-      }
-      html[data-mantine-color-scheme="dark"], html[data-mantine-color-scheme="dark"] body {
-        background-color: #242424;
-        color: #c1c2c5;
-      }
-      html[data-mantine-color-scheme="light"], html[data-mantine-color-scheme="light"] body {
-        background-color: #ffffff;
-        color: #1a1b1e;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        overscroll-behavior-y: none;
       }
 
-      /* Splash screen */
+      html[data-mantine-color-scheme="dark"], html[data-mantine-color-scheme="dark"] body {
+        background-color: #0d0e12;
+        color: #c8cad0;
+      }
+      html[data-mantine-color-scheme="light"], html[data-mantine-color-scheme="light"] body {
+        background-color: #f4f5f8;
+        color: #14151a;
+      }
+
+      /* ── Splash ─────────────────────────────── */
       #splash {
         position: fixed;
         inset: 0;
@@ -41,55 +57,100 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: opacity 0.3s ease;
+        flex-direction: column;
+        gap: 20px;
+        transition: opacity 0.35s ease, transform 0.35s ease;
       }
-      html[data-mantine-color-scheme="dark"] #splash {
-        background-color: #242424;
-      }
-      html[data-mantine-color-scheme="light"] #splash {
-        background-color: #ffffff;
-      }
+      html[data-mantine-color-scheme="dark"] #splash { background-color: #0d0e12; }
+      html[data-mantine-color-scheme="light"] #splash { background-color: #f4f5f8; }
+
       #splash.fade-out {
         opacity: 0;
+        transform: scale(1.04);
         pointer-events: none;
       }
-      .splash-content {
+
+      .splash-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #4f7cff 0%, #9b59f5 100%);
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 24px;
+        justify-content: center;
+        box-shadow: 0 8px 32px rgba(79,124,255,0.35);
+        animation: splash-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
       }
-      .splash-spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid;
+      .splash-logo svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+      .splash-dots {
+        display: flex;
+        gap: 6px;
+        animation: splash-pop 0.5s 0.1s cubic-bezier(0.34,1.56,0.64,1) both;
+      }
+      .splash-dot {
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+        background: #4f7cff;
+        animation: bounce 1.2s ease-in-out infinite;
       }
-      html[data-mantine-color-scheme="dark"] .splash-spinner {
-        border-color: #3a3a3a;
-        border-top-color: #339af0;
+      .splash-dot:nth-child(2) { animation-delay: 0.15s; background: #7b5ff5; }
+      .splash-dot:nth-child(3) { animation-delay: 0.3s; background: #9b59f5; }
+
+      @keyframes splash-pop {
+        from { opacity: 0; transform: scale(0.7); }
+        to { opacity: 1; transform: scale(1); }
       }
-      html[data-mantine-color-scheme="light"] .splash-spinner {
-        border-color: #e0e0e0;
-        border-top-color: #339af0;
+      @keyframes bounce {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+        30% { transform: translateY(-8px); opacity: 1; }
       }
-      .splash-text {
-        font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        color: #868e96;
-        letter-spacing: 0.5px;
+
+      /* ── Global scrollbar ───────────────────── */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      html[data-mantine-color-scheme="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+      html[data-mantine-color-scheme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(79,124,255,0.4) !important; }
+
+      /* ── Focus ring ────────────────────────── */
+      :focus-visible {
+        outline: 2px solid #4f7cff;
+        outline-offset: 2px;
+        border-radius: 6px;
       }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
+
+      /* ── Page transition ───────────────────── */
+      #root { animation: root-in 0.25s ease both; }
+      @keyframes root-in { from { opacity: 0; } to { opacity: 1; } }
+
+      /* ── Sidebar hover states ───────────────── */
+      .sidebar-user-card:hover { background: var(--mantine-color-default-hover) !important; }
+      .sidebar-app-item:hover { background: var(--mantine-color-default-hover) !important; }
+
+      /* ── Card hover lift ────────────────────── */
+      .card-hover {
+        transition: transform 160ms cubic-bezier(0.4,0,0.2,1), box-shadow 160ms cubic-bezier(0.4,0,0.2,1) !important;
       }
+      .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(79,124,255,0.12), 0 2px 8px rgba(0,0,0,0.08) !important;
+      }
+
+      /* ── Selection color ────────────────────── */
+      ::selection { background: rgba(79,124,255,0.2); }
     </style>
   </head>
   <body>
     <div id="splash">
-      <div class="splash-content">
-        <div class="splash-spinner"></div>
-        <div class="splash-text">Loading...</div>
+      <div class="splash-logo">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="3" y="14" width="8" height="7" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/></svg>
+      </div>
+      <div class="splash-dots">
+        <div class="splash-dot"></div>
+        <div class="splash-dot"></div>
+        <div class="splash-dot"></div>
       </div>
     </div>
     <div id="root"></div>

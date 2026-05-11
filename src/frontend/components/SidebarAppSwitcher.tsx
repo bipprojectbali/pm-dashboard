@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Stack, Text, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Box, Group, Stack, Text, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core'
 import { useNavigate } from '@tanstack/react-router'
 import type { IconType } from 'react-icons'
 import { TbBug, TbCode, TbSettings, TbShieldLock, TbTarget } from 'react-icons/tb'
@@ -46,8 +46,8 @@ const APPS: AppDef[] = [
   },
   {
     key: 'dev',
-    label: 'Dev',
-    description: 'Konsol teknis',
+    label: 'Dev Console',
+    description: 'Tools & diagnostics',
     icon: TbCode,
     color: 'orange',
     roles: ['SUPER_ADMIN'],
@@ -79,13 +79,29 @@ export function SidebarAppSwitcher({
 
   if (collapsed) {
     return (
-      <Stack gap={6} align="center">
+      <Stack gap={4} align="center">
+        <Box
+          style={{
+            width: 28,
+            height: 1,
+            background: 'var(--app-border)',
+            borderRadius: 1,
+            marginBottom: 2,
+          }}
+        />
         {items.map((app) => {
           const Icon = app.icon
           return (
             <Tooltip key={app.key} label={app.label} position="right" withArrow>
-              <ActionIcon variant="subtle" color={app.color} size="lg" onClick={() => app.navigate(navigate)}>
-                <Icon size={18} />
+              <ActionIcon
+                variant="subtle"
+                color={app.color}
+                size={34}
+                radius="md"
+                onClick={() => app.navigate(navigate)}
+                style={{ flexShrink: 0 }}
+              >
+                <Icon size={17} />
               </ActionIcon>
             </Tooltip>
           )
@@ -95,8 +111,17 @@ export function SidebarAppSwitcher({
   }
 
   return (
-    <Stack gap={4}>
-      <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.6 }} px="xs" pt={4}>
+    <Stack gap={2}>
+      <Text
+        size="xs"
+        fw={700}
+        c="dimmed"
+        tt="uppercase"
+        px="xs"
+        pt={4}
+        pb={2}
+        style={{ letterSpacing: '0.08em', fontSize: '0.65rem' }}
+      >
         Aplikasi Lain
       </Text>
       {items.map((app) => {
@@ -108,20 +133,27 @@ export function SidebarAppSwitcher({
             px="xs"
             py={6}
             style={{
-              borderRadius: 'var(--mantine-radius-sm)',
-              transition: 'background 120ms',
+              borderRadius: 8,
+              transition: 'background 130ms ease',
+              width: '100%',
             }}
             className="sidebar-app-item"
           >
-            <Group gap="xs" wrap="nowrap">
-              <ThemeIcon variant="light" color={app.color} size="md" radius="md">
-                <Icon size={14} />
+            <Group gap="sm" wrap="nowrap">
+              <ThemeIcon
+                variant="light"
+                color={app.color}
+                size={30}
+                radius="md"
+                style={{ flexShrink: 0 }}
+              >
+                <Icon size={15} />
               </ThemeIcon>
               <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
-                <Text size="sm" fw={500} truncate>
+                <Text size="sm" fw={600} truncate style={{ fontSize: '0.8rem', letterSpacing: '-0.01em' }}>
                   {app.label}
                 </Text>
-                <Text size="xs" c="dimmed" truncate>
+                <Text size="xs" c="dimmed" truncate style={{ fontSize: '0.7rem' }}>
                   {app.description}
                 </Text>
               </Stack>

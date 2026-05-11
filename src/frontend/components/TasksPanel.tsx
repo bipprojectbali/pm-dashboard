@@ -1553,6 +1553,8 @@ function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
   return m[current] ?? []
 }
 
+const KANBAN_PAGE = 20
+
 function TasksKanbanView({
   tasks,
   canWrite,
@@ -1566,6 +1568,14 @@ function TasksKanbanView({
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null)
+  // Per-column "show more" limit
+  const [colLimit, setColLimit] = useState<Record<TaskStatus, number>>({
+    OPEN: KANBAN_PAGE,
+    IN_PROGRESS: KANBAN_PAGE,
+    READY_FOR_QC: KANBAN_PAGE,
+    REOPENED: KANBAN_PAGE,
+    CLOSED: KANBAN_PAGE,
+  })
   const draggingTask = draggingId ? tasks.find((t) => t.id === draggingId) : null
   const allowedForDrag = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
@@ -1601,6 +1611,9 @@ function TasksKanbanView({
     >
       {KANBAN_COLUMNS.map((col) => {
         const items = byStatus[col.status]
+        const limit = colLimit[col.status]
+        const visible = items.slice(0, limit)
+        const hidden = items.length - visible.length
         const canDrop = !!draggingTask && draggingTask.status !== col.status && allowedForDrag.includes(col.status)
         const isOver = overStatus === col.status
         return (
@@ -1645,7 +1658,7 @@ function TasksKanbanView({
                   {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
                 </Text>
               ) : (
-                items.map((t) => (
+                visible.map((t) => (
                   <Card
                     key={t.id}
                     withBorder
@@ -1719,6 +1732,22 @@ function TasksKanbanView({
                     </Stack>
                   </Card>
                 ))
+              )}
+              {hidden > 0 && (
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  color="gray"
+                  fullWidth
+                  onClick={() =>
+                    setColLimit((prev) => ({
+                      ...prev,
+                      [col.status]: prev[col.status] + KANBAN_PAGE,
+                    }))
+                  }
+                >
+                  +{hidden} lainnya
+                </Button>
               )}
             </Stack>
           </Card>

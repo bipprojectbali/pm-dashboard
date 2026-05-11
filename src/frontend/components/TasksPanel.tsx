@@ -31,7 +31,8 @@ import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { EChartsOption } from 'echarts'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -1560,141 +1561,6 @@ function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
 
 const KANBAN_PAGE = 20
 
-// Tracks whether a drag gesture is actually in progress.
-// Prevents the queued onClick from firing after dragEnd.
-let _isDragging = false
-
-function KanbanCardList({
-  items,
-  colStatus,
-  draggingId,
-  draggingTask,
-  overIndex,
-  canWrite,
-  onSelect,
-  setDraggingId,
-  setOverStatus,
-  setOverIndex,
-}: {
-  items: TaskListItem[]
-  colStatus: TaskStatus
-  draggingId: string | null
-  draggingTask: TaskListItem | null | undefined
-  overIndex: { status: TaskStatus; index: number } | null
-  canWrite: boolean
-  onSelect: (id: string) => void
-  setDraggingId: (id: string | null) => void
-  setOverStatus: (s: TaskStatus | null) => void
-  setOverIndex: (v: { status: TaskStatus; index: number } | null) => void
-}) {
-  const sameCol = draggingTask?.status === colStatus
-  const ghostIdx = overIndex?.status === colStatus ? overIndex.index : null
-
-  // Build display list: hide dragged card from original slot, insert ghost at target
-  const displayItems: Array<{ type: 'card'; task: TaskListItem; origIdx: number } | { type: 'ghost' }> = []
-  items.forEach((t, idx) => {
-    if (ghostIdx === idx) displayItems.push({ type: 'ghost' })
-    if (sameCol && t.id === draggingId) return
-    displayItems.push({ type: 'card', task: t, origIdx: idx })
-  })
-  if (ghostIdx !== null && ghostIdx >= items.length) displayItems.push({ type: 'ghost' })
-
-  return (
-    <>
-      {displayItems.map((item) => {
-        if (item.type === 'ghost') {
-          return (
-            <div
-              key="__ghost__"
-              style={{
-                border: '2px dashed var(--mantine-color-blue-5)',
-                borderRadius: 'var(--mantine-radius-sm)',
-                minHeight: 56,
-                background: 'var(--mantine-color-blue-light)',
-                opacity: 0.6,
-              }}
-            />
-          )
-        }
-        const t = item.task
-        const idx = item.origIdx
-        return (
-          <Card
-            key={t.id}
-            withBorder
-            padding="xs"
-            radius="sm"
-            draggable={canWrite}
-            onDragStart={(e) => {
-              // Required for Firefox — without setData, dragover/drop won't fire
-              e.dataTransfer.setData('text/plain', t.id)
-              e.dataTransfer.effectAllowed = 'move'
-              e.stopPropagation()
-              _isDragging = true
-              setDraggingId(t.id)
-            }}
-            onDragEnd={(e) => {
-              e.stopPropagation()
-              _isDragging = false
-              setDraggingId(null)
-              setOverStatus(null)
-              setOverIndex(null)
-            }}
-            onDragOver={(e) => {
-              // Use e.dataTransfer check instead of state (avoids async race)
-              if (!e.dataTransfer.types.includes('text/plain')) return
-              e.preventDefault()
-              e.stopPropagation()
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-              const insertAt = e.clientY < rect.top + rect.height / 2 ? idx : idx + 1
-              if (overIndex?.status !== colStatus || overIndex.index !== insertAt)
-                setOverIndex({ status: colStatus, index: insertAt })
-            }}
-            onClick={(e) => {
-              // Block click if a drag just ended — browser queues click after dragEnd
-              if (_isDragging) { e.preventDefault(); return }
-              e.stopPropagation()
-              onSelect(t.id)
-            }}
-            style={{ cursor: canWrite ? 'grab' : 'pointer' }}
-          >
-            <Stack gap={4}>
-              <Group gap={4} wrap="wrap">
-                <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">{t.kind}</Badge>
-                <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">{t.priority}</Badge>
-              </Group>
-              <Text size="sm" fw={500} lineClamp={2}>{t.title}</Text>
-              {t.tags.length > 0 && (
-                <Group gap={4} wrap="wrap">
-                  {t.tags.slice(0, 3).map((tg) => (
-                    <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>{tg.tag.name}</Badge>
-                  ))}
-                </Group>
-              )}
-              {t.progressPercent != null && t.progressPercent > 0 && (
-                <div style={{ height: 4, background: 'var(--mantine-color-gray-2)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{
-                    width: `${t.progressPercent}%`, height: '100%',
-                    background: t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
-                  }} />
-                </div>
-              )}
-              <Group justify="space-between" wrap="nowrap">
-                <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name : 'Unassigned'}</Text>
-                {t.dueAt && (
-                  <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
-                    {new Date(t.dueAt).toLocaleDateString()}
-                  </Text>
-                )}
-              </Group>
-            </Stack>
-          </Card>
-        )
-      })}
-    </>
-  )
-}
-
 function TasksKanbanView({
   tasks,
   canWrite,
@@ -1706,44 +1572,39 @@ function TasksKanbanView({
   onSelect: (id: string) => void
   onMove: (id: string, status: TaskStatus) => void
 }) {
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [overStatus, setOverStatus] = useState<TaskStatus | null>(null)
-  // Vertical reorder: track insertion index within a column while dragging
-  const [overIndex, setOverIndex] = useState<{ status: TaskStatus; index: number } | null>(null)
-  // Client-side column order overrides (task IDs in preferred order per status)
+  // Client-side column order — task IDs in preferred order per status.
+  // Populated by same-column reorder; cross-column moves use onMove API.
   const [colOrder, setColOrder] = useState<Partial<Record<TaskStatus, string[]>>>({})
-  // Per-column "show more" limit
+
+  // Per-column show-more limit
   const [colLimit, setColLimit] = useState<Record<TaskStatus, number>>({
-    OPEN: KANBAN_PAGE,
-    IN_PROGRESS: KANBAN_PAGE,
-    READY_FOR_QC: KANBAN_PAGE,
-    REOPENED: KANBAN_PAGE,
-    CLOSED: KANBAN_PAGE,
+    OPEN: KANBAN_PAGE, IN_PROGRESS: KANBAN_PAGE, READY_FOR_QC: KANBAN_PAGE,
+    REOPENED: KANBAN_PAGE, CLOSED: KANBAN_PAGE,
   })
-  // Per-column hidden (collapsed) state — persisted
+
+  // Per-column hide/show — persisted to localStorage
   const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
-    key: 'pm:kanban:col-hidden',
-    defaultValue: {},
+    key: 'pm:kanban:col-hidden', defaultValue: {},
   })
-  // Per-column maximized (extra wide) state — persisted
+  // Per-column maximize — persisted to localStorage
   const [colMax, setColMax] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
-    key: 'pm:kanban:col-max',
-    defaultValue: {},
+    key: 'pm:kanban:col-max', defaultValue: {},
   })
 
-  const toggleHidden = (status: TaskStatus) =>
-    setColHidden((prev) => ({ ...prev, [status]: !prev[status] }))
-  const toggleMax = (status: TaskStatus) =>
-    setColMax((prev) => ({ ...prev, [status]: !prev[status] }))
-  const draggingTask = draggingId ? tasks.find((t) => t.id === draggingId) : null
-  const allowedForDrag = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
+  // draggingTaskId — tracked via onDragStart so we can compute allowed targets
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
+  const draggingTask = draggingTaskId ? tasks.find((t) => t.id === draggingTaskId) : null
+  const allowedTargets = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
+  const toggleHidden = (s: TaskStatus) => setColHidden((p) => ({ ...p, [s]: !p[s] }))
+  const toggleMax    = (s: TaskStatus) => setColMax((p) => ({ ...p, [s]: !p[s] }))
+
+  // Ordered task list per status, with client-side reorder applied
   const byStatus = useMemo(() => {
     const map: Record<TaskStatus, TaskListItem[]> = {
       OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
     }
     for (const t of tasks) map[t.status].push(t)
-    // Apply client-side column ordering
     for (const status of Object.keys(map) as TaskStatus[]) {
       const order = colOrder[status]
       if (!order) continue
@@ -1755,180 +1616,203 @@ function TasksKanbanView({
     return map
   }, [tasks, colOrder])
 
-  const handleDrop = (status: TaskStatus) => {
-    if (!draggingTask) return
-    const insertIndex = overIndex?.status === status ? overIndex.index : undefined
-    setOverStatus(null)
-    setOverIndex(null)
-    setDraggingId(null)
+  const handleDragEnd = useCallback((result: import('@hello-pangea/dnd').DropResult) => {
+    setDraggingTaskId(null)
+    const { source, destination, draggableId, reason } = result
 
-    if (draggingTask.status === status) {
-      // Same-column reorder
-      if (insertIndex === undefined) return
-      const ids = byStatus[status].map((t) => t.id)
-      const from = ids.indexOf(draggingTask.id)
-      if (from === -1) return
-      // Remove from current position, insert at target
+    // Dropped outside any droppable or cancelled
+    if (reason === 'CANCEL' || !destination) return
+    // No movement
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
+
+    const srcStatus = source.droppableId as TaskStatus
+    const dstStatus = destination.droppableId as TaskStatus
+    const task = tasks.find((t) => t.id === draggableId)
+    if (!task) return
+
+    if (srcStatus === dstStatus) {
+      // Same-column reorder — update client-side order only
+      const ids = byStatus[srcStatus].map((t) => t.id)
       const next = [...ids]
-      next.splice(from, 1)
-      // After removing, target slot shifts by -1 if target was after source
-      const to = insertIndex > from ? insertIndex - 1 : insertIndex
-      if (from === to) return
-      next.splice(to, 0, draggingTask.id)
-      setColOrder((prev) => ({ ...prev, [status]: next }))
+      next.splice(source.index, 1)
+      next.splice(destination.index, 0, draggableId)
+      setColOrder((prev) => ({ ...prev, [srcStatus]: next }))
       return
     }
 
-    if (!allowedForDrag.includes(status)) return
-    onMove(draggingTask.id, status)
-  }
+    // Cross-column move — validate transition rule, then call API
+    const allowed = kanbanAllowed(srcStatus, task.kind)
+    if (!allowed.includes(dstStatus)) return
+    onMove(draggableId, dstStatus)
+  }, [tasks, byStatus, onMove])
 
-  // Build dynamic column widths: hidden=auto(compact), max=2fr, normal=1fr
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'
   ).join(' ')
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
-      {KANBAN_COLUMNS.map((col) => {
-        const items = byStatus[col.status]
-        const limit = colLimit[col.status]
-        const visible = items.slice(0, limit)
-        const hidden = items.length - visible.length
-        const isHidden = !!colHidden[col.status]
-        const isMax = !!colMax[col.status]
-        const canDrop = !!draggingTask && draggingTask.status !== col.status && allowedForDrag.includes(col.status)
-        const isOver = overStatus === col.status
-        return (
-          <Card
-            key={col.status}
-            withBorder
-            padding="xs"
-            radius="md"
-            style={{
-              background: isOver && canDrop ? 'var(--mantine-color-blue-light)' : undefined,
-              borderColor: isOver && canDrop ? 'var(--mantine-color-blue-filled)' : undefined,
-              borderStyle: draggingTask && !canDrop && draggingTask.status !== col.status ? 'dashed' : undefined,
-              opacity: draggingTask && !canDrop && draggingTask.status !== col.status ? 0.55 : 1,
-              minHeight: isHidden ? 0 : 240,
-              overflow: 'hidden',
-            }}
-            onDragEnter={(e) => {
-              if (!e.dataTransfer.types.includes('text/plain')) return
-              e.preventDefault()
-            }}
-            onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes('text/plain')) return
-              // Allow same-column reorder + cross-column drop
-              if (!canDrop && draggingId == null) return
-              e.preventDefault()
-              if (overStatus !== col.status) setOverStatus(col.status)
-            }}
-            onDragLeave={(e) => {
-              // Use bounding box instead of relatedTarget — more reliable cross-browser
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-              const outside =
-                e.clientX < rect.left || e.clientX > rect.right ||
-                e.clientY < rect.top  || e.clientY > rect.bottom
-              if (outside) {
-                if (overStatus === col.status) setOverStatus(null)
-                if (overIndex?.status === col.status) setOverIndex(null)
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleDrop(col.status)
-            }}
-          >
-            <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
-              <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-                <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
-                  {isHidden ? items.length : col.label}
-                </Badge>
+    <DragDropContext
+      onDragStart={(initial) => setDraggingTaskId(initial.draggableId)}
+      onDragEnd={handleDragEnd}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
+        {KANBAN_COLUMNS.map((col) => {
+          const items = byStatus[col.status]
+          const limit = colLimit[col.status]
+          const visible = items.slice(0, limit)
+          const hiddenCount = items.length - visible.length
+          const isHidden = !!colHidden[col.status]
+          const isMax = !!colMax[col.status]
+          // A column is a valid drop target if the task can transition to it
+          const isDropDisabled = !canWrite || isHidden ||
+            (draggingTask !== null && draggingTask !== undefined &&
+              draggingTask.status !== col.status &&
+              !allowedTargets.includes(col.status))
+
+          return (
+            <Card
+              key={col.status}
+              withBorder
+              padding="xs"
+              radius="md"
+              style={{ minHeight: isHidden ? 0 : 240, overflow: 'hidden' }}
+            >
+              {/* Column header */}
+              <Group justify="space-between" mb={isHidden ? 0 : 6} wrap="nowrap">
+                <Group gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light" style={{ flexShrink: 0 }}>
+                    {isHidden ? items.length : col.label}
+                  </Badge>
+                  {!isHidden && <Text size="xs" c="dimmed">{items.length}</Text>}
+                </Group>
                 {!isHidden && (
-                  <Text size="xs" c="dimmed">
-                    {items.length}
-                  </Text>
+                  <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
+                    <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
+                      <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleMax(col.status)}>
+                        {isMax ? <TbArrowsMinimize size={12} /> : <TbArrowsMaximize size={12} />}
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label="Sembunyikan kolom">
+                      <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
+                        <TbEyeOff size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                )}
+                {isHidden && (
+                  <Tooltip label={`Tampilkan ${col.label}`} position="right">
+                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
+                      <TbEye size={12} />
+                    </ActionIcon>
+                  </Tooltip>
                 )}
               </Group>
+
+              {/* Cards */}
               {!isHidden && (
-                <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
-                  <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      color="gray"
-                      onClick={() => toggleMax(col.status)}
+                <Droppable droppableId={col.status} isDropDisabled={isDropDisabled}>
+                  {(provided, snapshot) => (
+                    <Stack
+                      gap={6}
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      style={{
+                        minHeight: 40,
+                        background: snapshot.isDraggingOver && !isDropDisabled
+                          ? 'var(--mantine-color-blue-light)'
+                          : undefined,
+                        borderRadius: 'var(--mantine-radius-md)',
+                        transition: 'background 120ms ease',
+                        padding: snapshot.isDraggingOver ? '4px' : undefined,
+                      }}
                     >
-                      {isMax ? <TbArrowsMinimize size={12} /> : <TbArrowsMaximize size={12} />}
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label="Sembunyikan kolom">
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      color="gray"
-                      onClick={() => toggleHidden(col.status)}
-                    >
-                      <TbEyeOff size={12} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
+                      {visible.length === 0 && !snapshot.isDraggingOver && (
+                        <Text size="xs" c="dimmed" ta="center" py="md">No tasks</Text>
+                      )}
+
+                      {visible.map((t, idx) => (
+                        <Draggable
+                          key={t.id}
+                          draggableId={t.id}
+                          index={idx}
+                          isDragDisabled={!canWrite}
+                        >
+                          {(dragProvided, dragSnapshot) => (
+                            <Card
+                              withBorder
+                              padding="xs"
+                              radius="sm"
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              {...dragProvided.dragHandleProps}
+                              onClick={() => !dragSnapshot.isDragging && onSelect(t.id)}
+                              style={{
+                                cursor: canWrite ? 'grab' : 'pointer',
+                                opacity: dragSnapshot.isDragging ? 0.85 : 1,
+                                boxShadow: dragSnapshot.isDragging
+                                  ? '0 8px 24px rgba(0,0,0,0.18)'
+                                  : undefined,
+                                ...dragProvided.draggableProps.style,
+                              }}
+                            >
+                              <Stack gap={4}>
+                                <Group gap={4} wrap="wrap">
+                                  <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">{t.kind}</Badge>
+                                  <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">{t.priority}</Badge>
+                                </Group>
+                                <Text size="sm" fw={500} lineClamp={2}>{t.title}</Text>
+                                {t.tags.length > 0 && (
+                                  <Group gap={4} wrap="wrap">
+                                    {t.tags.slice(0, 3).map((tg) => (
+                                      <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>{tg.tag.name}</Badge>
+                                    ))}
+                                  </Group>
+                                )}
+                                {t.progressPercent != null && t.progressPercent > 0 && (
+                                  <div style={{ height: 4, background: 'var(--mantine-color-gray-2)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <div style={{
+                                      width: `${t.progressPercent}%`, height: '100%',
+                                      background: t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
+                                    }} />
+                                  </div>
+                                )}
+                                <Group justify="space-between" wrap="nowrap">
+                                  <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name : 'Unassigned'}</Text>
+                                  {t.dueAt && (
+                                    <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
+                                      {new Date(t.dueAt).toLocaleDateString()}
+                                    </Text>
+                                  )}
+                                </Group>
+                              </Stack>
+                            </Card>
+                          )}
+                        </Draggable>
+                      ))}
+
+                      {/* Required by @hello-pangea/dnd — reserves space for dragged item */}
+                      {provided.placeholder}
+
+                      {hiddenCount > 0 && (
+                        <Button
+                          variant="subtle"
+                          size="compact-xs"
+                          color="gray"
+                          fullWidth
+                          onClick={() => setColLimit((prev) => ({ ...prev, [col.status]: prev[col.status] + KANBAN_PAGE }))}
+                        >
+                          +{hiddenCount} lainnya
+                        </Button>
+                      )}
+                    </Stack>
+                  )}
+                </Droppable>
               )}
-              {isHidden && (
-                <Tooltip label={`Tampilkan ${col.label}`} position="right">
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => toggleHidden(col.status)}
-                  >
-                    <TbEye size={12} />
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </Group>
-            {!isHidden && <Stack gap={6}>
-              {items.length === 0 ? (
-                <Text size="xs" c="dimmed" ta="center" py="md">
-                  {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
-                </Text>
-              ) : (
-                <KanbanCardList
-                  items={visible}
-                  colStatus={col.status}
-                  draggingId={draggingId}
-                  draggingTask={draggingTask}
-                  overIndex={overIndex}
-                  canWrite={canWrite}
-                  onSelect={onSelect}
-                  setDraggingId={setDraggingId}
-                  setOverStatus={setOverStatus}
-                  setOverIndex={setOverIndex}
-                />
-              )}
-              {hidden > 0 && (
-                <Button
-                  variant="subtle"
-                  size="compact-xs"
-                  color="gray"
-                  fullWidth
-                  onClick={() =>
-                    setColLimit((prev) => ({
-                      ...prev,
-                      [col.status]: prev[col.status] + KANBAN_PAGE,
-                    }))
-                  }
-                >
-                  +{hidden} lainnya
-                </Button>
-              )}
-            </Stack>}
-          </Card>
-        )
-      })}
-    </div>
+            </Card>
+          )
+        })}
+      </div>
+    </DragDropContext>
   )
 }
 

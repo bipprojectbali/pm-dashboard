@@ -156,13 +156,13 @@ const STATUS_COLOR: Record<ProjectStatus, string> = {
 }
 
 const STATUS_ACCENT: Record<ProjectStatus, string> = {
-  DRAFT:     '#868e96',
-  ACTIVE:    '#228be6',
-  ON_HOLD:   '#fab005',
-  COMPLETED: '#40c057',
-  CANCELLED: '#495057',
+  DRAFT:     'rgba(134,142,150,0.35)',
+  ACTIVE:    'rgba(34,139,230,0.45)',
+  ON_HOLD:   'rgba(250,176,5,0.45)',
+  COMPLETED: 'rgba(64,192,87,0.45)',
+  CANCELLED: 'rgba(73,80,87,0.35)',
 }
-const OVERDUE_ACCENT = '#fa5252'
+const OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
 
 const PRIORITY_COLOR: Record<ProjectPriority, string> = {
   LOW: 'gray',
@@ -991,14 +991,14 @@ function ProjectCard({
         </Group>
 
         <Group gap={4} wrap="wrap">
-          <Badge color={STATUS_COLOR[p.status]} variant="light" size="xs">
+          <Badge color={STATUS_COLOR[p.status]} variant="outline" size="xs">
             {p.status.replace('_', ' ')}
           </Badge>
           <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
             {p.priority}
           </Badge>
           {p.myRole ? (
-            <Badge color={ROLE_COLOR[p.myRole]} variant="light" size="xs">
+            <Badge color={ROLE_COLOR[p.myRole]} variant="outline" size="xs">
               {p.myRole}
             </Badge>
           ) : isAdmin ? (
@@ -1016,7 +1016,7 @@ function ProjectCard({
             </Badge>
           )}
           {overdue && (
-            <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={10} />}>
+            <Badge color="red" variant="outline" size="xs" leftSection={<TbAlertTriangle size={10} />}>
               Overdue {daysOver}d
             </Badge>
           )}
@@ -1029,7 +1029,7 @@ function ProjectCard({
           )}
           {extended && (
             <Tooltip label={`Original deadline: ${formatDate(p.originalEndAt)}`}>
-              <Badge color="grape" variant="light" size="xs">
+              <Badge color="grape" variant="outline" size="xs">
                 Extended
               </Badge>
             </Tooltip>
@@ -1065,7 +1065,8 @@ function ProjectCard({
               value={timeProgress}
               size="xs"
               mt={2}
-              color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'blue'}
+              color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'}
+              style={{ opacity: 0.65 }}
             />
           </div>
         )}
@@ -1088,15 +1089,15 @@ function ProjectCard({
                 </Text>
               </Tooltip>
             </Group>
-            <Progress.Root size="xs" mt={2}>
+            <Progress.Root size="xs" mt={2} style={{ opacity: 0.65 }}>
               <Tooltip label={`Closed · ${p.taskStats.closed}`}>
-                <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="green" />
+                <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="teal" />
               </Tooltip>
               <Tooltip label={`Ready for QC · ${p.taskStats.readyForQc}`}>
-                <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="teal" />
+                <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="cyan" />
               </Tooltip>
               <Tooltip label={`In progress · ${p.taskStats.inProgress}`}>
-                <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="blue" />
+                <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="indigo" />
               </Tooltip>
               <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
                 <Progress.Section
@@ -1121,7 +1122,7 @@ function ProjectCard({
                 {p.milestoneStats.done}/{p.milestoneStats.total}
               </Text>
             </Group>
-            <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" mt={2} color="grape" />
+            <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" mt={2} color="violet" style={{ opacity: 0.65 }} />
           </div>
         )}
 

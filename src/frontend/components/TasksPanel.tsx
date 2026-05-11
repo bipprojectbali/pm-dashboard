@@ -1572,22 +1572,27 @@ function TasksKanbanView({
   onSelect: (id: string) => void
   onMove: (id: string, status: TaskStatus) => Promise<void> | void
 }) {
-  // Optimistic local task list — immediate drag results applied here,
-  // server refetch syncs back only when no drag is in-flight.
-  const [localTasks, setLocalTasks] = useState<TaskListItem[]>(tasks)
+  // State per kolom — array terpisah per status, indeks = persis apa yang di-render.
+  // Ini source of truth untuk kanban. Sync dari server saat tidak ada drag.
+  const initCols = (): Record<TaskStatus, TaskListItem[]> => {
+    const m: Record<TaskStatus, TaskListItem[]> = {
+      OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
+    }
+    for (const t of tasks) m[t.status].push(t)
+    return m
+  }
+  const [cols, setCols] = useState<Record<TaskStatus, TaskListItem[]>>(initCols)
   const prevTasksRef = useRef(tasks)
-  // Track how many cross-column moves are still waiting for server ACK.
-  // While pendingMoves > 0, server refetch data is ignored so it doesn't
-  // overwrite the optimistic order the user just produced.
   const pendingMovesRef = useRef(0)
 
   useEffect(() => {
     if (prevTasksRef.current === tasks) return
     prevTasksRef.current = tasks
-    // Only sync from server when nothing is pending
+    // Sync dari server hanya saat tidak ada drag in-flight
     if (pendingMovesRef.current === 0) {
-      setLocalTasks(tasks)
+      setCols(initCols())
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks])
 
   // Per-column show-more limit
@@ -1596,31 +1601,21 @@ function TasksKanbanView({
     REOPENED: KANBAN_PAGE, CLOSED: KANBAN_PAGE,
   })
 
-  // Per-column hide/show — persisted to localStorage
   const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
     key: 'pm:kanban:col-hidden', defaultValue: {},
   })
-  // Per-column maximize — persisted to localStorage
   const [colMax, setColMax] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
     key: 'pm:kanban:col-max', defaultValue: {},
   })
 
-  // draggingTaskId — tracked via onDragStart to compute allowed targets
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
-  const draggingTask = draggingTaskId ? localTasks.find((t) => t.id === draggingTaskId) : null
+  const draggingTask = draggingTaskId
+    ? Object.values(cols).flat().find((t) => t.id === draggingTaskId)
+    : null
   const allowedTargets = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
   const toggleHidden = (s: TaskStatus) => setColHidden((p) => ({ ...p, [s]: !p[s] }))
   const toggleMax    = (s: TaskStatus) => setColMax((p) => ({ ...p, [s]: !p[s] }))
-
-  // Group localTasks by status — stable order = insertion order from localTasks
-  const byStatus = useMemo(() => {
-    const map: Record<TaskStatus, TaskListItem[]> = {
-      OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
-    }
-    for (const t of localTasks) map[t.status].push(t)
-    return map
-  }, [localTasks])
 
   const handleDragEnd = useCallback((result: import('@hello-pangea/dnd').DropResult) => {
     setDraggingTaskId(null)
@@ -1631,61 +1626,59 @@ function TasksKanbanView({
 
     const srcStatus = source.droppableId as TaskStatus
     const dstStatus = destination.droppableId as TaskStatus
-    const task = localTasks.find((t) => t.id === draggableId)
-    if (!task) return
 
-    if (srcStatus === dstStatus) {
-      // Same-column reorder: splice in localTasks
-      setLocalTasks((prev) => {
-        const next = [...prev]
-        // Remove from old position
-        const fromIdx = next.findIndex((t) => t.id === draggableId)
-        if (fromIdx === -1) return prev
-        const [moved] = next.splice(fromIdx, 1)
-        // Find insertion position: destination.index counts within the column
-        const colItems = next.filter((t) => t.status === srcStatus)
-        const insertAfter = colItems[destination.index - 1]
-        const insertIdx = insertAfter
-          ? next.findIndex((t) => t.id === insertAfter.id) + 1
-          : next.findIndex((t) => t.status === srcStatus)
-        next.splice(insertIdx < 0 ? next.length : insertIdx, 0, moved)
-        return next
-      })
-      return
-    }
+    setCols((prev) => {
+      const next = {
+        OPEN: [...prev.OPEN],
+        IN_PROGRESS: [...prev.IN_PROGRESS],
+        READY_FOR_QC: [...prev.READY_FOR_QC],
+        REOPENED: [...prev.REOPENED],
+        CLOSED: [...prev.CLOSED],
+      }
 
-    // Cross-column: validate rule, then optimistic update + API call
-    const allowed = kanbanAllowed(srcStatus, task.kind)
-    if (!allowed.includes(dstStatus)) return
+      // Ambil item dari sumber berdasarkan index — persis sama dengan yang di-render
+      const [moved] = next[srcStatus].splice(source.index, 1)
+      if (!moved) return prev
 
-    // Optimistic: change status in localTasks and move to destination.index in target column
-    setLocalTasks((prev) => {
-      const next = prev.filter((t) => t.id !== draggableId)
-      const updated = { ...task, status: dstStatus }
-      const dstItems = next.filter((t) => t.status === dstStatus)
-      const insertAfter = dstItems[destination.index - 1]
-      const insertIdx = insertAfter
-        ? next.findIndex((t) => t.id === insertAfter.id) + 1
-        : next.findIndex((t) => t.status === dstStatus)
-      next.splice(insertIdx < 0 ? next.length : insertIdx, 0, updated)
+      if (srcStatus === dstStatus) {
+        // Same-column: cukup insert di destination.index
+        next[dstStatus].splice(destination.index, 0, moved)
+      } else {
+        // Cross-column: validasi transisi, update status, insert
+        const allowed = kanbanAllowed(srcStatus, moved.kind)
+        if (!allowed.includes(dstStatus)) {
+          // Kembalikan item ke posisi asal
+          next[srcStatus].splice(source.index, 0, moved)
+          return prev
+        }
+        next[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
+      }
+
       return next
     })
 
-    // Block server-refetch sync while API is in-flight
-    pendingMovesRef.current += 1
-    const settle = () => {
-      pendingMovesRef.current -= 1
-      if (pendingMovesRef.current === 0) {
-        setLocalTasks(prevTasksRef.current)
+    // Cross-column: panggil API setelah state update
+    if (srcStatus !== dstStatus) {
+      pendingMovesRef.current += 1
+      const settle = () => {
+        pendingMovesRef.current -= 1
+        if (pendingMovesRef.current === 0) {
+          // Sync dari server setelah semua drag selesai
+          const m: Record<TaskStatus, TaskListItem[]> = {
+            OPEN: [], IN_PROGRESS: [], READY_FOR_QC: [], REOPENED: [], CLOSED: [],
+          }
+          for (const t of prevTasksRef.current) m[t.status].push(t)
+          setCols(m)
+        }
+      }
+      const moveResult = onMove(draggableId, dstStatus)
+      if (moveResult && typeof (moveResult as Promise<void>).finally === 'function') {
+        ;(moveResult as Promise<void>).finally(settle)
+      } else {
+        settle()
       }
     }
-    const moveResult = onMove(draggableId, dstStatus)
-    if (moveResult && typeof (moveResult as Promise<void>).finally === 'function') {
-      ;(moveResult as Promise<void>).finally(settle)
-    } else {
-      settle()
-    }
-  }, [localTasks, onMove])
+  }, [onMove])
 
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'
@@ -1698,7 +1691,7 @@ function TasksKanbanView({
     >
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
         {KANBAN_COLUMNS.map((col) => {
-          const items = byStatus[col.status]
+          const items = cols[col.status]
           const limit = colLimit[col.status]
           const visible = items.slice(0, limit)
           const hiddenCount = items.length - visible.length

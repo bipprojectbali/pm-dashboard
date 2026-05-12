@@ -1475,6 +1475,11 @@ const PROJECT_GANTT_OVERDUE = '#a84444'
 type ProjViewMode = 'day' | 'week' | 'month'
 
 const PROJ_COL_WIDTH: Record<ProjViewMode, number> = { day: 44, week: 28, month: 18 }
+const PROJ_EFFECTIVE_DAY_PX: Record<ProjViewMode, number> = {
+  day: 44,
+  week: Math.max(28 / 2, 14),
+  month: Math.max(18 / 6, 7),
+}
 
 const PROJ_VIEW_OPTIONS: Array<{ value: ProjViewMode; label: string }> = [
   { value: 'day', label: 'Hari' },
@@ -1537,7 +1542,7 @@ function ProjectsGanttView({
     const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
-    const todayPx = daysSinceStart * PROJ_COL_WIDTH[viewMode]
+    const todayPx = daysSinceStart * PROJ_EFFECTIVE_DAY_PX[viewMode]
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
   }, [tlStart, viewMode, now])
 

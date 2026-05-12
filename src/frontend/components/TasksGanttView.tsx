@@ -61,6 +61,12 @@ const STATUS_PROGRESS: Record<TaskStatus, number> = {
 // Column width per view mode — passed to mantine-gantt as base unit
 // mantine-gantt divides this internally for week (/2) and month (/6)
 const COL_WIDTH: Record<ViewMode, number> = { day: 44, week: 120, month: 120 }
+// mantine-gantt effective per-day pixel: day=colWidth, week=colWidth/2, month=colWidth/6
+const EFFECTIVE_DAY_PX: Record<ViewMode, number> = {
+  day: 44,
+  week: Math.max(120 / 2, 14),
+  month: Math.max(120 / 6, 7),
+}
 
 const TASK_LIST_WIDTH = 280
 const ROW_HEIGHT = 52
@@ -234,7 +240,7 @@ export function TasksGanttView({
     const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
-    const todayPx = daysSinceStart * COL_WIDTH[viewMode]
+    const todayPx = daysSinceStart * EFFECTIVE_DAY_PX[viewMode]
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
   }, [timelineStart, viewMode, now])
 

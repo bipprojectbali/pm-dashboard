@@ -105,6 +105,9 @@ const PROJ_STATUS_LABEL: Record<string, string> = {
 
 const TIMELINE_COL_WIDTH = 22
 const TIMELINE_ROW_H = 42
+// mantine-gantt divides columnWidth by 6 for month view, by 2 for week view
+// We must use the same effective per-day width for scroll calculation
+const TIMELINE_EFFECTIVE_DAY_PX = Math.max(TIMELINE_COL_WIDTH / 6, 7)
 
 function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -134,12 +137,16 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
       })
   }, [timeline])
 
-  const allMs = ganttTasks.flatMap((t) => {
-    const s = new Date(t.startDate).getTime()
-    return [s, s + t.duration * 86_400_000]
-  })
-  const tlStart = allMs.length ? new Date(Math.min(...allMs) - 7 * 86_400_000) : undefined
-  const tlEnd = allMs.length ? new Date(Math.max(...allMs) + 14 * 86_400_000) : undefined
+  const { tlStart, tlEnd } = useMemo(() => {
+    const allMs = ganttTasks.flatMap((t) => {
+      const s = new Date(t.startDate).getTime()
+      return [s, s + t.duration * 86_400_000]
+    })
+    return {
+      tlStart: allMs.length ? new Date(Math.min(...allMs) - 7 * 86_400_000) : undefined,
+      tlEnd: allMs.length ? new Date(Math.max(...allMs) + 14 * 86_400_000) : undefined,
+    }
+  }, [ganttTasks])
 
   const statusesInData = useMemo(() => {
     const seen = new Set<string>()
@@ -152,7 +159,7 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
     const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((Date.now() - tlStart.getTime()) / 86_400_000)
-    const todayPx = daysSinceStart * TIMELINE_COL_WIDTH
+    const todayPx = daysSinceStart * TIMELINE_EFFECTIVE_DAY_PX
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
   }, [tlStart])
 

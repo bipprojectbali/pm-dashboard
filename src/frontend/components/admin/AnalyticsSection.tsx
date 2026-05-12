@@ -147,28 +147,35 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
     return Array.from(seen)
   }, [timeline])
 
+  const tlStartRef = useRef(tlStart)
+  tlStartRef.current = tlStart
+
   const scrollToToday = useCallback(() => {
-    if (!tlStart) return
+    const start = tlStartRef.current
+    if (!start) return
     const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
-    const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+    const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
     const todayPx = daysSinceStart * TIMELINE_COL_WIDTH
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
-  }, [tlStart, now])
+  }, [now])
 
   useEffect(() => {
     if (!tlStart) return
     let attempts = 0
+    let done = false
     const tryScroll = () => {
+      if (done) return
       const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
       if (!body || body.scrollWidth <= body.clientWidth + 10) {
         if (++attempts < 30) setTimeout(tryScroll, 100)
         return
       }
+      done = true
       scrollToToday()
     }
     setTimeout(tryScroll, 100)
-  }, [tlStart, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlStart, ganttTasks.length, scrollToToday])
 
   return (
     <Card withBorder padding="md" radius="md">
@@ -206,19 +213,43 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
       {ganttTasks.length === 0 ? (
         <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
       ) : (
-        <div ref={wrapperRef} style={{ height: Math.max(200, ganttTasks.length * TIMELINE_ROW_H + 60) }}>
-          <Gantt
-            tasks={ganttTasks}
-            viewMode="month"
-            startDate={tlStart}
-            endDate={tlEnd}
-            columnWidth={TIMELINE_COL_WIDTH}
-            rowHeight={TIMELINE_ROW_H}
-            taskListWidth={0}
-            showTodayMarker
-            showTitle
-            styles={{ taskList: { display: 'none' } }}
-          />
+        <div style={{
+          display: 'flex',
+          height: Math.max(200, ganttTasks.length * TIMELINE_ROW_H + 60),
+          border: '1px solid var(--mantine-color-default-border)',
+          borderRadius: 'var(--mantine-radius-md)',
+          overflow: 'hidden',
+        }}>
+          {/* Sidebar nama project */}
+          <div style={{ width: 180, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
+            <div style={{ height: 56, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 10px 8px' }}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
+              {timeline.filter((p) => p.startsAt || p.endsAt).map((p) => (
+                <div key={p.id} style={{ height: TIMELINE_ROW_H, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6, borderBottom: '1px solid var(--mantine-color-default-border)', overflow: 'hidden' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'), flexShrink: 0 }} />
+                  <Text size="xs" fw={500} truncate title={p.name}>{p.name}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Gantt timeline */}
+          <div ref={wrapperRef} style={{ flex: 1, overflow: 'hidden' }}>
+            <Gantt
+              tasks={ganttTasks}
+              viewMode="month"
+              startDate={tlStart}
+              endDate={tlEnd}
+              columnWidth={TIMELINE_COL_WIDTH}
+              rowHeight={TIMELINE_ROW_H}
+              taskListWidth={0}
+              showTodayMarker
+              showTitle
+              styles={{ taskList: { display: 'none' } }}
+            />
+          </div>
         </div>
       )}
     </Card>

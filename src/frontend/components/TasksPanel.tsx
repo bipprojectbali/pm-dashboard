@@ -172,7 +172,10 @@ export function TasksPanel({
   const isAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
   const openTask = (id: string) => setDrawerTaskId(id)
-  const closeTask = () => setDrawerTaskId(null)
+  const closeTask = () => {
+    setDrawerTaskId(null)
+    qc.invalidateQueries({ queryKey: ['tasks'] })
+  }
   const [createOpen, setCreateOpen] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [kind, setKind] = useState<string | null>(null)

@@ -104,7 +104,7 @@ export function authRoutes() {
           },
         })
         .catch(() => {})
-      return { user: { id: user.id, name: user.name, email: user.email, role: user.role } }
+      return { user: { id: user.id, name: user.name, email: user.email, role: user.role, image: user.image ?? null } }
     })
 
     .post('/api/auth/logout', async ({ request, set }) => {
@@ -138,7 +138,7 @@ export function authRoutes() {
       const session = await prisma.session.findUnique({
         where: { token },
         include: {
-          user: { select: { id: true, name: true, email: true, role: true, blocked: true } },
+          user: { select: { id: true, name: true, email: true, role: true, blocked: true, image: true } },
         },
       })
       if (!session || session.expiresAt < new Date() || session.user.blocked) {

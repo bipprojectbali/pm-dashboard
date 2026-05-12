@@ -1,6 +1,6 @@
-import { Badge, Card, Group, SimpleGrid, Stack, Text, ThemeIcon, Title, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Card, Group, SimpleGrid, Stack, Text, ThemeIcon, Title, Tooltip } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { TbCalendarEvent, TbChartDonut, TbChartLine, TbInfoCircle, TbTimeline } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
 import { Gantt, type GanttTask } from 'mantine-gantt'
@@ -103,9 +103,14 @@ const PROJ_STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Active', ON_HOLD: 'On Hold', DRAFT: 'Draft', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
 }
 
+const TIMELINE_COL_WIDTH = 22
+const TIMELINE_ROW_H = 42
+
 function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
+  const now = useMemo(() => new Date(), [])
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
   const ganttTasks = useMemo<GanttTask[]>(() => {
-    const now = new Date()
     const weekOut = new Date(Date.now() + 7 * 86_400_000)
     return timeline
       .filter((p) => p.startsAt || p.endsAt)
@@ -113,7 +118,6 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
         const start = p.startsAt ? new Date(p.startsAt) : now
         const end = p.endsAt ? new Date(p.endsAt) : weekOut
         const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
-        // Encode status + owner + slipped ke label
         const suffix = [
           PROJ_STATUS_LABEL[p.status] ?? p.status,
           p.owner,
@@ -125,10 +129,10 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
           startDate: start.toISOString().slice(0, 10),
           duration,
           progress: 0,
-          color: p.slipped ? 'orange' : (PROJ_STATUS_COLOR[p.status] ?? 'blue'),
+          color: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'),
         }
       })
-  }, [timeline])
+  }, [timeline, now])
 
   const allMs = ganttTasks.flatMap((t) => {
     const s = new Date(t.startDate).getTime()
@@ -137,12 +141,34 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
   const tlStart = allMs.length ? new Date(Math.min(...allMs) - 7 * 86_400_000) : undefined
   const tlEnd = allMs.length ? new Date(Math.max(...allMs) + 14 * 86_400_000) : undefined
 
-  // Legend: status yang muncul di data
   const statusesInData = useMemo(() => {
     const seen = new Set<string>()
     for (const p of timeline) seen.add(p.status)
     return Array.from(seen)
   }, [timeline])
+
+  const scrollToToday = useCallback(() => {
+    if (!tlStart) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body) return
+    const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+    const todayPx = daysSinceStart * TIMELINE_COL_WIDTH
+    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+  }, [tlStart, now])
+
+  useEffect(() => {
+    if (!tlStart) return
+    let attempts = 0
+    const tryScroll = () => {
+      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body || body.scrollWidth <= body.clientWidth + 10) {
+        if (++attempts < 30) setTimeout(tryScroll, 100)
+        return
+      }
+      scrollToToday()
+    }
+    setTimeout(tryScroll, 100)
+  }, [tlStart, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card withBorder padding="md" radius="md">
@@ -160,30 +186,40 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
             <Text size="xs" c="dimmed">startsAt → endsAt · read-only</Text>
           </div>
         </Group>
-        {/* Legend */}
-        <Group gap={6} wrap="wrap">
+        <Group gap={6} wrap="wrap" align="center">
           {statusesInData.map((s) => (
             <Badge key={s} size="xs" color={PROJ_STATUS_COLOR[s] ?? 'gray'} variant="dot">
               {PROJ_STATUS_LABEL[s] ?? s}
             </Badge>
           ))}
           <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
+          {ganttTasks.length > 0 && (
+            <Tooltip label="Scroll ke hari ini" withArrow>
+              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+                <TbCalendarEvent size={13} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 
       {ganttTasks.length === 0 ? (
         <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
       ) : (
-        <Gantt
-          tasks={ganttTasks}
-          viewMode="month"
-          startDate={tlStart}
-          endDate={tlEnd}
-          columnWidth={22}
-          rowHeight={42}
-          taskListWidth={240}
-          showTodayMarker
-        />
+        <div ref={wrapperRef} style={{ height: Math.max(200, ganttTasks.length * TIMELINE_ROW_H + 60) }}>
+          <Gantt
+            tasks={ganttTasks}
+            viewMode="month"
+            startDate={tlStart}
+            endDate={tlEnd}
+            columnWidth={TIMELINE_COL_WIDTH}
+            rowHeight={TIMELINE_ROW_H}
+            taskListWidth={0}
+            showTodayMarker
+            showTitle
+            styles={{ taskList: { display: 'none' } }}
+          />
+        </div>
       )}
     </Card>
   )

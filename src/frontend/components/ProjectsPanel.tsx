@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -51,6 +52,7 @@ import {
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { EChart } from './charts/EChart'
+import { UserAvatar } from './shared/UserAvatar'
 
 export type MemberRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
 export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -1087,32 +1089,39 @@ function ProjectCard({
         )}
 
         <Group gap="md" mt={compact ? 0 : 'xs'} justify="space-between" wrap="nowrap">
-          <Group gap={10} wrap="nowrap">
-            <Tooltip label={`${p._count.members} members`}>
-              <Group gap={3} wrap="nowrap">
-                <TbUsers size={12} />
-                <Text size="xs" c="dimmed">
-                  {p._count.members}
-                </Text>
-              </Group>
-            </Tooltip>
+          {/* Member avatars */}
+          <Avatar.Group spacing="sm">
+            {p.members.slice(0, 4).map((m) => (
+              <Tooltip key={m.userId} label={`${m.user.name} · ${m.role}`} withArrow>
+                <UserAvatar name={m.user.name} image={m.user.image} size={22} color="blue" />
+              </Tooltip>
+            ))}
+            {p.members.length > 4 && (
+              <Tooltip label={`${p.members.length - 4} more members`} withArrow>
+                <Avatar size={22} radius="xl" color="gray">
+                  +{p.members.length - 4}
+                </Avatar>
+              </Tooltip>
+            )}
+          </Avatar.Group>
+
+          {/* Tasks count + owner */}
+          <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
             <Tooltip label={`${p._count.tasks} tasks`}>
               <Group gap={3} wrap="nowrap">
                 <TbFolder size={12} />
-                <Text size="xs" c="dimmed">
-                  {p._count.tasks}
+                <Text size="xs" c="dimmed">{p._count.tasks}</Text>
+              </Group>
+            </Tooltip>
+            <Tooltip label={`Owner: ${p.owner.name}`}>
+              <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                <UserAvatar name={p.owner.name} image={p.owner.image} size={16} color="blue" style={{ flexShrink: 0 }} />
+                <Text size="xs" c="dimmed" truncate style={{ maxWidth: 90 }}>
+                  {p.owner.name.split(' ')[0]}
                 </Text>
               </Group>
             </Tooltip>
           </Group>
-          <Tooltip label={`Owner: ${p.owner.name}`}>
-            <Group gap={3} wrap="nowrap" style={{ minWidth: 0 }}>
-              <TbUser size={12} />
-              <Text size="xs" c="dimmed" truncate>
-                {p.owner.name}
-              </Text>
-            </Group>
-          </Tooltip>
         </Group>
       </Stack>
     </Card>

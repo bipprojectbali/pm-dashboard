@@ -5,6 +5,7 @@ import {
   Card,
   Checkbox,
   Divider,
+  Drawer,
   Group,
   Pagination,
   Progress,
@@ -20,7 +21,6 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
@@ -43,6 +43,7 @@ import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDashboardOverlay } from './TaskDashboardOverlay'
+import { TaskDetailView } from './TaskDetailView'
 import { TasksGanttView } from './TasksGanttView'
 import { TasksKanbanView } from './TasksKanbanView'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
@@ -164,16 +165,13 @@ export function TasksPanel({
   canWriteOverride?: boolean
 }) {
   const qc = useQueryClient()
-  const navigate = useNavigate()
+
   const session = useSession()
   const systemRole = session.data?.user?.role ?? null
   const isAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
-  const openTask = (id: string) => {
-    navigate({
-      to: '/pm',
-      search: projectId ? { tab: 'tasks', projectId, taskId: id } : { tab: 'tasks', taskId: id },
-    })
-  }
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
+  const openTask = (id: string) => setDrawerTaskId(id)
+  const closeTask = () => setDrawerTaskId(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [kind, setKind] = useState<string | null>(null)
@@ -910,6 +908,20 @@ export function TasksPanel({
         error={create.error?.message ?? bulkCreate.error?.message}
         tagsByProject={tagsQ.data?.tags ?? []}
       />
+
+      <Drawer
+        opened={!!drawerTaskId}
+        onClose={closeTask}
+        position="right"
+        size="xl"
+        withCloseButton={false}
+        padding={0}
+        styles={{ body: { height: '100%', padding: 0 } }}
+      >
+        {drawerTaskId && (
+          <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />
+        )}
+      </Drawer>
     </Stack>
   )
 }

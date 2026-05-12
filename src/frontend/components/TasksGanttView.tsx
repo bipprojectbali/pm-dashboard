@@ -39,10 +39,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Soft muted hex colors for Gantt bars — less saturated than Mantine filled colors
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  OPEN: 'blue', IN_PROGRESS: 'violet', READY_FOR_QC: 'yellow',
-  REOPENED: 'orange', CLOSED: 'teal',
+  OPEN:         '#5c8fd6',
+  IN_PROGRESS:  '#7c6dbf',
+  READY_FOR_QC: '#b8963e',
+  REOPENED:     '#c07a3a',
+  CLOSED:       '#3d9e7a',
 }
+const OVERDUE_COLOR = '#b85c5c'
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Open', IN_PROGRESS: 'In Progress', READY_FOR_QC: 'Ready for QC',
@@ -193,7 +198,7 @@ export function TasksGanttView({
         startDate: startDate.toISOString().slice(0, 10),
         duration,
         progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
-        color: isOverdue ? 'red' : STATUS_COLOR[t.status],
+        color: isOverdue ? OVERDUE_COLOR : STATUS_COLOR[t.status],
         dependencies: [],
       }
     }), [withDates, now])
@@ -283,7 +288,7 @@ export function TasksGanttView({
           {stats.qc > 0 && <Badge size="sm" color="yellow" variant="light">{stats.qc} QC</Badge>}
           {stats.reopened > 0 && <Badge size="sm" color="orange" variant="light">{stats.reopened} Reopened</Badge>}
           {stats.closed > 0 && <Badge size="sm" color="teal" variant="light">{stats.closed} Closed</Badge>}
-          {stats.overdue > 0 && <Badge size="sm" color="red" variant="filled">⚠ {stats.overdue} Overdue</Badge>}
+          {stats.overdue > 0 && <Badge size="sm" color="red" variant="light" leftSection={<TbAlertTriangle size={10} />}>{stats.overdue} Overdue</Badge>}
           <Divider orientation="vertical" />
           <Text size="xs" c="dimmed">Total {withDates.length}</Text>
         </Group>

@@ -27,7 +27,7 @@ import { DateInput } from '@mantine/dates'
 import { useHotkeys, useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo, useEffect, useRef, useState } from 'react'
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import {
   TbAlertTriangle,
@@ -1472,6 +1472,19 @@ const PROJECT_GANTT_COLOR: Record<ProjectStatus, string> = {
 }
 const PROJECT_GANTT_OVERDUE = '#a84444'
 
+type ProjViewMode = 'day' | 'week' | 'month'
+
+const PROJ_COL_WIDTH: Record<ProjViewMode, number> = { day: 44, week: 28, month: 18 }
+
+const PROJ_VIEW_OPTIONS: Array<{ value: ProjViewMode; label: string }> = [
+  { value: 'day', label: 'Hari' },
+  { value: 'week', label: 'Minggu' },
+  { value: 'month', label: 'Bulan' },
+]
+
+const ROW_H = 52
+const HDR_H = 56
+
 function ProjectsGanttView({
   projects,
   onSelect,
@@ -1482,6 +1495,12 @@ function ProjectsGanttView({
   const now = useMemo(() => new Date(), [])
   const withDates = useMemo(() => projects.filter((p) => p.startsAt && p.endsAt), [projects])
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const isSyncingRef = useRef(false)
+  const [viewMode, setViewMode] = useLocalStorage<ProjViewMode>({
+    key: 'pm:projects:gantt-view',
+    defaultValue: 'week',
+  })
 
   const ganttTasks = useMemo<GanttTask[]>(() =>
     withDates.map((p) => {
@@ -1513,18 +1532,37 @@ function ProjectsGanttView({
     }
   }, [withDates])
 
-  // Scroll to center today on mount
+  // Scroll to center today
   useEffect(() => {
     if (!tlStart) return
     const t = setTimeout(() => {
       const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
       if (!body) return
       const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
-      const todayPx = daysSinceStart * 28 // week view ~28px per day
+      const todayPx = daysSinceStart * PROJ_COL_WIDTH[viewMode]
       body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
     }, 80)
     return () => clearTimeout(t)
-  }, [tlStart, now, ganttTasks.length])
+  }, [tlStart, viewMode, ganttTasks.length, now])
+
+  // Sync vertical scroll: list ↔ gantt body
+  const syncFromGantt = useCallback(() => {
+    if (isSyncingRef.current) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body || !listRef.current) return
+    isSyncingRef.current = true
+    listRef.current.scrollTop = body.scrollTop
+    isSyncingRef.current = false
+  }, [])
+
+  const syncFromList = useCallback(() => {
+    if (isSyncingRef.current) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body || !listRef.current) return
+    isSyncingRef.current = true
+    body.scrollTop = listRef.current.scrollTop
+    isSyncingRef.current = false
+  }, [])
 
   if (withDates.length === 0) {
     return (
@@ -1540,29 +1578,99 @@ function ProjectsGanttView({
     )
   }
 
+  const totalH = Math.max(320, withDates.length * ROW_H + HDR_H + 8)
+
   return (
     <Card withBorder padding="sm" radius="md">
-      <div
-        ref={wrapperRef}
-        style={{ height: Math.max(300, withDates.length * 52 + 60) }}
-      >
-        <Gantt
-          tasks={ganttTasks}
-          viewMode="week"
-          startDate={tlStart}
-          endDate={tlEnd}
-          columnWidth={28}
-          rowHeight={52}
-          taskListWidth={200}
-          showTodayMarker
-          showTitle
-          styles={{ taskList: { display: 'none' } }}
-          onTaskClick={(t) => {
-            const proj = projects.find((p) => p.id === t.id)
-            if (proj) onSelect(proj)
-          }}
-        />
-      </div>
+      <Stack gap="xs">
+        {/* Toolbar */}
+        <Group justify="space-between">
+          <Group gap="xs">
+            <Text size="xs" c="dimmed">{withDates.length} proyek</Text>
+            {projects.length > withDates.length && (
+              <Tooltip label={`${projects.length - withDates.length} proyek tanpa tanggal tidak ditampilkan`} withArrow>
+                <Badge size="xs" variant="default" style={{ border: 'none' }}>
+                  +{projects.length - withDates.length} tanpa jadwal
+                </Badge>
+              </Tooltip>
+            )}
+          </Group>
+          <SegmentedControl
+            size="xs"
+            value={viewMode}
+            onChange={(v) => setViewMode(v as ProjViewMode)}
+            data={PROJ_VIEW_OPTIONS}
+          />
+        </Group>
+
+        {/* Legend */}
+        <Group gap={6} wrap="wrap">
+          {(Object.entries(PROJECT_GANTT_COLOR) as [ProjectStatus, string][]).map(([status, color]) => (
+            <Badge key={status} size="xs" variant="default" style={{ border: 'none' }}
+              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />}
+            >
+              {status.replace('_', ' ')}
+            </Badge>
+          ))}
+          <Badge size="xs" variant="default" style={{ border: 'none' }}
+            leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#b86d2a', flexShrink: 0 }} />}
+          >Slipped</Badge>
+          <Badge size="xs" variant="default" style={{ border: 'none' }}
+            leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: PROJECT_GANTT_OVERDUE, flexShrink: 0 }} />}
+          >Overdue</Badge>
+        </Group>
+
+        {/* Gantt + custom sidebar */}
+        <div style={{ display: 'flex', height: totalH, border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-md)', overflow: 'hidden' }}>
+
+          {/* Left sidebar — project names */}
+          <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
+            {/* Header */}
+            <div style={{ height: HDR_H, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 12px 8px' }}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+            </div>
+            {/* Rows */}
+            <div ref={listRef} onScroll={syncFromList} style={{ flex: 1, overflowY: 'scroll', scrollbarWidth: 'none' }}>
+              {withDates.map((p) => {
+                const isOverdue = new Date(p.endsAt as string) < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+                return (
+                  <Tooltip key={p.id} label={`${p.status.replace('_',' ')} · ${p.priority}`} withArrow position="right">
+                    <div
+                      onClick={() => onSelect(p)}
+                      style={{ height: ROW_H, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 8, borderBottom: '1px solid var(--mantine-color-default-border)', cursor: 'pointer', overflow: 'hidden' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--mantine-color-default-hover)' }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = '' }}
+                    >
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isOverdue ? PROJECT_GANTT_OVERDUE : PROJECT_GANTT_COLOR[p.status], flexShrink: 0 }} />
+                      <Text size="xs" fw={500} truncate style={{ minWidth: 0, flex: 1 }} title={p.name}>{p.name}</Text>
+                    </div>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Gantt timeline */}
+          <div ref={wrapperRef} style={{ flex: 1, overflow: 'hidden' }} onScroll={syncFromGantt}>
+            <Gantt
+              tasks={ganttTasks}
+              viewMode={viewMode}
+              startDate={tlStart}
+              endDate={tlEnd}
+              columnWidth={PROJ_COL_WIDTH[viewMode]}
+              rowHeight={ROW_H}
+              taskListWidth={0}
+              showTodayMarker
+              showTitle
+              styles={{ taskList: { display: 'none' } }}
+              onTaskClick={(t) => {
+                const proj = projects.find((p) => p.id === t.id)
+                if (proj) onSelect(proj)
+              }}
+            />
+          </div>
+        </div>
+      </Stack>
     </Card>
   )
 }

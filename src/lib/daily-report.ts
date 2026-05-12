@@ -4,8 +4,11 @@ import { getSetting, setSetting } from './app-settings'
 
 // ─── Claude API ──────────────────────────────────────────────────────────────
 
-async function callClaudeAPI(apiKey: string, model: string, prompt: string): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function callClaudeAPI(apiKey: string, model: string, prompt: string, baseUrl?: string): Promise<string> {
+  const endpoint = baseUrl
+    ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
+    : 'https://api.anthropic.com/v1/messages'
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -122,19 +125,21 @@ Tulis laporan sekarang:`
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export async function generateReportPreview(): Promise<string> {
-  const [apiKey, model] = await Promise.all([
+  const [apiKey, model, baseUrl] = await Promise.all([
     getSetting('ai.anthropicApiKey'),
     getSetting('ai.model'),
+    getSetting('ai.baseUrl'),
   ])
   if (!apiKey) throw new Error('Anthropic API key belum dikonfigurasi')
   const prompt = await buildReportPrompt()
-  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt)
+  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
 }
 
 export async function generateAndSendDailyReport(): Promise<{ ok: boolean; message: string }> {
-  const [apiKey, model, botToken, chatId] = await Promise.all([
+  const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([
     getSetting('ai.anthropicApiKey'),
     getSetting('ai.model'),
+    getSetting('ai.baseUrl'),
     getSetting('telegram.botToken'),
     getSetting('telegram.chatId'),
   ])
@@ -146,7 +151,7 @@ export async function generateAndSendDailyReport(): Promise<{ ok: boolean; messa
   try {
     appLog('info', 'Daily report: generating...')
     const prompt = await buildReportPrompt()
-    const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt)
+    const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
     await sendToTelegram(botToken, chatId, report)
     await setSetting('report.lastSentAt', new Date().toISOString())
     appLog('info', 'Daily report: sent successfully')

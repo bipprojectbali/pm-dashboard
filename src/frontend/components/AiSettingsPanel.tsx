@@ -13,6 +13,7 @@ import {
   Stack,
   Text,
   Textarea,
+  TextInput,
   ThemeIcon,
   Title,
   Tooltip,
@@ -57,6 +58,7 @@ export function AiSettingsPanel() {
   const settings = data?.settings ?? {}
 
   const [apiKey, setApiKey] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
   const [scheduleHour, setScheduleHour] = useState<number | string>(18)
   const [dirty, setDirty] = useState(false)
@@ -65,6 +67,7 @@ export function AiSettingsPanel() {
   useEffect(() => {
     if (!data) return
     setApiKey(settings['ai.anthropicApiKey'] ?? '')
+    setBaseUrl(settings['ai.baseUrl'] ?? '')
     setModel(settings['ai.model'] ?? 'claude-opus-4-7')
     setScheduleHour(parseInt(settings['report.scheduleHour'] ?? '18', 10))
     setDirty(false)
@@ -74,6 +77,7 @@ export function AiSettingsPanel() {
     mutationFn: async () => {
       await Promise.all([
         saveSetting('ai.anthropicApiKey', apiKey),
+        saveSetting('ai.baseUrl', baseUrl),
         saveSetting('ai.model', model),
         saveSetting('report.scheduleHour', String(scheduleHour)),
       ])
@@ -141,6 +145,14 @@ export function AiSettingsPanel() {
             description="Dapatkan di console.anthropic.com → API Keys. Disimpan terenkripsi di database."
             value={apiKey}
             onChange={(e) => { setApiKey(e.currentTarget.value); setDirty(true) }}
+          />
+
+          <TextInput
+            label="Base URL (opsional)"
+            placeholder="https://your-proxy.example.com"
+            description="Kosongkan untuk pakai endpoint Anthropic langsung. Isi jika menggunakan proxy/gateway custom. Harus kompatibel dengan Anthropic API (/v1/messages)."
+            value={baseUrl}
+            onChange={(e) => { setBaseUrl(e.currentTarget.value); setDirty(true) }}
           />
 
           <Select

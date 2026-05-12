@@ -5,8 +5,8 @@ import {
   Card,
   Checkbox,
   Divider,
-  Drawer,
   Group,
+  Modal,
   Pagination,
   Progress,
   SegmentedControl,
@@ -909,19 +909,19 @@ export function TasksPanel({
         tagsByProject={tagsQ.data?.tags ?? []}
       />
 
-      <Drawer
+      <Modal
         opened={!!drawerTaskId}
         onClose={closeTask}
-        position="right"
-        size="xl"
+        centered
+        size="90vw"
         withCloseButton={false}
         padding={0}
-        styles={{ body: { height: '100%', padding: 0 } }}
+        styles={{ body: { padding: 0 }, content: { maxHeight: '92vh', overflowY: 'auto' } }}
       >
         {drawerTaskId && (
           <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />
         )}
-      </Drawer>
+      </Modal>
     </Stack>
   )
 }

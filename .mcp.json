@@ -4,7 +4,8 @@
       "command": "bunx",
       "args": ["@playwright/mcp@latest"]
     },
-    "pm-dashboard": {
+    "pm-dev": {
+      "description": "pm-dashboard local dev runtime — akses langsung ke DB, Redis, dan semua tools via stdio. Full admin scope (read + write). Gunakan untuk query data, trigger actions, dan debug di environment lokal.",
       "command": "bun",
       "args": ["run", "scripts/mcp/server.ts"],
       "env": {
@@ -15,7 +16,8 @@
       "command": "bun",
       "args": ["run", "scripts/mcp-deploy/server.ts"]
     },
-    "pm-dashboard-stg": {
+    "pm-stg": {
+      "description": "pm-dashboard staging remote (pm-dashboard.wibudev.com) — akses via HTTP MCP. Readonly scope saat NODE_ENV=production. Gunakan untuk verifikasi deploy, cek data stg, dan monitor kondisi server staging.",
       "type": "http",
       "url": "https://pm-dashboard.wibudev.com/mcp",
       "headers": {

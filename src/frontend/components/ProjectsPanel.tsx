@@ -1551,14 +1551,14 @@ function ProjectsGanttView({
     if (!tlStart) return
     let attempts = 0
     const tryScroll = () => {
-      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body || body.scrollWidth <= body.clientWidth + 10) {
-        if (++attempts < 30) setTimeout(tryScroll, 100)
+      const content = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
+      if (!content || content.offsetWidth < 200) {
+        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
         return
       }
       scrollToToday()
     }
-    setTimeout(tryScroll, 100)
+    setTimeout(tryScroll, 80)
   }, [tlStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync vertical scroll: list ↔ gantt body

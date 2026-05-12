@@ -163,6 +163,20 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
   }, [tlStart])
 
+  useEffect(() => {
+    if (!tlStart) return
+    let attempts = 0
+    const tryScroll = () => {
+      const content = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
+      if (!content || content.offsetWidth < 200) {
+        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        return
+      }
+      scrollToToday()
+    }
+    setTimeout(tryScroll, 80)
+  }, [tlStart, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Card withBorder padding="md" radius="md">
       {/* Header */}

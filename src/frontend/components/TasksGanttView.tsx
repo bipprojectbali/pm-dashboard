@@ -249,14 +249,14 @@ export function TasksGanttView({
     if (!timelineStart) return
     let attempts = 0
     const tryScroll = () => {
-      const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body || body.scrollWidth <= body.clientWidth + 10) {
-        if (++attempts < 30) setTimeout(tryScroll, 100)
+      const content = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
+      if (!content || content.offsetWidth < 200) {
+        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
         return
       }
       scrollToToday()
     }
-    setTimeout(tryScroll, 100)
+    setTimeout(tryScroll, 80)
   }, [timelineStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Empty state ────────────────────────────────────────────────────────────

@@ -70,7 +70,7 @@ const KIND_COLOR: Record<GanttTaskMeta['kind'], string> = {
 
 export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
   ({ tasks, rowHeight, headerHeight, width, collapsed = false, onToggleCollapse, onTaskClick, onScroll }, ref) => {
-    const collapsedWidth = 32
+    const collapsedWidth = 48
 
     return (
       <Box
@@ -125,27 +125,52 @@ export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
         </Box>
 
         {/* Scrollable body */}
-        {!collapsed && (
-          <Box
-            ref={ref}
-            onScroll={onScroll}
-            style={{
-              flex: 1,
-              overflowY: 'scroll',
-              overflowX: 'hidden',
-              scrollbarWidth: 'none',
-            }}
-          >
-            {tasks.map((task) => (
+        <Box
+          ref={ref}
+          onScroll={onScroll}
+          style={{
+            flex: 1,
+            overflowY: 'scroll',
+            overflowX: 'hidden',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {tasks.map((task) => (
+            collapsed ? (
+              /* Collapsed: hanya avatar assignee */
+              <Tooltip
+                key={task.id}
+                label={task.assigneeName ?? 'Unassigned'}
+                position="right"
+                withArrow
+              >
+                <Box
+                  style={{
+                    height: rowHeight,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderBottom: '1px solid var(--mantine-color-default-border)',
+                  }}
+                >
+                  <UserAvatar
+                    name={task.assigneeName}
+                    image={task.assigneeImage}
+                    size={30}
+                    color="blue"
+                  />
+                </Box>
+              </Tooltip>
+            ) : (
               <TaskRow
                 key={task.id}
                 task={task}
                 rowHeight={rowHeight}
                 onClick={() => onTaskClick(task.id)}
               />
-            ))}
-          </Box>
-        )}
+            )
+          ))}
+        </Box>
       </Box>
     )
   },

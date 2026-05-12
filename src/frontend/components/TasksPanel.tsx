@@ -7,6 +7,7 @@ import {
   Divider,
   Group,
   Modal,
+  ScrollArea,
   Pagination,
   Progress,
   SegmentedControl,
@@ -916,7 +917,14 @@ export function TasksPanel({
         size="90vw"
         withCloseButton={false}
         padding={0}
-        styles={{ body: { padding: 0 }, content: { maxHeight: '92vh', overflowY: 'auto' } }}
+        scrollAreaComponent={ScrollArea.Autosize}
+        overlayProps={{ blur: 3, backgroundOpacity: 0.4 }}
+        transitionProps={{ transition: 'fade-up', duration: 200 }}
+        radius="md"
+        styles={{
+          content: { maxHeight: '92vh' },
+          body: { padding: 0 },
+        }}
       >
         {drawerTaskId && (
           <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />

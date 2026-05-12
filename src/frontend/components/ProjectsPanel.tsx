@@ -27,8 +27,8 @@ import { DateInput } from '@mantine/dates'
 import { useHotkeys, useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import type { EChartsOption } from 'echarts'
-import { useMemo, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
+import { Gantt, type GanttTask } from 'mantine-gantt'
 import {
   TbAlertTriangle,
   TbArrowsSort,
@@ -51,7 +51,6 @@ import {
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
-import { EChart } from './charts/EChart'
 import { UserAvatar } from './shared/UserAvatar'
 
 export type MemberRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
@@ -1405,13 +1404,7 @@ function PillButton({
 }
 
 
-const STATUS_BAR_COLOR: Record<ProjectStatus, string> = {
-  DRAFT: '#868e96',
-  ACTIVE: '#228be6',
-  ON_HOLD: '#fab005',
-  COMPLETED: '#40c057',
-  CANCELLED: '#495057',
-}
+
 
 function ProjectsGrid({
   filtered,
@@ -1469,6 +1462,16 @@ function ProjectsGrid({
   )
 }
 
+// Muted status colors for project Gantt bars
+const PROJECT_GANTT_COLOR: Record<ProjectStatus, string> = {
+  DRAFT:     '#6c757d',
+  ACTIVE:    '#4a7abf',
+  ON_HOLD:   '#c49a28',
+  COMPLETED: '#3a8f6a',
+  CANCELLED: '#868e96',
+}
+const PROJECT_GANTT_OVERDUE = '#a84444'
+
 function ProjectsGanttView({
   projects,
   onSelect,
@@ -1476,145 +1479,52 @@ function ProjectsGanttView({
   projects: ProjectListItem[]
   onSelect: (p: ProjectListItem) => void
 }) {
+  const now = useMemo(() => new Date(), [])
   const withDates = useMemo(() => projects.filter((p) => p.startsAt && p.endsAt), [projects])
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const milestonesQ = useQuery({
-    queryKey: ['milestones', 'all'],
-    queryFn: () => api<{ milestones: ProjectMilestone[] }>('/api/milestones'),
-  })
-
-  const option = useMemo<EChartsOption>(() => {
-    const now = Date.now()
-    const categories = withDates.map((p) => p.name)
-    const idxById = new Map<string, number>(withDates.map((p, i) => [p.id, i]))
-    const milestonePoints = (milestonesQ.data?.milestones ?? [])
-      .filter((m) => m.dueAt && idxById.has(m.projectId))
-      .map((m) => ({
-        name: m.title,
-        value: [new Date(m.dueAt as string).getTime(), idxById.get(m.projectId) as number],
-        milestone: m,
-        itemStyle: { color: m.completedAt ? '#40c057' : '#7950f2' },
-      }))
-    const data = withDates.map((p, idx) => {
-      const start = new Date(p.startsAt as string).getTime()
-      const end = new Date(p.endsAt as string).getTime()
-      const overdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
-      const taskPct = computeTaskProgress(p)
-      const timePct = computeTimeProgress(p)
-      const color = overdue ? '#fa5252' : STATUS_BAR_COLOR[p.status]
+  const ganttTasks = useMemo<GanttTask[]>(() =>
+    withDates.map((p) => {
+      const start = new Date(p.startsAt as string)
+      const end = new Date(p.endsAt as string)
+      const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
+      const isOverdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+      const slipped = !!(p.originalEndAt && p.endsAt && p.originalEndAt !== p.endsAt)
       return {
-        name: p.name,
-        value: [idx, start, end],
-        projectId: p.id,
-        status: p.status,
-        priority: p.priority,
-        overdue,
-        taskPct,
-        timePct,
-        itemStyle: { color },
+        id: p.id,
+        label: p.name,
+        startDate: start.toISOString().slice(0, 10),
+        duration,
+        progress: computeTaskProgress(p) ?? 0,
+        color: isOverdue ? PROJECT_GANTT_OVERDUE : slipped ? '#b86d2a' : PROJECT_GANTT_COLOR[p.status],
+        dependencies: [],
       }
-    })
+    }), [withDates, now])
 
-    type BarData = (typeof data)[number]
-
+  const { tlStart, tlEnd } = useMemo(() => {
+    if (withDates.length === 0) return { tlStart: undefined, tlEnd: undefined }
+    const allMs = withDates.flatMap((p) => [
+      new Date(p.startsAt as string).getTime(),
+      new Date(p.endsAt as string).getTime(),
+    ])
     return {
-      grid: { left: 160, right: 24, top: 12, bottom: 48, containLabel: false },
-      xAxis: {
-        type: 'time',
-        position: 'bottom',
-        splitLine: { show: true },
-      },
-      yAxis: {
-        type: 'category',
-        data: categories,
-        inverse: true,
-        axisLabel: { width: 140, overflow: 'truncate', fontSize: 11 },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: unknown) => {
-          const p = params as { data: BarData }
-          const d = p.data
-          const start = new Date(d.value[1]).toLocaleDateString()
-          const end = new Date(d.value[2]).toLocaleDateString()
-          const parts = [
-            `<b>${d.name}</b>`,
-            `${start} → ${end}`,
-            `Status: ${d.status.replace('_', ' ')} · Priority: ${d.priority}`,
-          ]
-          if (d.taskPct !== null) parts.push(`Tasks: ${d.taskPct}%`)
-          if (d.timePct !== null) parts.push(`Time: ${d.timePct}%`)
-          if (d.overdue) parts.push('<span style="color:#fa5252">Overdue</span>')
-          return parts.join('<br/>')
-        },
-      },
-      series: [
-        {
-          type: 'scatter',
-          name: 'Milestones',
-          data: milestonePoints,
-          symbol: 'diamond',
-          symbolSize: 12,
-          z: 10,
-          tooltip: {
-            formatter: (params: unknown) => {
-              const p = params as { data: { milestone: ProjectMilestone } }
-              const m = p.data.milestone
-              const done = !!m.completedAt
-              return [
-                `<b>${m.title}</b>`,
-                `Due: ${m.dueAt ? new Date(m.dueAt).toLocaleDateString() : '—'}`,
-                done ? '<span style="color:#40c057">Completed</span>' : 'Pending',
-              ].join('<br/>')
-            },
-          },
-        },
-        {
-          type: 'custom',
-          encode: { x: [1, 2], y: 0 },
-          data,
-          renderItem: (paramsRef: unknown, apiRef: unknown) => {
-            const params = paramsRef as { coordSys: { x: number; y: number; width: number; height: number } }
-            const api = apiRef as {
-              value: (i: number) => number
-              coord: (pt: [number, number]) => [number, number]
-              size: (v: [number, number]) => [number, number]
-              visual: (key: string) => string
-            }
-            const yIdx = api.value(0)
-            const start = api.coord([api.value(1), yIdx])
-            const end = api.coord([api.value(2), yIdx])
-            const barH = api.size([0, 1])[1] * 0.5
-            const color = api.visual('color') || '#228be6'
+      tlStart: new Date(Math.min(...allMs) - 14 * 86_400_000),
+      tlEnd: new Date(Math.max(...allMs) + 14 * 86_400_000),
+    }
+  }, [withDates])
 
-            // Clamp bar to plot area so it never bleeds into the label column
-            const plotLeft = params.coordSys.x
-            const plotRight = params.coordSys.x + params.coordSys.width
-            const rectX = Math.max(start[0], plotLeft)
-            const rectRight = Math.min(end[0], plotRight)
-            const rectW = Math.max(2, rectRight - rectX)
-
-            return {
-              type: 'rect',
-              shape: { x: rectX, y: start[1] - barH / 2, width: rectW, height: barH },
-              style: { fill: color, opacity: 0.9 },
-            }
-          },
-          markLine: {
-            symbol: 'none',
-            silent: true,
-            label: { formatter: 'Today', position: 'insideEndTop', color: '#fa5252' },
-            lineStyle: { color: '#fa5252', type: 'dashed', width: 1 },
-            data: [{ xAxis: now }],
-          },
-        },
-      ],
-      dataZoom: [
-        { type: 'slider', xAxisIndex: 0, height: 18, bottom: 8, filterMode: 'weakFilter' },
-        { type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' },
-      ],
-    } as unknown as EChartsOption
-  }, [withDates, milestonesQ.data])
+  // Scroll to center today on mount
+  useEffect(() => {
+    if (!tlStart) return
+    const t = setTimeout(() => {
+      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) return
+      const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+      const todayPx = daysSinceStart * 28 // week view ~28px per day
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
+    }, 80)
+    return () => clearTimeout(t)
+  }, [tlStart, now, ganttTasks.length])
 
   if (withDates.length === 0) {
     return (
@@ -1630,23 +1540,29 @@ function ProjectsGanttView({
     )
   }
 
-  const height = Math.max(240, withDates.length * 36 + 80)
-
   return (
     <Card withBorder padding="sm" radius="md">
-      <EChart
-        option={option}
-        height={height}
-        onEvents={{
-          click: (params: unknown) => {
-            const p = params as { data?: { projectId?: string } }
-            const id = p?.data?.projectId
-            if (!id) return
-            const proj = projects.find((x) => x.id === id)
+      <div
+        ref={wrapperRef}
+        style={{ height: Math.max(300, withDates.length * 52 + 60) }}
+      >
+        <Gantt
+          tasks={ganttTasks}
+          viewMode="week"
+          startDate={tlStart}
+          endDate={tlEnd}
+          columnWidth={28}
+          rowHeight={52}
+          taskListWidth={200}
+          showTodayMarker
+          showTitle
+          styles={{ taskList: { display: 'none' } }}
+          onTaskClick={(t) => {
+            const proj = projects.find((p) => p.id === t.id)
             if (proj) onSelect(proj)
-          },
-        }}
-      />
+          }}
+        />
+      </div>
     </Card>
   )
 }

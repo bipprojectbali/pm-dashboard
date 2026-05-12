@@ -147,6 +147,14 @@ const STATUS_ACCENT: Record<ProjectStatus, string> = {
 }
 const OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
 
+const STATUS_BG: Record<ProjectStatus, string> = {
+  DRAFT:     'rgba(134,142,150,0.05)',
+  ACTIVE:    'rgba(34,139,230,0.05)',
+  ON_HOLD:   'rgba(250,176,5,0.05)',
+  COMPLETED: 'rgba(64,192,87,0.05)',
+  CANCELLED: 'rgba(73,80,87,0.04)',
+}
+
 const PRIORITY_COLOR: Record<ProjectPriority, string> = {
   LOW: 'gray',
   MEDIUM: 'blue',
@@ -901,25 +909,29 @@ function ProjectCard({
   const compact = density === 'compact'
   const [hover, setHover] = useState(false)
 
+  const statusBg = overdue ? 'rgba(250,82,82,0.06)' : STATUS_BG[p.status]
+  const pad = compact ? 'sm' : 'md'
+
   return (
     <Card
       withBorder
-      padding={compact ? 'sm' : 'lg'}
+      padding={0}
       radius="md"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        borderLeft: `3px solid ${overdue ? OVERDUE_ACCENT : STATUS_ACCENT[p.status]}`,
+        background: statusBg,
         transform: hover && onOpen ? 'translateY(-1px)' : undefined,
-        boxShadow: hover && onOpen ? '0 4px 12px rgba(0,0,0,0.08)' : undefined,
+        boxShadow: hover && onOpen ? '0 4px 16px rgba(0,0,0,0.10)' : undefined,
         transition: 'all 120ms ease',
       }}
       onClick={onOpen}
     >
-      <Stack gap="xs">
+      {/* ── Header ── */}
+      <Card.Section inheritPadding py={compact ? 'xs' : 'sm'} px={pad}>
         <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <Text fw={600} size={compact ? 'sm' : 'md'} lineClamp={1} style={{ flex: 1 }}>
+          <Text fw={700} size={compact ? 'sm' : 'md'} lineClamp={1} style={{ flex: 1 }}>
             {p.name}
           </Text>
           {canEdit && (
@@ -927,10 +939,7 @@ function ProjectCard({
               <ActionIcon
                 variant="subtle"
                 size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onEdit()
-                }}
+                onClick={(e) => { e.stopPropagation(); onEdit() }}
               >
                 <TbPencil size={14} />
               </ActionIcon>
@@ -938,37 +947,25 @@ function ProjectCard({
           )}
         </Group>
 
-        <Group gap={4} wrap="wrap">
+        <Group gap={4} wrap="wrap" mt={4}>
           <Badge variant="default" size="xs" style={{ border: 'none' }}>
             {p.status.replace('_', ' ')}
           </Badge>
           <Badge
-            variant="default"
-            size="xs"
-            style={{ border: 'none' }}
-            leftSection={
-              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`, flexShrink: 0 }} />
-            }
+            variant="default" size="xs" style={{ border: 'none' }}
+            leftSection={<div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`, flexShrink: 0 }} />}
           >
             {p.priority}
           </Badge>
           {p.myRole ? (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>
-              {p.myRole}
-            </Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>{p.myRole}</Badge>
           ) : isAdmin ? (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>
-              ADMIN VIEW
-            </Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>ADMIN VIEW</Badge>
           ) : (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>
-              READ-ONLY
-            </Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>READ-ONLY</Badge>
           )}
           {p.visibility === 'PRIVATE' && (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>
-              PRIVATE
-            </Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>PRIVATE</Badge>
           )}
           {overdue && (
             <Badge variant="default" size="xs" style={{ border: 'none' }} leftSection={<TbAlertTriangle size={10} color="var(--mantine-color-red-6)" />}>
@@ -978,12 +975,8 @@ function ProjectCard({
           {health && (
             <Tooltip label="Derived from task-completion pace vs. time elapsed">
               <Badge
-                variant="default"
-                size="xs"
-                style={{ border: 'none' }}
-                leftSection={
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${health.color}-6)`, flexShrink: 0 }} />
-                }
+                variant="default" size="xs" style={{ border: 'none' }}
+                leftSection={<div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${health.color}-6)`, flexShrink: 0 }} />}
               >
                 {health.label.toUpperCase()}
               </Badge>
@@ -991,105 +984,91 @@ function ProjectCard({
           )}
           {extended && (
             <Tooltip label={`Original deadline: ${formatDate(p.originalEndAt)}`}>
-              <Badge variant="default" size="xs" style={{ border: 'none' }}>
-                Extended
-              </Badge>
+              <Badge variant="default" size="xs" style={{ border: 'none' }}>Extended</Badge>
             </Tooltip>
           )}
         </Group>
+      </Card.Section>
 
+      {/* ── Body ── */}
+      <Card.Section inheritPadding px={pad} pb={compact ? 'xs' : 'sm'}>
         {!compact && (
-          <Text size="xs" c="dimmed" lineClamp={2} mih={32}>
+          <Text size="xs" c="dimmed" lineClamp={2} mb="xs">
             {p.description || 'No description'}
           </Text>
         )}
 
         {(p.startsAt || p.endsAt) && (
-          <Group gap={4}>
-            <TbCalendarEvent size={12} />
+          <Group gap={4} mb={6}>
+            <TbCalendarEvent size={12} color="var(--mantine-color-dimmed)" />
             <Text size="xs" c="dimmed">
               {formatDate(p.startsAt)} → {formatDate(p.endsAt)}
             </Text>
           </Group>
         )}
 
-        {timeProgress !== null && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Text size="xs" c="dimmed">
-                Timeline
-              </Text>
-              <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
-                {timeProgress}%
-              </Text>
-            </Group>
-            <Progress
-              value={timeProgress}
-              size="xs"
-              mt={2}
-              color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'}
-              style={{ opacity: 0.65 }}
-            />
-          </div>
-        )}
-
-        {p.taskStats && p.taskStats.total > 0 && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Group gap={4}>
-                <TbChecks size={12} />
-                <Text size="xs" c="dimmed">
-                  Tasks
-                </Text>
+        <Stack gap={6}>
+          {timeProgress !== null && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
+                <Text size="xs" c="dimmed">Timeline</Text>
+                <Text size="xs" c={overdue ? 'red' : 'dimmed'}>{timeProgress}%</Text>
               </Group>
-              <Tooltip
-                label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}
-              >
-                <Text size="xs" c="dimmed">
-                  {p.taskStats.closed}/{p.taskStats.total} ·{' '}
-                  {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
-                </Text>
-              </Tooltip>
-            </Group>
-            <Progress.Root size="xs" mt={2} style={{ opacity: 0.65 }}>
-              <Tooltip label={`Closed · ${p.taskStats.closed}`}>
-                <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="teal" />
-              </Tooltip>
-              <Tooltip label={`Ready for QC · ${p.taskStats.readyForQc}`}>
-                <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="cyan" />
-              </Tooltip>
-              <Tooltip label={`In progress · ${p.taskStats.inProgress}`}>
-                <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="indigo" />
-              </Tooltip>
-              <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
-                <Progress.Section
-                  value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100}
-                  color="gray"
-                />
-              </Tooltip>
-            </Progress.Root>
-          </div>
-        )}
+              <Progress value={timeProgress} size="xs" color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'} style={{ opacity: 0.7 }} />
+            </div>
+          )}
 
-        {p.milestoneStats && p.milestoneStats.total > 0 && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Group gap={4}>
-                <TbFlag size={12} />
-                <Text size="xs" c="dimmed">
-                  Milestones
-                </Text>
+          {p.taskStats && p.taskStats.total > 0 && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
+                <Group gap={4}>
+                  <TbChecks size={12} color="var(--mantine-color-dimmed)" />
+                  <Text size="xs" c="dimmed">Tasks</Text>
+                </Group>
+                <Tooltip label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}>
+                  <Text size="xs" c="dimmed">
+                    {p.taskStats.closed}/{p.taskStats.total} · {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
+                  </Text>
+                </Tooltip>
               </Group>
-              <Text size="xs" c="dimmed">
-                {p.milestoneStats.done}/{p.milestoneStats.total}
-              </Text>
-            </Group>
-            <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" mt={2} color="violet" style={{ opacity: 0.65 }} />
-          </div>
-        )}
+              <Progress.Root size="xs" style={{ opacity: 0.7 }}>
+                <Tooltip label={`Closed · ${p.taskStats.closed}`}>
+                  <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="teal" />
+                </Tooltip>
+                <Tooltip label={`Ready for QC · ${p.taskStats.readyForQc}`}>
+                  <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="cyan" />
+                </Tooltip>
+                <Tooltip label={`In progress · ${p.taskStats.inProgress}`}>
+                  <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="indigo" />
+                </Tooltip>
+                <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
+                  <Progress.Section value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100} color="gray" />
+                </Tooltip>
+              </Progress.Root>
+            </div>
+          )}
 
-        <Group gap="md" mt={compact ? 0 : 'xs'} justify="space-between" wrap="nowrap">
-          {/* Member avatars */}
+          {p.milestoneStats && p.milestoneStats.total > 0 && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
+                <Group gap={4}>
+                  <TbFlag size={12} color="var(--mantine-color-dimmed)" />
+                  <Text size="xs" c="dimmed">Milestones</Text>
+                </Group>
+                <Text size="xs" c="dimmed">{p.milestoneStats.done}/{p.milestoneStats.total}</Text>
+              </Group>
+              <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" color="violet" style={{ opacity: 0.7 }} />
+            </div>
+          )}
+        </Stack>
+      </Card.Section>
+
+      {/* ── Footer ── */}
+      <Card.Section
+        inheritPadding px={pad} py="xs"
+        style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+      >
+        <Group justify="space-between" wrap="nowrap">
           <Avatar.Group spacing="sm">
             {p.members.slice(0, 4).map((m) => (
               <Tooltip key={m.userId} label={`${m.user.name} · ${m.role}`} withArrow>
@@ -1098,14 +1077,11 @@ function ProjectCard({
             ))}
             {p.members.length > 4 && (
               <Tooltip label={`${p.members.length - 4} more members`} withArrow>
-                <Avatar size={22} radius="xl" color="gray">
-                  +{p.members.length - 4}
-                </Avatar>
+                <Avatar size={22} radius="xl" color="gray">+{p.members.length - 4}</Avatar>
               </Tooltip>
             )}
           </Avatar.Group>
 
-          {/* Tasks count + owner */}
           <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
             <Tooltip label={`${p._count.tasks} tasks`}>
               <Group gap={3} wrap="nowrap">
@@ -1115,7 +1091,7 @@ function ProjectCard({
             </Tooltip>
             <Tooltip label={`Owner: ${p.owner.name}`}>
               <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-                <UserAvatar name={p.owner.name} image={p.owner.image} size={16} color="blue" style={{ flexShrink: 0 }} />
+                <UserAvatar name={p.owner.name} image={p.owner.image} size={18} color="blue" style={{ flexShrink: 0 }} />
                 <Text size="xs" c="dimmed" truncate style={{ maxWidth: 90 }}>
                   {p.owner.name.split(' ')[0]}
                 </Text>
@@ -1123,7 +1099,7 @@ function ProjectCard({
             </Tooltip>
           </Group>
         </Group>
-      </Stack>
+      </Card.Section>
     </Card>
   )
 }

@@ -322,6 +322,7 @@ export function TasksGanttView({
               showTodayMarker
               onTaskUpdate={handleTaskUpdate}
               onTaskClick={(t) => onSelect(t.id)}
+              styles={{ taskList: { display: 'none' } }}
             />
           </div>
         </div>

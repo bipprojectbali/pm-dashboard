@@ -1,8 +1,8 @@
-import { Badge, Card, Divider, Group, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Card, Divider, Group, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TbAlertTriangle, TbCalendarOff, TbListCheck } from 'react-icons/tb'
+import { TbAlertTriangle, TbCalendarOff, TbCalendarEvent, TbListCheck } from 'react-icons/tb'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import { notifyError } from '../lib/notify'
 import { GanttTaskList, type GanttTaskMeta } from './GanttTaskList'
@@ -229,23 +229,29 @@ export function TasksGanttView({
     }
   }, [withDates])
 
-  // ─── Scroll to today — retry until columns are rendered ─────────────────────
+  const scrollToToday = useCallback(() => {
+    if (!timelineStart) return
+    const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body) return
+    const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
+    const todayPx = daysSinceStart * COL_WIDTH[viewMode]
+    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+  }, [timelineStart, viewMode, now])
+
+  // Auto-scroll on first render after columns are ready
   useEffect(() => {
     if (!timelineStart) return
     let attempts = 0
-    const scrollToToday = () => {
+    const tryScroll = () => {
       const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
       if (!body || body.scrollWidth <= body.clientWidth + 10) {
-        if (++attempts < 20) setTimeout(scrollToToday, 50)
+        if (++attempts < 30) setTimeout(tryScroll, 100)
         return
       }
-      const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
-      const todayPx = daysSinceStart * COL_WIDTH[viewMode]
-      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
+      scrollToToday()
     }
-    const t = setTimeout(scrollToToday, 50)
-    return () => clearTimeout(t)
-  }, [timelineStart, viewMode, ganttTasks.length, now])
+    setTimeout(tryScroll, 100)
+  }, [timelineStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Empty state ────────────────────────────────────────────────────────────
   if (withDates.length === 0) {
@@ -290,13 +296,20 @@ export function TasksGanttView({
             )}
             {saving && <Badge size="xs" color="blue" variant="dot">Menyimpan…</Badge>}
           </Group>
-          <SegmentedControl
-            size="xs"
-            value={viewMode}
-            onChange={(v) => setViewMode(v as ViewMode)}
-            data={VIEW_OPTIONS}
-            style={{ flexShrink: 0 }}
-          />
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Scroll ke hari ini" withArrow>
+              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+                <TbCalendarEvent size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <SegmentedControl
+              size="xs"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              data={VIEW_OPTIONS}
+              style={{ flexShrink: 0 }}
+            />
+          </Group>
         </Group>
 
         {/* ── Stats bar ── */}

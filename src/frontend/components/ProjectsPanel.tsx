@@ -1532,25 +1532,29 @@ function ProjectsGanttView({
     }
   }, [withDates])
 
-  // Scroll to center today — retry until timeline columns are rendered
+  const scrollToToday = useCallback(() => {
+    if (!tlStart) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body) return
+    const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+    const todayPx = daysSinceStart * PROJ_COL_WIDTH[viewMode]
+    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+  }, [tlStart, viewMode, now])
+
+  // Auto-scroll on first render
   useEffect(() => {
     if (!tlStart) return
     let attempts = 0
-    const scrollToToday = () => {
+    const tryScroll = () => {
       const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
       if (!body || body.scrollWidth <= body.clientWidth + 10) {
-        if (++attempts < 20) {
-          setTimeout(scrollToToday, 50)
-        }
+        if (++attempts < 30) setTimeout(tryScroll, 100)
         return
       }
-      const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
-      const todayPx = daysSinceStart * PROJ_COL_WIDTH[viewMode]
-      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
+      scrollToToday()
     }
-    const t = setTimeout(scrollToToday, 50)
-    return () => clearTimeout(t)
-  }, [tlStart, viewMode, ganttTasks.length, now])
+    setTimeout(tryScroll, 100)
+  }, [tlStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync vertical scroll: list ↔ gantt body
   const syncFromGantt = useCallback(() => {
@@ -1602,12 +1606,19 @@ function ProjectsGanttView({
               </Tooltip>
             )}
           </Group>
-          <SegmentedControl
-            size="xs"
-            value={viewMode}
-            onChange={(v) => setViewMode(v as ProjViewMode)}
-            data={PROJ_VIEW_OPTIONS}
-          />
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Scroll ke hari ini" withArrow>
+              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+                <TbCalendarEvent size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <SegmentedControl
+              size="xs"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as ProjViewMode)}
+              data={PROJ_VIEW_OPTIONS}
+            />
+          </Group>
         </Group>
 
         {/* Legend */}

@@ -193,6 +193,26 @@ setInterval(() => cleanupAuditLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
+// ─── Daily AI Report Cron ─────────────────────────────
+import { generateAndSendDailyReport } from './lib/daily-report'
+import { getSetting } from './lib/app-settings'
+import { appLog } from './lib/applog'
+
+async function runDailyReport() {
+  const enabled = await getSetting('telegram.enabled')
+  if (enabled !== 'true') return
+  const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
+  // Convert UTC to WIB (UTC+7)
+  const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  if (nowWIB.getUTCHours() !== schedHour) return
+  // Dedup: jangan kirim dua kali dalam 1 jam
+  const last = await getSetting('report.lastSentAt')
+  if (last && Date.now() - new Date(last).getTime() < 60 * 60 * 1000) return
+  await generateAndSendDailyReport()
+}
+
+setInterval(() => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`)), 60 * 60 * 1000)
+
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'
 

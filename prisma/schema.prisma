@@ -561,3 +561,12 @@ model GithubWebhookLog {
   @@index([statusCode])
   @@map("github_webhook_log")
 }
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("app_setting")
+}

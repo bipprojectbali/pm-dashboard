@@ -46,6 +46,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@xyflow/react/dist/style.css'
 import { modals } from '@mantine/modals'
 import {
+  TbBrandTelegram,
   TbChartBar,
   TbChevronRight,
   TbCircleFilled,
@@ -59,6 +60,7 @@ import {
   TbLayoutDashboard,
   TbLock,
   TbRefresh,
+  TbRobot,
   TbServer,
   TbShieldCheck,
   TbSitemap,
@@ -67,6 +69,8 @@ import {
   TbUsers,
   TbWifi,
 } from 'react-icons/tb'
+import { AiSettingsPanel } from '@/frontend/components/AiSettingsPanel'
+import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
 import { AgentsPanel } from '@/frontend/components/AgentsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
@@ -93,6 +97,8 @@ const validTabs = [
   'database',
   'project',
   'sync',
+  'channel',
+  'ai',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -136,6 +142,14 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   sync: {
     label: 'Data Sync',
     description: 'Pull data dari remote (STG/prod) ke local untuk dev dengan data mendekati real.',
+  },
+  channel: {
+    label: 'Saluran',
+    description: 'Konfigurasi Telegram bot untuk laporan harian otomatis.',
+  },
+  ai: {
+    label: 'AI & Laporan',
+    description: 'Konfigurasi Claude AI, model, jadwal kirim, dan preview laporan.',
   },
 }
 
@@ -195,13 +209,7 @@ const navGroups: DevNavGroup[] = [
     items: [
       { label: 'Agent', icon: TbDeviceDesktop, key: 'agents', badgeKey: 'pendingAgents', badgeColor: 'orange' },
       { label: 'Token Webhook', icon: TbKey, key: 'webhook-tokens' },
-      {
-        label: 'Monitor Webhook',
-        icon: TbChartBar,
-        key: 'webhook-monitor',
-        badgeKey: 'webhookFail24h',
-        badgeColor: 'red',
-      },
+      { label: 'Monitor Webhook', icon: TbChartBar, key: 'webhook-monitor', badgeKey: 'webhookFail24h', badgeColor: 'red' },
     ],
   },
   {
@@ -217,6 +225,13 @@ const navGroups: DevNavGroup[] = [
       { label: 'Database', icon: TbDatabase, key: 'database' },
       { label: 'Proyek', icon: TbSitemap, key: 'project' },
       { label: 'Data Sync', icon: TbCloudDownload, key: 'sync' },
+    ],
+  },
+  {
+    label: 'Otomasi',
+    items: [
+      { label: 'Saluran', icon: TbBrandTelegram, key: 'channel' },
+      { label: 'AI & Laporan', icon: TbRobot, key: 'ai' },
     ],
   },
 ]
@@ -334,6 +349,8 @@ function DevPage() {
               {active === 'database' && <DatabasePanel />}
               {active === 'project' && <ProjectPanel />}
               {active === 'sync' && <SyncPanel />}
+              {active === 'channel' && <ChannelSettingsPanel />}
+              {active === 'ai' && <AiSettingsPanel />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

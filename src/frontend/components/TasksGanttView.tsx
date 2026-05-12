@@ -229,20 +229,23 @@ export function TasksGanttView({
     }
   }, [withDates])
 
-  // ─── Scroll to today on mount + view/data change ────────────────────────────
+  // ─── Scroll to today — retry until columns are rendered ─────────────────────
   useEffect(() => {
     if (!timelineStart) return
-    const t = setTimeout(() => {
+    let attempts = 0
+    const scrollToToday = () => {
       const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body) return
-      const daysSinceStart = Math.floor(
-        (now.getTime() - timelineStart.getTime()) / 86_400_000,
-      )
+      if (!body || body.scrollWidth <= body.clientWidth + 10) {
+        if (++attempts < 20) setTimeout(scrollToToday, 50)
+        return
+      }
+      const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
       const todayPx = daysSinceStart * COL_WIDTH[viewMode]
-      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
-    }, 80)
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
+    }
+    const t = setTimeout(scrollToToday, 50)
     return () => clearTimeout(t)
-  }, [timelineStart, viewMode, ganttTasks.length])
+  }, [timelineStart, viewMode, ganttTasks.length, now])
 
   // ─── Empty state ────────────────────────────────────────────────────────────
   if (withDates.length === 0) {

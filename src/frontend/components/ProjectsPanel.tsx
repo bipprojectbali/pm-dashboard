@@ -1532,16 +1532,23 @@ function ProjectsGanttView({
     }
   }, [withDates])
 
-  // Scroll to center today
+  // Scroll to center today — retry until timeline columns are rendered
   useEffect(() => {
     if (!tlStart) return
-    const t = setTimeout(() => {
+    let attempts = 0
+    const scrollToToday = () => {
       const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body) return
+      if (!body || body.scrollWidth <= body.clientWidth + 10) {
+        if (++attempts < 20) {
+          setTimeout(scrollToToday, 50)
+        }
+        return
+      }
       const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
       const todayPx = daysSinceStart * PROJ_COL_WIDTH[viewMode]
       body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'instant' })
-    }, 80)
+    }
+    const t = setTimeout(scrollToToday, 50)
     return () => clearTimeout(t)
   }, [tlStart, viewMode, ganttTasks.length, now])
 

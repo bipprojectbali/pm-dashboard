@@ -4,8 +4,9 @@
  * Menampilkan: avatar (Google photo / inisial fallback), nama task,
  * status badge berwarna, assignee name + priority icon.
  */
-import { Badge, Box, Group, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Box, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { forwardRef } from 'react'
+import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand } from 'react-icons/tb'
 import { UserAvatar } from './shared/UserAvatar'
 
 export type GanttTaskMeta = {
@@ -25,6 +26,8 @@ interface Props {
   rowHeight: number
   headerHeight: number
   width: number
+  collapsed?: boolean
+  onToggleCollapse?: () => void
   onTaskClick: (id: string) => void
   onScroll?: () => void
 }
@@ -66,17 +69,20 @@ const KIND_COLOR: Record<GanttTaskMeta['kind'], string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
-  ({ tasks, rowHeight, headerHeight, width, onTaskClick, onScroll }, ref) => {
+  ({ tasks, rowHeight, headerHeight, width, collapsed = false, onToggleCollapse, onTaskClick, onScroll }, ref) => {
+    const collapsedWidth = 32
+
     return (
       <Box
         style={{
-          width,
+          width: collapsed ? collapsedWidth : width,
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
           borderRight: '1px solid var(--mantine-color-default-border)',
           overflow: 'hidden',
           userSelect: 'none',
+          transition: 'width 180ms ease',
         }}
       >
         {/* Header */}
@@ -86,37 +92,60 @@ export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
             flexShrink: 0,
             borderBottom: '1px solid var(--mantine-color-default-border)',
             display: 'flex',
-            alignItems: 'flex-end',
-            padding: '0 12px 8px',
-            gap: 8,
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'space-between',
+            padding: collapsed ? 0 : '0 8px 0 12px',
+            gap: 4,
           }}
         >
-          <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
-            Task
-          </Text>
-          <Text size="xs" c="dimmed">/ Assignee</Text>
+          {!collapsed && (
+            <Group gap={4}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
+                Task
+              </Text>
+              <Text size="xs" c="dimmed">/ Assignee</Text>
+            </Group>
+          )}
+          {onToggleCollapse && (
+            <Tooltip label={collapsed ? 'Tampilkan panel' : 'Sembunyikan panel'} position="right" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={onToggleCollapse}
+                style={{ flexShrink: 0 }}
+              >
+                {collapsed
+                  ? <TbLayoutSidebarLeftExpand size={14} />
+                  : <TbLayoutSidebarLeftCollapse size={14} />
+                }
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Box>
 
-        {/* Scrollable body — ref syncs with timeline scroll */}
-        <Box
-          ref={ref}
-          onScroll={onScroll}
-          style={{
-            flex: 1,
-            overflowY: 'scroll',
-            overflowX: 'hidden',
-            scrollbarWidth: 'none',
-          }}
-        >
-          {tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              rowHeight={rowHeight}
-              onClick={() => onTaskClick(task.id)}
-            />
-          ))}
-        </Box>
+        {/* Scrollable body */}
+        {!collapsed && (
+          <Box
+            ref={ref}
+            onScroll={onScroll}
+            style={{
+              flex: 1,
+              overflowY: 'scroll',
+              overflowX: 'hidden',
+              scrollbarWidth: 'none',
+            }}
+          >
+            {tasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                rowHeight={rowHeight}
+                onClick={() => onTaskClick(task.id)}
+              />
+            ))}
+          </Box>
+        )}
       </Box>
     )
   },

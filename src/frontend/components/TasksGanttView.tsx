@@ -89,6 +89,10 @@ export function TasksGanttView({
   const pendingRef = useRef<Map<string, { startsAt: string; dueAt: string }>>(new Map())
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [listCollapsed, setListCollapsed] = useLocalStorage({
+    key: 'pm:tasks:gantt-list-collapsed',
+    defaultValue: false,
+  })
 
   // Sync scroll: custom left panel ↔ mantine-gantt timeline body
   const taskListBodyRef = useRef<HTMLDivElement>(null)
@@ -301,6 +305,8 @@ export function TasksGanttView({
             rowHeight={ROW_HEIGHT}
             headerHeight={HEADER_HEIGHT}
             width={TASK_LIST_WIDTH}
+            collapsed={listCollapsed}
+            onToggleCollapse={() => setListCollapsed((v) => !v)}
             onTaskClick={onSelect}
             onScroll={syncScrollFromList}
           />

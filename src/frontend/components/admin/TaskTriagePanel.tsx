@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TbAlertTriangle, TbBan, TbClock, TbListCheck, TbRefresh, TbSearch, TbUserQuestion } from 'react-icons/tb'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
@@ -34,7 +35,7 @@ interface TriageTask {
   title: string
   status: TaskStatus
   priority: TaskPriority
-  assignee: { id: string; name: string; email: string } | null
+  assignee: { id: string; name: string; email: string; image?: string | null } | null
   startsAt: string | null
   dueAt: string | null
   createdAt: string
@@ -425,11 +426,14 @@ export function TaskTriagePanel() {
                   </Table.Td>
                   <Table.Td>
                     {t.assignee ? (
-                      <Text size="xs">{t.assignee.name}</Text>
+                      <Tooltip label={t.assignee.email} withArrow>
+                        <Group gap={6} wrap="nowrap">
+                          <UserAvatar name={t.assignee.name} image={t.assignee.image} size={20} color="blue" />
+                          <Text size="xs" truncate style={{ maxWidth: 80 }}>{t.assignee.name.split(' ')[0]}</Text>
+                        </Group>
+                      </Tooltip>
                     ) : (
-                      <Badge color="orange" variant="light" size="xs">
-                        Unassigned
-                      </Badge>
+                      <Badge color="orange" variant="light" size="xs">Unassigned</Badge>
                     )}
                   </Table.Td>
                   <Table.Td>

@@ -2,6 +2,7 @@ import { ColorSchemeScript, MantineProvider } from '@mantine/core'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
 import '@mantine/notifications/styles.css'
+import 'mantine-gantt/styles.css'
 import { ModalsProvider } from '@mantine/modals'
 import { Notifications } from '@mantine/notifications'
 import { keepPreviousData, QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,7 +16,6 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      // Never retry a 401 — session is gone, redirect is the right action
       retry: (failureCount, error) => {
         if (error instanceof UnauthorizedError) return false
         return failureCount < 1

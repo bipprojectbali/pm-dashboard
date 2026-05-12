@@ -1,4 +1,5 @@
-import { ActionIcon, Avatar, Badge, Card, Group, Menu, Stack, Table, Text, Title } from '@mantine/core'
+import { ActionIcon, Badge, Card, Group, Menu, Stack, Table, Text, Title } from '@mantine/core'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
@@ -12,6 +13,7 @@ interface AdminUser {
   role: Role
   blocked: boolean
   createdAt: string
+  image?: string | null
 }
 
 const roleBadge: Record<string, { color: string; label: string }> = {
@@ -115,9 +117,7 @@ export function UsersPanel() {
                   <Table.Td>
                     <Group gap="sm">
                       <div style={{ position: 'relative' }}>
-                        <Avatar color={badge.color} radius="xl" size="sm">
-                          {u.name.charAt(0).toUpperCase()}
-                        </Avatar>
+                        <UserAvatar name={u.name} image={u.image} size="sm" color={badge.color} />
                         {!u.blocked && (
                           <TbCircleFilled
                             size={10}

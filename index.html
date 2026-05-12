@@ -24,6 +24,7 @@
         var stored = localStorage.getItem('mantine-color-scheme-value');
         var scheme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+        document.documentElement.setAttribute('data-theme', scheme);
         document.documentElement.style.colorScheme = scheme;
         window.__colorScheme = scheme;
       })();
@@ -140,6 +141,7 @@
 
       /* ── Selection color ────────────────────── */
       ::selection { background: rgba(79,124,255,0.2); }
+
     </style>
   </head>
   <body>

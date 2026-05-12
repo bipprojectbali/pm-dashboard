@@ -36,3 +36,4 @@ Load the relevant file(s) when working in that area — Claude Code auto-loads `
 - @docs/MCP.md — MCP server + tools (local stdio, HTTP fallback, remote-stg)
 - @docs/DEPLOYMENT.md — Docker, compose, CI, deploy-stg MCP, preflight/version/migration gates
 - @docs/TESTING.md — `bun:test` structure + helpers
+- @docs/FILE-HEALTH.md — file size limits, single-responsibility rules, when to split files

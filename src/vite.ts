@@ -175,7 +175,7 @@ export async function createVite() {
     ],
     server: {
       middlewareMode: true,
-      hmr: { port: 24678 },
+      hmr: { port: Number(process.env.HMR_PORT) || 24678 },
       allowedHosts: true,
     },
     appType: 'custom',

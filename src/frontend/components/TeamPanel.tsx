@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Badge,
   Card,
   Divider,
@@ -29,6 +28,7 @@ import {
   TbWifi,
 } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { usePresence } from '@/frontend/hooks/usePresence'
 
 type Teammate = {
@@ -37,6 +37,7 @@ type Teammate = {
   email: string
   role: 'USER' | 'QC' | 'ADMIN' | 'SUPER_ADMIN'
   blocked: boolean
+  image?: string | null
   sharedProjects: Array<{ projectId: string; projectName: string; myRole: string; theirRole: string }>
   openTasks: number
   overdueTasks: number
@@ -78,13 +79,6 @@ const STATUS_COLOR: Record<string, string> = {
   CLOSED: 'teal',
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('')
-}
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -222,9 +216,7 @@ export function TeamPanel() {
               <Tooltip key={t.id} label={t.email} withArrow>
                 <Group gap="xs" wrap="nowrap">
                   <div style={{ position: 'relative' }}>
-                    <Avatar color={ROLE_COLOR[t.role] ?? 'gray'} radius="xl" size="md">
-                      {initials(t.name)}
-                    </Avatar>
+                    <UserAvatar name={t.name} image={t.image} size="md" color={ROLE_COLOR[t.role] ?? 'gray'} />
                     <div
                       style={{
                         position: 'absolute',
@@ -301,9 +293,7 @@ export function TeamPanel() {
                     <Group justify="space-between" mb={4} wrap="nowrap">
                       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
                         <div style={{ position: 'relative' }}>
-                          <Avatar color={ROLE_COLOR[t.role] ?? 'gray'} radius="xl" size="sm">
-                            {initials(t.name)}
-                          </Avatar>
+                          <UserAvatar name={t.name} image={t.image} size="sm" color={ROLE_COLOR[t.role] ?? 'gray'} />
                           {isOnline && (
                             <div
                               style={{
@@ -464,9 +454,7 @@ export function TeamPanel() {
                 <Card key={t.id} withBorder padding="md" radius="md">
                   <Group gap="sm" mb="sm" wrap="nowrap">
                     <div style={{ position: 'relative' }}>
-                      <Avatar color={ROLE_COLOR[t.role] ?? 'gray'} radius="xl" size="md">
-                        {initials(t.name)}
-                      </Avatar>
+                      <UserAvatar name={t.name} image={t.image} size="md" color={ROLE_COLOR[t.role] ?? 'gray'} />
                       {isOnline && (
                         <div
                           style={{

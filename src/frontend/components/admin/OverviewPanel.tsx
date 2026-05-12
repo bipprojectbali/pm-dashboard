@@ -34,6 +34,7 @@ import {
 } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
 import { SectionSkeleton } from '@/frontend/components/shared/LoadingState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import type { Role } from '@/frontend/hooks/useAuth'
 import { type AnalyticsData, AnalyticsSection } from './AnalyticsSection'
 
@@ -66,7 +67,7 @@ interface AuditLogEntry {
   action: string
   detail: string | null
   createdAt: string
-  user: { name: string; email: string } | null
+  user: { name: string; email: string; image?: string | null } | null
 }
 
 type RiskSeverity = 'none' | 'low' | 'medium' | 'high'
@@ -128,6 +129,7 @@ interface LoadRow {
   email: string | null
   name: string
   role: string | null
+  image?: string | null
   open: number
   estimateHours: number
   highPriority: number
@@ -505,6 +507,7 @@ export function OverviewPanel() {
               <Badge color={ACTION_COLOR[log.action] ?? 'gray'} variant="light" size="sm">
                 {log.action}
               </Badge>
+              {log.user && <UserAvatar name={log.user.name} image={log.user.image} size={20} color="blue" style={{ flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text size="sm" lineClamp={1}>
                   <Text component="span" fw={500}>
@@ -850,14 +853,13 @@ function TeamLoadSection({ rows }: { rows: LoadRow[] }) {
       <Stack gap={8}>
         {rows.map((r) => (
           <Group key={r.userId ?? 'none'} gap="sm" wrap="nowrap">
-            <div style={{ minWidth: 160, flex: '0 0 160px' }}>
-              <Text size="sm" fw={500} truncate>
-                {r.name}
-              </Text>
-              <Text size="xs" c="dimmed" truncate>
-                {r.role ?? '—'}
-              </Text>
-            </div>
+            <Group gap="xs" wrap="nowrap" style={{ minWidth: 160, flex: '0 0 160px' }}>
+              <UserAvatar name={r.name} image={r.image} size={28} color="blue" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <Text size="sm" fw={500} truncate>{r.name}</Text>
+                <Text size="xs" c="dimmed" truncate>{r.role ?? '—'}</Text>
+              </div>
+            </Group>
             <div style={{ flex: 1, minWidth: 0 }}>
               <Progress
                 value={(r.open / maxOpen) * 100}

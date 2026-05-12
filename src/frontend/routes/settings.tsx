@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   AppShell,
-  Avatar,
   Badge,
   Burger,
   Button,
@@ -43,6 +42,7 @@ import {
   TbX,
 } from 'react-icons/tb'
 import { MyDevicesPanel } from '@/frontend/components/MyDevicesPanel'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
@@ -272,7 +272,7 @@ const projectStatusColor: Record<string, string> = {
   CANCELLED: 'red',
 }
 
-function ProfileSection({ user }: { user: { name?: string; email?: string; role?: string } | null | undefined }) {
+function ProfileSection({ user }: { user: { name?: string; email?: string; role?: string; image?: string | null } | null | undefined }) {
   const navigate = useNavigate()
   const { data: tasksData } = useQuery({
     queryKey: ['me', 'tasks'],
@@ -299,9 +299,7 @@ function ProfileSection({ user }: { user: { name?: string; email?: string; role?
     <Stack gap="lg">
       <Paper withBorder p="xl" radius="md">
         <Stack align="center" gap="md">
-          <Avatar color="blue" radius="xl" size={80}>
-            {user?.name?.charAt(0).toUpperCase()}
-          </Avatar>
+          <UserAvatar name={user?.name} image={user?.image} size={80} color="blue" />
           <div style={{ textAlign: 'center' }}>
             <Text fw={600} size="lg">
               {user?.name}

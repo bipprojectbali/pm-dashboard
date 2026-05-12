@@ -60,6 +60,7 @@ import { modals } from '@mantine/modals'
 import { useSession } from '@/frontend/hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { Breadcrumbs } from './shared/Breadcrumbs'
+import { UserAvatar } from './shared/UserAvatar'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -71,6 +72,7 @@ interface TaskUser {
   name: string
   email: string
   role: string
+  image?: string | null
 }
 
 interface TaskComment {
@@ -637,9 +639,12 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                     {task.priority}
                   </Badge>
                   {task.assignee && (
-                    <Badge color="blue" variant="outline" size="sm">
-                      @ {task.assignee.name}
-                    </Badge>
+                    <Tooltip label={task.assignee.email} withArrow>
+                      <Group gap={4} wrap="nowrap" style={{ cursor: 'default' }}>
+                        <UserAvatar name={task.assignee.name} image={task.assignee.image} size={18} color="blue" />
+                        <Text size="xs" c="blue">@ {task.assignee.name.split(' ')[0]}</Text>
+                      </Group>
+                    </Tooltip>
                   )}
                   {task.route && (
                     <Badge color="gray" variant="outline" size="sm" leftSection={<TbLink size={10} />}>
@@ -983,14 +988,13 @@ function CommentsSection({
       ) : (
         comments.map((c) => (
           <Card key={c.id} withBorder padding="sm" radius="sm">
-            <Group justify="space-between" mb={4}>
-              <Text size="xs" fw={600}>
-                {c.author.name}{' '}
-                <Badge size="xs" variant="light">
-                  {c.authorTag}
-                </Badge>
-              </Text>
-              <Text size="xs" c="dimmed">
+            <Group justify="space-between" mb={4} wrap="nowrap">
+              <Group gap="xs" wrap="nowrap">
+                <UserAvatar name={c.author.name} image={c.author.image} size={22} color="blue" />
+                <Text size="xs" fw={600}>{c.author.name}</Text>
+                <Badge size="xs" variant="light">{c.authorTag}</Badge>
+              </Group>
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                 {new Date(c.createdAt).toLocaleString()}
               </Text>
             </Group>

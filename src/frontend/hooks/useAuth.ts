@@ -9,6 +9,7 @@ export interface User {
   email: string
   role: Role
   blocked: boolean
+  image?: string | null
 }
 
 export function getDefaultRoute(role: Role): string {

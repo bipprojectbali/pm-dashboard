@@ -80,7 +80,8 @@ export const auth = betterAuth({
     google: {
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
-      // Better Auth handles CSRF state, PKCE, and callback routing automatically.
+      // Sync Google profile picture to User.image on every sign-in.
+      overrideUserInfoOnSignIn: true,
     },
   },
 

@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Badge,
   Card,
   Group,
   SegmentedControl,
@@ -15,6 +16,7 @@ import type { EChartsOption } from 'echarts'
 import { useMemo, useState } from 'react'
 import { TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
+import { Gantt, type GanttTask } from 'mantine-gantt'
 import { InfoTip } from '../shared/InfoTip'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
@@ -423,82 +425,46 @@ export function AnalyticsPanel() {
     }
   }, [overviewData])
 
-  const timelineOption = useMemo<EChartsOption>(() => {
+  const AP_PROJ_COLOR: Record<string, string> = {
+    ACTIVE: 'blue', ON_HOLD: 'yellow', DRAFT: 'gray', COMPLETED: 'green', CANCELLED: 'dark',
+  }
+  const AP_PROJ_LABEL: Record<string, string> = {
+    ACTIVE: 'Active', ON_HOLD: 'On Hold', DRAFT: 'Draft', COMPLETED: 'Done', CANCELLED: 'Cancelled',
+  }
+
+  const timelineTasks = useMemo<GanttTask[]>(() => {
     const rows = overviewData?.timeline ?? []
-    if (rows.length === 0) return { series: [] }
-    const parse = (s: string | null) => (s ? new Date(s).getTime() : null)
-    const items = rows
-      .map((r) => {
-        const start = parse(r.startsAt)
-        const end = parse(r.endsAt)
-        if (!start || !end) return null
-        return { name: r.name, start, end, slipped: r.slipped, status: r.status }
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a, b) => a.end - b.end)
+    const now = new Date()
+    const weekOut = new Date(Date.now() + 7 * 86_400_000)
+    return rows
+      .filter((r) => r.startsAt || r.endsAt)
+      .sort((a, b) => (a.endsAt ?? '').localeCompare(b.endsAt ?? ''))
       .slice(0, 12)
-    if (items.length === 0) return { series: [] }
-    const minMs = Math.min(...items.map((i) => i.start))
-    const maxMs = Math.max(...items.map((i) => i.end), Date.now())
-    const statusColor: Record<string, string> = {
-      ACTIVE: '#228be6',
-      ON_HOLD: '#fab005',
-      DRAFT: '#868e96',
-    }
-    return {
-      tooltip: {
-        formatter: (params: unknown) => {
-          const p = params as { name: string; value: [number, number, number] }
-          const item = items[p.value[0]]
-          if (!item) return ''
-          const s = new Date(item.start).toISOString().slice(0, 10)
-          const e = new Date(item.end).toISOString().slice(0, 10)
-          return `<b>${item.name}</b><br/>${s} → ${e}${item.slipped ? '<br/><b style="color:#fd7e14">Slipped</b>' : ''}`
-        },
-      },
-      grid: { left: 140, right: 24, top: 16, bottom: 28 },
-      xAxis: {
-        type: 'time',
-        min: minMs,
-        max: maxMs,
-        axisLabel: { fontSize: 9 },
-      },
-      yAxis: {
-        type: 'category',
-        data: items.map((i) => (i.name.length > 18 ? `${i.name.slice(0, 18)}…` : i.name)),
-        axisLabel: { fontSize: 10 },
-      },
-      series: [
-        {
-          type: 'custom',
-          renderItem: (_params, api) => {
-            const idx = Number(api.value(0))
-            const start = api.coord([Number(api.value(1)), idx])
-            const end = api.coord([Number(api.value(2)), idx])
-            const height = (api.size?.([0, 1]) as number[] | undefined)?.[1] ?? 20
-            const barH = height * 0.6
-            return {
-              type: 'rect',
-              shape: { x: start[0], y: start[1] - barH / 2, width: end[0] - start[0], height: barH },
-              style: {
-                fill: items[idx]?.slipped ? '#fd7e14' : (statusColor[items[idx]?.status ?? 'ACTIVE'] ?? '#228be6'),
-                opacity: 0.85,
-              },
-            }
-          },
-          encode: { x: [1, 2], y: 0 },
-          data: items.map((i, idx) => ({ value: [idx, i.start, i.end] })),
-          markLine: {
-            silent: true,
-            symbol: 'none',
-            data: [{ xAxis: Date.now() }],
-            lineStyle: { color: '#fa5252', width: 2, type: 'dashed' },
-            label: { show: false },
-          },
-        },
-      ],
-    } as EChartsOption
+      .map((r) => {
+        const start = r.startsAt ? new Date(r.startsAt) : now
+        const end = r.endsAt ? new Date(r.endsAt) : weekOut
+        const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
+        const suffix = [
+          AP_PROJ_LABEL[r.status] ?? r.status,
+          r.slipped ? '⚠ slipped' : '',
+        ].filter(Boolean).join(' · ')
+        return {
+          id: r.id,
+          label: `${r.name}  —  ${suffix}`,
+          startDate: start.toISOString().slice(0, 10),
+          duration,
+          progress: 0,
+          color: r.slipped ? 'orange' : (AP_PROJ_COLOR[r.status] ?? 'blue'),
+        }
+      })
   }, [overviewData])
+
+  const tlMs = timelineTasks.flatMap((t) => {
+    const s = new Date(t.startDate).getTime()
+    return [s, s + t.duration * 86_400_000]
+  })
+  const tlStart = tlMs.length ? new Date(Math.min(...tlMs) - 7 * 86_400_000) : undefined
+  const tlEnd = tlMs.length ? new Date(Math.max(...tlMs) + 14 * 86_400_000) : undefined
 
   const refetchAll = () => {
     refetchOverview()
@@ -606,11 +572,32 @@ export function AnalyticsPanel() {
       </SimpleGrid>
 
       <ChartCard
-        title="Timeline Proyek"
-        subtitle="Garis merah = hari ini · oranye = endsAt mundur dari rencana"
-        tip="Gantt chart startsAt → endsAt tiap proyek ACTIVE. Bar biru = on schedule, oranye = slipped (endsAt sudah dimundurkan dari originalEndAt via extension)."
+        title={`Timeline Proyek${timelineTasks.length > 0 ? ` · ${timelineTasks.length} projects` : ''}`}
+        subtitle="Oranye = slipped deadline · read-only"
+        tip="Gantt chart startsAt → endsAt tiap proyek ACTIVE. Oranye = slipped (deadline pernah diperpanjang via extension)."
       >
-        <EChart option={timelineOption} height={320} />
+        {timelineTasks.length > 0 && (
+          <Group gap={6} mb="xs" wrap="wrap">
+            {Object.entries(AP_PROJ_COLOR).map(([s, c]) => (
+              <Badge key={s} size="xs" color={c} variant="dot">{AP_PROJ_LABEL[s] ?? s}</Badge>
+            ))}
+            <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
+          </Group>
+        )}
+        {timelineTasks.length === 0 ? (
+          <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
+        ) : (
+          <Gantt
+            tasks={timelineTasks}
+            viewMode="month"
+            startDate={tlStart}
+            endDate={tlEnd}
+            columnWidth={22}
+            rowHeight={42}
+            taskListWidth={220}
+            showTodayMarker
+          />
+        )}
       </ChartCard>
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">

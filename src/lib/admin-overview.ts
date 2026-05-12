@@ -72,7 +72,7 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
       ? prisma.auditLog.findMany({
           take: recentAuditLimit,
           orderBy: { createdAt: 'desc' },
-          include: { user: { select: { name: true, email: true } } },
+          include: { user: { select: { name: true, email: true, image: true } } },
         })
       : Promise.resolve([]),
   ])
@@ -317,7 +317,7 @@ export async function computeTeamLoad(opts: { projectId?: string; includeUnassig
   const users = userIds.length
     ? await prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, role: true, image: true },
       })
     : []
   const userById = new Map(users.map((u) => [u.id, u]))
@@ -330,6 +330,7 @@ export async function computeTeamLoad(opts: { projectId?: string; includeUnassig
       email: u?.email ?? null,
       name: u?.name ?? (userId ? '(unknown)' : '(unassigned)'),
       role: u?.role ?? null,
+      image: u?.image ?? null,
       open: b.open,
       estimateHours: Math.round(b.estimateHours * 10) / 10,
       highPriority: b.highPriority,

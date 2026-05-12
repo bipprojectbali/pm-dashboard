@@ -97,7 +97,7 @@ const navItems: NavItem[] = [
   { label: 'Ringkasan', description: 'KPI, overdue, prioritas', icon: TbLayoutDashboard, key: 'overview' },
   { label: 'Proyek', description: 'Kelola semua proyek', icon: TbTarget, key: 'projects' },
   { label: 'Task', description: 'Tugas kamu & tim', icon: TbListCheck, key: 'tasks' },
-  { label: 'Aktivitas', description: 'Event ActivityWatch', icon: TbActivity, key: 'activity', badge: 'AW' },
+  // { label: 'Aktivitas', description: 'Event ActivityWatch', icon: TbActivity, key: 'activity', badge: 'AW' },
   { label: 'Tim', description: 'Anggota & beban kerja', icon: TbUsers, key: 'team' },
 ]
 

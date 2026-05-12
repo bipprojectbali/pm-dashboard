@@ -31,6 +31,7 @@ import {
 } from 'react-icons/tb'
 import { EChart } from '@/frontend/components/charts/EChart'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
@@ -52,7 +53,7 @@ interface AuditLogEntry {
   detail: string | null
   ip: string | null
   createdAt: string
-  user: { name: string; email: string } | null
+  user: { name: string; email: string; image?: string | null } | null
 }
 
 const actionBadge: Record<string, { color: string; label: string }> = {
@@ -402,18 +403,15 @@ export function AuditLogsPanel() {
                   </Table.Td>
                   <Table.Td>
                     {log.user ? (
-                      <div>
-                        <Text size="sm" fw={500}>
-                          {log.user.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {log.user.email}
-                        </Text>
-                      </div>
+                      <Group gap="xs" wrap="nowrap">
+                        <UserAvatar name={log.user.name} image={log.user.image} size={24} color="blue" style={{ flexShrink: 0 }} />
+                        <Stack gap={0} style={{ minWidth: 0 }}>
+                          <Text size="sm" fw={500} truncate>{log.user.name}</Text>
+                          <Text size="xs" c="dimmed" truncate>{log.user.email}</Text>
+                        </Stack>
+                      </Group>
                     ) : (
-                      <Text size="sm" c="dimmed">
-                        —
-                      </Text>
+                      <Text size="sm" c="dimmed">—</Text>
                     )}
                   </Table.Td>
                   <Table.Td>

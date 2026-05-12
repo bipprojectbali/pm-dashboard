@@ -1,9 +1,10 @@
-import { ActionIcon, Avatar, Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
+import { UserAvatar } from './shared/UserAvatar'
 import { useNavigate } from '@tanstack/react-router'
 import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand, TbLogout } from 'react-icons/tb'
 import { ThemeToggle } from './ThemeToggle'
 
-type User = { name?: string; email?: string; role?: string } | null | undefined
+type User = { name?: string; email?: string; role?: string; image?: string | null } | null | undefined
 
 const roleConfig: Record<string, { color: string; bg: string; label: string }> = {
   USER:        { color: '#4f7cff', bg: 'rgba(79,124,255,0.12)',   label: 'User' },
@@ -28,7 +29,6 @@ export function SidebarUserFooter({
   accentColor?: string
 }) {
   const navigate = useNavigate()
-  const initial = user?.name?.charAt(0).toUpperCase() ?? '?'
   const roleKey = user?.role ?? 'USER'
   const config = roleConfig[roleKey] ?? { color: '#4f7cff', bg: 'rgba(79,124,255,0.12)', label: 'User' }
   const goProfile = () => navigate({ to: '/settings', search: { section: 'profile' } })
@@ -64,22 +64,15 @@ export function SidebarUserFooter({
           position="right"
           withArrow
         >
-          <Avatar
-            size={34}
-            radius="xl"
-            style={{
-              cursor: 'pointer',
-              border: `2px solid ${config.color}`,
-              background: config.bg,
-              color: config.color,
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              flexShrink: 0,
-            }}
-            onClick={goProfile}
-          >
-            {initial}
-          </Avatar>
+          <div onClick={goProfile} style={{ cursor: 'pointer', flexShrink: 0 }}>
+            <UserAvatar
+              name={user?.name}
+              image={user?.image}
+              size={34}
+              color="blue"
+              style={{ border: `2px solid ${config.color}` }}
+            />
+          </div>
         </Tooltip>
         <ThemeToggle size="sm" />
         <Tooltip label="Perluas sidebar" position="right" withArrow>
@@ -125,20 +118,16 @@ export function SidebarUserFooter({
         className="sidebar-user-card"
       >
         <Group gap="sm" wrap="nowrap">
-          <Avatar
+          <UserAvatar
+            name={user?.name}
+            image={user?.image}
             size={36}
-            radius="xl"
+            color="blue"
             style={{
               border: `2px solid ${config.color}`,
-              background: config.bg,
-              color: config.color,
-              fontWeight: 700,
-              fontSize: '0.875rem',
               flexShrink: 0,
             }}
-          >
-            {initial}
-          </Avatar>
+          />
           <Stack gap={1} style={{ minWidth: 0, flex: 1 }}>
             <Text size="sm" fw={600} truncate style={{ letterSpacing: '-0.01em' }}>
               {user?.name ?? '—'}

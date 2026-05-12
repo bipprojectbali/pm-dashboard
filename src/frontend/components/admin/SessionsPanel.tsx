@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TbActivity, TbClock, TbDevices, TbRefresh, TbSearch, type TbUsers, TbWifi } from 'react-icons/tb'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 const PAGE_SIZE = 25
@@ -30,6 +31,7 @@ interface SessionRow {
   userEmail: string
   userRole: string
   userBlocked: boolean
+  userImage?: string | null
   isOnline: boolean
   createdAt: string
   expiresAt: string
@@ -270,14 +272,13 @@ export function SessionsPanel() {
             {pagedFiltered.map((s) => (
               <Table.Tr key={s.id} opacity={s.isExpired ? 0.5 : 1}>
                 <Table.Td style={stickyFirstCell(240)}>
-                  <Stack gap={2}>
-                    <Text size="sm" fw={500} lineClamp={1}>
-                      {s.userName}
-                    </Text>
-                    <Text size="xs" c="dimmed" lineClamp={1}>
-                      {s.userEmail}
-                    </Text>
-                  </Stack>
+                  <Group gap="xs" wrap="nowrap">
+                    <UserAvatar name={s.userName} image={s.userImage} size={26} color="blue" style={{ flexShrink: 0 }} />
+                    <Stack gap={0} style={{ minWidth: 0 }}>
+                      <Text size="sm" fw={500} lineClamp={1}>{s.userName}</Text>
+                      <Text size="xs" c="dimmed" lineClamp={1}>{s.userEmail}</Text>
+                    </Stack>
+                  </Group>
                 </Table.Td>
                 <Table.Td>
                   <Badge color={ROLE_COLOR[s.userRole] ?? 'gray'} variant="light" size="sm">

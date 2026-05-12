@@ -3,6 +3,7 @@ import type { EChartsOption } from 'echarts'
 import { useMemo } from 'react'
 import { TbCalendarEvent, TbChartDonut, TbChartLine, TbInfoCircle, TbTimeline } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
+import { Gantt, type GanttTask } from 'mantine-gantt'
 
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
@@ -94,116 +95,95 @@ export function AnalyticsSection({ data }: { data: AnalyticsData }) {
   )
 }
 
+const PROJ_STATUS_COLOR: Record<string, string> = {
+  ACTIVE: 'blue', ON_HOLD: 'yellow', DRAFT: 'gray', COMPLETED: 'green', CANCELLED: 'dark',
+}
+
+const PROJ_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: 'Active', ON_HOLD: 'On Hold', DRAFT: 'Draft', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+}
+
 function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
-  const option = useMemo<EChartsOption | null>(() => {
-    if (timeline.length === 0) return null
-    const now = Date.now()
-    const rows = timeline.slice().reverse()
-    const names = rows.map((p) => p.name)
-    const min = rows
-      .map((p) => (p.startsAt ? new Date(p.startsAt).getTime() : null))
-      .filter((n): n is number => n !== null)
-    const max = rows.map((p) => (p.endsAt ? new Date(p.endsAt).getTime() : null)).filter((n): n is number => n !== null)
-    const xMin = min.length > 0 ? Math.min(...min, now) : now - 30 * 86_400_000
-    const xMax = max.length > 0 ? Math.max(...max, now) : now + 30 * 86_400_000
+  const ganttTasks = useMemo<GanttTask[]>(() => {
+    const now = new Date()
+    const weekOut = new Date(Date.now() + 7 * 86_400_000)
+    return timeline
+      .filter((p) => p.startsAt || p.endsAt)
+      .map((p) => {
+        const start = p.startsAt ? new Date(p.startsAt) : now
+        const end = p.endsAt ? new Date(p.endsAt) : weekOut
+        const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
+        // Encode status + owner + slipped ke label
+        const suffix = [
+          PROJ_STATUS_LABEL[p.status] ?? p.status,
+          p.owner,
+          p.slipped ? '⚠ slipped' : '',
+        ].filter(Boolean).join(' · ')
+        return {
+          id: p.id,
+          label: `${p.name}  —  ${suffix}`,
+          startDate: start.toISOString().slice(0, 10),
+          duration,
+          progress: 0,
+          color: p.slipped ? 'orange' : (PROJ_STATUS_COLOR[p.status] ?? 'blue'),
+        }
+      })
+  }, [timeline])
 
-    const bars = rows.map((p, idx) => {
-      const start = p.startsAt ? new Date(p.startsAt).getTime() : now
-      const end = p.endsAt ? new Date(p.endsAt).getTime() : now + 7 * 86_400_000
-      return {
-        name: p.name,
-        value: [idx, start, end, p.status, p.priority, p.owner, p.slipped],
-        itemStyle: { color: PRIORITY_COLOR[p.priority], opacity: p.status === 'ON_HOLD' ? 0.45 : 0.9 },
-      }
-    })
+  const allMs = ganttTasks.flatMap((t) => {
+    const s = new Date(t.startDate).getTime()
+    return [s, s + t.duration * 86_400_000]
+  })
+  const tlStart = allMs.length ? new Date(Math.min(...allMs) - 7 * 86_400_000) : undefined
+  const tlEnd = allMs.length ? new Date(Math.max(...allMs) + 14 * 86_400_000) : undefined
 
-    return {
-      grid: { left: 150, right: 20, top: 10, bottom: 30, containLabel: false },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: unknown) => {
-          const p = params as { value: [number, number, number, string, string, string, boolean]; name: string }
-          const [, s, e, status, priority, owner, slipped] = p.value
-          const fmt = (t: number) => new Date(t).toLocaleDateString()
-          return `<b>${p.name}</b><br/>${fmt(s)} → ${fmt(e)}<br/>status: ${status} · priority: ${priority}<br/>owner: ${owner}${slipped ? '<br/><span style="color:#fa5252">⚠ slipped (extended)</span>' : ''}`
-        },
-      },
-      xAxis: {
-        type: 'time',
-        min: xMin,
-        max: xMax,
-        splitLine: { show: true },
-      },
-      yAxis: {
-        type: 'category',
-        data: names,
-        axisLabel: { fontSize: 11, width: 140, overflow: 'truncate' },
-      },
-      series: [
-        {
-          type: 'custom',
-          renderItem: ((_params: unknown, api: unknown) => {
-            const a = api as {
-              value: (idx: number) => number
-              coord: (pt: [number, number]) => [number, number]
-              size: (vals: [number, number]) => [number, number]
-            }
-            const categoryIdx = a.value(0)
-            const startTs = a.value(1)
-            const endTs = a.value(2)
-            const startPt = a.coord([startTs, categoryIdx])
-            const endPt = a.coord([endTs, categoryIdx])
-            const height = a.size([0, 1])[1] * 0.55
-            return {
-              type: 'rect' as const,
-              shape: { x: startPt[0], y: startPt[1] - height / 2, width: Math.max(2, endPt[0] - startPt[0]), height },
-              style: { fill: (bars[categoryIdx]?.itemStyle as { color: string } | undefined)?.color ?? '#228be6' },
-            }
-          }) as never,
-          encode: { x: [1, 2], y: 0 },
-          data: bars,
-        },
-        {
-          type: 'line',
-          markLine: {
-            symbol: 'none',
-            lineStyle: { color: '#fa5252', width: 2, type: 'dashed' },
-            label: { formatter: 'today', position: 'insideEndTop', color: '#fa5252', fontSize: 10 },
-            data: [{ xAxis: now }],
-          },
-          data: [],
-        },
-      ],
-    } satisfies EChartsOption
+  // Legend: status yang muncul di data
+  const statusesInData = useMemo(() => {
+    const seen = new Set<string>()
+    for (const p of timeline) seen.add(p.status)
+    return Array.from(seen)
   }, [timeline])
 
   return (
     <Card withBorder padding="md" radius="md">
-      <Group gap="xs" mb="sm">
-        <ThemeIcon variant="light" color="indigo" size="md" radius="md">
-          <TbTimeline size={16} />
-        </ThemeIcon>
-        <Title order={5}>Project timeline</Title>
-        <Tooltip
-          multiline
-          w={340}
-          withArrow
-          label="Bar Gantt per project aktif dari startsAt → endsAt. Warna bar mengikuti priority (gray/blue/orange/red). ON_HOLD ditampilkan semi-transparan. Garis merah putus-putus = hari ini. Hover bar untuk detail + flag 'slipped' (endsAt pernah di-extend)."
-        >
-          <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-            <TbInfoCircle size={14} />
+      {/* Header */}
+      <Group justify="space-between" align="flex-start" mb="sm" wrap="wrap" gap="xs">
+        <Group gap="xs">
+          <ThemeIcon variant="light" color="indigo" size="md" radius="md">
+            <TbTimeline size={16} />
           </ThemeIcon>
-        </Tooltip>
-        <Text size="xs" c="dimmed">
-          active projects · today marker
-        </Text>
+          <div>
+            <Group gap={6} align="baseline">
+              <Title order={5}>Project timeline</Title>
+              <Text size="xs" c="dimmed">{ganttTasks.length} projects</Text>
+            </Group>
+            <Text size="xs" c="dimmed">startsAt → endsAt · read-only</Text>
+          </div>
+        </Group>
+        {/* Legend */}
+        <Group gap={6} wrap="wrap">
+          {statusesInData.map((s) => (
+            <Badge key={s} size="xs" color={PROJ_STATUS_COLOR[s] ?? 'gray'} variant="dot">
+              {PROJ_STATUS_LABEL[s] ?? s}
+            </Badge>
+          ))}
+          <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
+        </Group>
       </Group>
-      {timeline.length === 0 || !option ? (
-        <Text size="sm" c="dimmed" ta="center" py="lg">
-          Belum ada project aktif dengan jadwal.
-        </Text>
+
+      {ganttTasks.length === 0 ? (
+        <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
       ) : (
-        <EChart option={option} height={Math.max(160, timeline.length * 28 + 60)} />
+        <Gantt
+          tasks={ganttTasks}
+          viewMode="month"
+          startDate={tlStart}
+          endDate={tlEnd}
+          columnWidth={22}
+          rowHeight={42}
+          taskListWidth={240}
+          showTodayMarker
+        />
       )}
     </Card>
   )

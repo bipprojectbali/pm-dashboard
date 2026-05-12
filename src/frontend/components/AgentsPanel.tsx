@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Alert,
-  Avatar,
   Badge,
   Button,
   Card,
@@ -41,6 +40,7 @@ import {
   TbUserCheck,
 } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { LoadingBlock } from '@/frontend/components/shared/LoadingState'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
@@ -55,6 +55,7 @@ interface AgentUser {
   name: string
   email: string
   role: string
+  image?: string | null
 }
 
 interface AgentRow {
@@ -439,9 +440,12 @@ export function AgentsPanel() {
             <Card key={g.key} withBorder padding={0} radius="md">
               <Group justify="space-between" p="sm" wrap="nowrap">
                 <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                  <Avatar color={g.user ? 'blue' : 'gray'} radius="xl" size="sm">
-                    {g.user ? g.user.name.charAt(0).toUpperCase() : '?'}
-                  </Avatar>
+                  <UserAvatar
+                    name={g.user?.name}
+                    image={g.user?.image}
+                    size="sm"
+                    color={g.user ? 'blue' : 'gray'}
+                  />
                   <Stack gap={0} style={{ minWidth: 0 }}>
                     <Text size="sm" fw={600} truncate>
                       {g.user ? g.user.name : 'Unassigned'}
@@ -588,18 +592,15 @@ function AgentRowTr({
       {showAssignee ? (
         <Table.Td>
           {a.claimedBy ? (
-            <Stack gap={0}>
-              <Text size="xs" fw={500}>
-                {a.claimedBy.name}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {a.claimedBy.email}
-              </Text>
-            </Stack>
+            <Group gap="xs" wrap="nowrap">
+              <UserAvatar name={a.claimedBy.name} image={a.claimedBy.image} size={24} color="blue" style={{ flexShrink: 0 }} />
+              <Stack gap={0} style={{ minWidth: 0 }}>
+                <Text size="xs" fw={500} truncate>{a.claimedBy.name}</Text>
+                <Text size="xs" c="dimmed" truncate>{a.claimedBy.email}</Text>
+              </Stack>
+            </Group>
           ) : (
-            <Text size="xs" c="dimmed" fs="italic">
-              unassigned
-            </Text>
+            <Text size="xs" c="dimmed" fs="italic">unassigned</Text>
           )}
         </Table.Td>
       ) : null}

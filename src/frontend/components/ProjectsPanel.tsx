@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Card,
-  Checkbox,
   Divider,
   Group,
   Kbd,
@@ -33,13 +32,11 @@ import {
   TbAlertTriangle,
   TbArrowsSort,
   TbCalendarEvent,
-  TbCalendarPlus,
   TbChecks,
   TbClock,
   TbFilterX,
   TbFlag,
   TbFolder,
-  TbHistory,
   TbLayoutGrid,
   TbLayoutList,
   TbPencil,
@@ -47,7 +44,6 @@ import {
   TbRefresh,
   TbSearch,
   TbTarget,
-  TbTrash,
   TbUser,
   TbUsers,
   TbX,
@@ -64,6 +60,7 @@ export interface ProjectUser {
   id: string
   name: string
   email: string
+  image?: string | null
 }
 
 interface TaskStats {
@@ -111,22 +108,6 @@ export interface ProjectListItem {
 }
 
 export type ProjectDetail = ProjectListItem
-
-interface UserOption {
-  id: string
-  name: string
-  email: string
-  role: string
-}
-
-interface ProjectExtension {
-  id: string
-  previousEndAt: string | null
-  newEndAt: string
-  reason: string | null
-  createdAt: string
-  extendedBy: ProjectUser | null
-}
 
 interface ProjectMilestone {
   id: string
@@ -262,6 +243,16 @@ const ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
 
 const PRIORITY_RANK: Record<ProjectPriority, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
 
+// Status group order: active work first, then on-hold, draft, done, cancelled
+const STATUS_GROUP_ORDER: ProjectStatus[] = ['ACTIVE', 'ON_HOLD', 'DRAFT', 'COMPLETED', 'CANCELLED']
+const STATUS_GROUP_LABEL: Record<ProjectStatus, string> = {
+  ACTIVE: 'Aktif',
+  ON_HOLD: 'Ditunda',
+  DRAFT: 'Draft',
+  COMPLETED: 'Selesai',
+  CANCELLED: 'Dibatalkan',
+}
+
 function sortProjects(list: ProjectListItem[], key: SortKey): ProjectListItem[] {
   const out = [...list]
   switch (key) {
@@ -316,6 +307,7 @@ export function ProjectsPanel() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
   const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({ key: 'pm:projects:view', defaultValue: 'grid' })
+  const [groupByStatus, setGroupByStatus] = useLocalStorage<boolean>({ key: 'pm:projects:group-by-status', defaultValue: true })
   const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>({
     key: 'pm:projects:density',
     defaultValue: 'comfortable',
@@ -576,18 +568,7 @@ export function ProjectsPanel() {
                   { value: 'all', label: 'Semua proyek' },
                 ]}
               />
-              {/* <Select
-                size="xs"
-                w={150}
-                placeholder="Any status"
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as ProjectStatus | null)}
-                data={STATUS_OPTIONS.map((s) => ({
-                  value: s.value,
-                  label: `${s.label} · ${statusCounts[s.value]}`,
-                }))}
-                clearable
-              /> */}
+              {/* Status filter hidden temporarily */}
               <Select
                 size="xs"
                 w={140}
@@ -597,27 +578,8 @@ export function ProjectsPanel() {
                 data={PRIORITY_OPTIONS}
                 clearable
               />
-              {/* <Select
-                size="xs"
-                w={130}
-                placeholder="Any role"
-                value={roleFilter}
-                onChange={(v) => setRoleFilter(v as MemberRole | null)}
-                data={ROLE_FILTER_OPTIONS}
-                clearable
-              /> */}
-              {/* <Select
-                size="xs"
-                w={170}
-                placeholder="Any owner"
-                value={ownerFilter}
-                onChange={setOwnerFilter}
-                data={ownerOptions}
-                leftSection={<TbUser size={12} />}
-                searchable
-                clearable
-                nothingFoundMessage="No owners"
-              /> */}
+              {/* Role filter hidden temporarily */}
+              {/* Owner filter hidden temporarily */}
               <Select
                 size="xs"
                 w={180}
@@ -680,6 +642,16 @@ export function ProjectsPanel() {
                   </ActionIcon>
                 </Tooltip>
               </Group>
+              <Tooltip label={groupByStatus ? 'Matikan pengelompokan' : 'Kelompokkan per status'}>
+                <ActionIcon
+                  size="sm"
+                  variant={groupByStatus ? 'filled' : 'subtle'}
+                  color={groupByStatus ? 'blue' : 'gray'}
+                  onClick={() => setGroupByStatus(!groupByStatus)}
+                >
+                  <TbTarget size={14} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
             {hasActiveFilters && (
               <Group justify="space-between" gap="xs">
@@ -734,34 +706,8 @@ export function ProjectsPanel() {
         </Card>
       ) : view === 'timeline' ? (
         <ProjectsGanttView projects={filtered} onSelect={(p) => openProject(p.id)} />
-      ) : view === 'list' ? (
-        <Stack gap="xs">
-          {filtered.map((p) => (
-            <ProjectListRow
-              key={p.id}
-              project={p}
-              isSystemAdmin={canCreateProject}
-              onOpen={() => openProject(p.id)}
-              onEdit={() => openProject(p.id, 'settings')}
-            />
-          ))}
-        </Stack>
       ) : (
-        <SimpleGrid
-          cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }}
-          spacing="md"
-        >
-          {filtered.map((p) => (
-            <ProjectCard
-              key={p.id}
-              project={p}
-              density={density}
-              isSystemAdmin={canCreateProject}
-              onOpen={() => openProject(p.id)}
-              onEdit={() => openProject(p.id, 'settings')}
-            />
-          ))}
-        </SimpleGrid>
+        <ProjectsGrid filtered={filtered} view={view} density={density} groupByStatus={groupByStatus} canCreateProject={canCreateProject} openProject={openProject} />
       )}
 
       <CreateProjectModal
@@ -1459,293 +1405,6 @@ function PillButton({
   )
 }
 
-const MEMBER_ROLE_OPTIONS: Array<{ value: MemberRole; label: string }> = [
-  { value: 'OWNER', label: 'Owner' },
-  { value: 'PM', label: 'PM' },
-  { value: 'MEMBER', label: 'Member' },
-  { value: 'VIEWER', label: 'Viewer' },
-]
-
-export function MembersSection({
-  projectId,
-  myRole,
-  systemRole,
-  ownerId,
-}: {
-  projectId: string
-  myRole: MemberRole | null
-  systemRole?: string | null
-  ownerId: string
-}) {
-  const qc = useQueryClient()
-  const [addUserId, setAddUserId] = useState<string | null>(null)
-  const [addRole, setAddRole] = useState<MemberRole>('MEMBER')
-
-  const detailQ = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => api<{ project: ProjectDetail; myRole: MemberRole | null }>(`/api/projects/${projectId}`),
-  })
-  const usersQ = useQuery({
-    queryKey: ['users'],
-    queryFn: () => api<{ users: UserOption[] }>('/api/users'),
-  })
-
-  const addMember = useMutation({
-    mutationFn: (body: { userId: string; role: MemberRole }) =>
-      api(`/api/projects/${projectId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setAddUserId(null)
-      setAddRole('MEMBER')
-      notifySuccess({ message: 'Member ditambahkan.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const changeRole = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: MemberRole }) =>
-      api(`/api/projects/${projectId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      }),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: `Role member diubah ke ${vars.role}.` })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const removeMember = useMutation({
-    mutationFn: (userId: string) => api(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Member dikeluarkan.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const isSysAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
-  const canManage = isSysAdmin || myRole === 'OWNER' || myRole === 'PM'
-  const canRemove = canManage
-  const canGrantOwner = systemRole === 'SUPER_ADMIN' || myRole === 'OWNER'
-
-  const members = detailQ.data?.project.members ?? []
-  const memberUserIds = new Set(members.map((m) => m.userId))
-  const userOptions = useMemo(
-    () =>
-      (usersQ.data?.users ?? [])
-        .filter((u) => !memberUserIds.has(u.id))
-        .map((u) => ({ value: u.id, label: `${u.name} · ${u.email}` })),
-    [usersQ.data, memberUserIds],
-  )
-  const roleOptions = canGrantOwner ? MEMBER_ROLE_OPTIONS : MEMBER_ROLE_OPTIONS.filter((r) => r.value !== 'OWNER')
-
-  return (
-    <Stack gap="xs">
-      {detailQ.isLoading ? (
-        <Text size="xs" c="dimmed">
-          Loading members…
-        </Text>
-      ) : (
-        <Stack gap={6}>
-          {members.map((m) => {
-            const isOwner = m.userId === ownerId
-            return (
-              <Group key={m.id} justify="space-between" wrap="nowrap">
-                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <TbUser size={14} />
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={500} truncate>
-                      {m.user.name}
-                    </Text>
-                    <Text size="xs" c="dimmed" truncate>
-                      {m.user.email}
-                    </Text>
-                  </Stack>
-                </Group>
-                <Group gap="xs" wrap="nowrap">
-                  {canManage && !isOwner ? (
-                    <Select
-                      size="xs"
-                      data={roleOptions}
-                      value={m.role}
-                      onChange={(v) => v && changeRole.mutate({ userId: m.userId, role: v as MemberRole })}
-                      w={110}
-                      allowDeselect={false}
-                    />
-                  ) : (
-                    <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">
-                      {m.role}
-                    </Badge>
-                  )}
-                  {canRemove && !isOwner && (
-                    <Tooltip label="Remove member">
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remove ${m.user.name} from this project?`)) {
-                            removeMember.mutate(m.userId)
-                          }
-                        }}
-                      >
-                        <TbTrash size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
-              </Group>
-            )
-          })}
-        </Stack>
-      )}
-
-      {canManage && (
-        <Group gap="xs" align="flex-end" wrap="nowrap">
-          <Select
-            label="Add member"
-            placeholder={userOptions.length === 0 ? 'All users added' : 'Select user'}
-            data={userOptions}
-            value={addUserId}
-            onChange={setAddUserId}
-            searchable
-            disabled={userOptions.length === 0}
-            style={{ flex: 1 }}
-          />
-          <Select
-            label="Role"
-            data={roleOptions}
-            value={addRole}
-            onChange={(v) => v && setAddRole(v as MemberRole)}
-            w={110}
-            allowDeselect={false}
-          />
-          <Button
-            leftSection={<TbPlus size={14} />}
-            disabled={!addUserId || addMember.isPending}
-            loading={addMember.isPending}
-            onClick={() => addUserId && addMember.mutate({ userId: addUserId, role: addRole })}
-          >
-            Add
-          </Button>
-        </Group>
-      )}
-
-      {(addMember.error || changeRole.error || removeMember.error) && (
-        <Text size="xs" c="red">
-          {(addMember.error as Error | null)?.message ??
-            (changeRole.error as Error | null)?.message ??
-            (removeMember.error as Error | null)?.message}
-        </Text>
-      )}
-    </Stack>
-  )
-}
-
-export function ExtensionsSection({
-  projectId,
-  currentEndAt,
-  startsAt,
-  canExtend,
-}: {
-  projectId: string
-  currentEndAt: string | null
-  startsAt: string | null
-  canExtend: boolean
-}) {
-  const qc = useQueryClient()
-  const [extendOpen, setExtendOpen] = useState(false)
-
-  const historyQ = useQuery({
-    queryKey: ['project-extensions', projectId],
-    queryFn: () => api<{ extensions: ProjectExtension[] }>(`/api/projects/${projectId}/extensions`),
-  })
-
-  const extend = useMutation({
-    mutationFn: (body: { newEndAt: string; reason: string | null }) =>
-      api(`/api/projects/${projectId}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-extensions', projectId] })
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setExtendOpen(false)
-      notifySuccess({ message: 'Deadline diperpanjang.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const extensions = historyQ.data?.extensions ?? []
-
-  return (
-    <Stack gap="xs">
-      <Group justify="space-between">
-        <Group gap="xs">
-          <TbHistory size={14} />
-          <Text size="sm" c="dimmed">
-            {extensions.length === 0 ? 'No extensions recorded' : `${extensions.length} extension(s)`}
-          </Text>
-        </Group>
-        {canExtend && (
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<TbCalendarPlus size={14} />}
-            onClick={() => setExtendOpen(true)}
-          >
-            Extend deadline
-          </Button>
-        )}
-      </Group>
-
-      {extensions.length > 0 && (
-        <Stack gap={6}>
-          {extensions.map((e) => (
-            <Card key={e.id} withBorder padding="xs" radius="sm">
-              <Stack gap={2}>
-                <Group gap="xs" wrap="wrap">
-                  <Text size="xs" fw={500}>
-                    {formatDate(e.previousEndAt)} → {formatDate(e.newEndAt)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    by {e.extendedBy?.name ?? 'system'} · {new Date(e.createdAt).toLocaleString()}
-                  </Text>
-                </Group>
-                {e.reason && (
-                  <Text size="xs" c="dimmed">
-                    {e.reason}
-                  </Text>
-                )}
-              </Stack>
-            </Card>
-          ))}
-        </Stack>
-      )}
-
-      <ExtendDeadlineModal
-        opened={extendOpen}
-        onClose={() => setExtendOpen(false)}
-        currentEndAt={currentEndAt}
-        startsAt={startsAt}
-        onSubmit={(body) => extend.mutate(body)}
-        loading={extend.isPending}
-        error={extend.error?.message}
-      />
-    </Stack>
-  )
-}
 
 const STATUS_BAR_COLOR: Record<ProjectStatus, string> = {
   DRAFT: '#868e96',
@@ -1753,6 +1412,62 @@ const STATUS_BAR_COLOR: Record<ProjectStatus, string> = {
   ON_HOLD: '#fab005',
   COMPLETED: '#40c057',
   CANCELLED: '#495057',
+}
+
+function ProjectsGrid({
+  filtered,
+  view,
+  density,
+  groupByStatus,
+  canCreateProject,
+  openProject,
+}: {
+  filtered: ProjectListItem[]
+  view: 'grid' | 'list' | 'timeline'
+  density: 'comfortable' | 'compact'
+  groupByStatus: boolean
+  canCreateProject: boolean
+  openProject: (id: string, tab?: 'overview' | 'settings') => void
+}) {
+  const renderItems = (items: ProjectListItem[]) =>
+    view === 'list' ? (
+      <Stack gap="xs">
+        {items.map((p) => (
+          <ProjectListRow key={p.id} project={p} isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)} onEdit={() => openProject(p.id, 'settings')} />
+        ))}
+      </Stack>
+    ) : (
+      <SimpleGrid cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }} spacing="md">
+        {items.map((p) => (
+          <ProjectCard key={p.id} project={p} density={density} isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)} onEdit={() => openProject(p.id, 'settings')} />
+        ))}
+      </SimpleGrid>
+    )
+
+  if (!groupByStatus) return renderItems(filtered)
+
+  const groups = STATUS_GROUP_ORDER
+    .map((status) => ({ status, items: filtered.filter((p) => p.status === status) }))
+    .filter((g) => g.items.length > 0)
+
+  return (
+    <Stack gap="xl">
+      {groups.map((g) => (
+        <Stack key={g.status} gap="sm">
+          <Group gap={8} align="center">
+            <Box style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_ACCENT[g.status], flexShrink: 0 }} />
+            <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+              {STATUS_GROUP_LABEL[g.status]}
+            </Text>
+            <Text size="xs" c="dimmed">· {g.items.length}</Text>
+          </Group>
+          {renderItems(g.items)}
+        </Stack>
+      ))}
+    </Stack>
+  )
 }
 
 function ProjectsGanttView({
@@ -1937,249 +1652,3 @@ function ProjectsGanttView({
   )
 }
 
-export function MilestonesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
-  const qc = useQueryClient()
-  const [title, setTitle] = useState('')
-  const [dueAt, setDueAt] = useState<Date | null>(null)
-
-  const milestonesQ = useQuery({
-    queryKey: ['milestones', projectId],
-    queryFn: () => api<{ milestones: ProjectMilestone[] }>(`/api/projects/${projectId}/milestones`),
-  })
-
-  const create = useMutation({
-    mutationFn: (body: { title: string; dueAt: string | null }) =>
-      api(`/api/projects/${projectId}/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setTitle('')
-      setDueAt(null)
-      notifySuccess({ message: 'Milestone dibuat.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
-      api(`/api/milestones/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Milestone diperbarui.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const remove = useMutation({
-    mutationFn: (id: string) => api(`/api/milestones/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Milestone dihapus.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const milestones = milestonesQ.data?.milestones ?? []
-  const now = Date.now()
-
-  return (
-    <Stack gap="xs">
-      {milestonesQ.isLoading ? (
-        <Text size="xs" c="dimmed">
-          Loading…
-        </Text>
-      ) : milestones.length === 0 ? (
-        <Text size="xs" c="dimmed">
-          No milestones yet.
-        </Text>
-      ) : (
-        <Stack gap={6}>
-          {milestones.map((m) => {
-            const done = !!m.completedAt
-            const overdue = !done && m.dueAt && new Date(m.dueAt).getTime() < now
-            return (
-              <Group key={m.id} justify="space-between" wrap="nowrap" gap="xs">
-                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <Checkbox
-                    checked={done}
-                    disabled={!canManage || update.isPending}
-                    onChange={(e) => update.mutate({ id: m.id, body: { completed: e.currentTarget.checked } })}
-                  />
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text
-                      size="sm"
-                      fw={500}
-                      truncate
-                      td={done ? 'line-through' : undefined}
-                      c={done ? 'dimmed' : undefined}
-                    >
-                      {m.title}
-                    </Text>
-                    <Group gap={4}>
-                      {m.dueAt && (
-                        <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
-                          Due {formatDate(m.dueAt)}
-                        </Text>
-                      )}
-                      {overdue && (
-                        <Badge size="xs" color="red" variant="light">
-                          Overdue
-                        </Badge>
-                      )}
-                      {done && (
-                        <Text size="xs" c="dimmed">
-                          · Done {formatDate(m.completedAt)}
-                        </Text>
-                      )}
-                    </Group>
-                  </Stack>
-                </Group>
-                {canManage && (
-                  <Tooltip label="Delete">
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm(`Delete milestone "${m.title}"?`)) remove.mutate(m.id)
-                      }}
-                    >
-                      <TbTrash size={14} />
-                    </ActionIcon>
-                  </Tooltip>
-                )}
-              </Group>
-            )
-          })}
-        </Stack>
-      )}
-
-      {canManage && (
-        <Group gap="xs" align="flex-end" wrap="nowrap">
-          <TextInput
-            label="Add milestone"
-            placeholder="e.g. MVP launch"
-            value={title}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            style={{ flex: 1 }}
-          />
-          <DateInput
-            label="Due"
-            value={dueAt}
-            onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
-            clearable
-            w={160}
-          />
-          <Button
-            leftSection={<TbPlus size={14} />}
-            disabled={!title.trim() || create.isPending}
-            loading={create.isPending}
-            onClick={() => create.mutate({ title: title.trim(), dueAt: dueAt ? dueAt.toISOString() : null })}
-          >
-            Add
-          </Button>
-        </Group>
-      )}
-
-      {(create.error || update.error || remove.error) && (
-        <Text size="xs" c="red">
-          {(create.error as Error | null)?.message ??
-            (update.error as Error | null)?.message ??
-            (remove.error as Error | null)?.message}
-        </Text>
-      )}
-    </Stack>
-  )
-}
-
-function ExtendDeadlineModal({
-  opened,
-  onClose,
-  currentEndAt,
-  startsAt,
-  onSubmit,
-  loading,
-  error,
-}: {
-  opened: boolean
-  onClose: () => void
-  currentEndAt: string | null
-  startsAt: string | null
-  onSubmit: (body: { newEndAt: string; reason: string | null }) => void
-  loading: boolean
-  error?: string
-}) {
-  const [newEnd, setNewEnd] = useState<Date | null>(currentEndAt ? new Date(currentEndAt) : null)
-  const [reason, setReason] = useState('')
-  const [initKey, setInitKey] = useState<string | null>(null)
-
-  const key = currentEndAt ?? '__null__'
-  if (opened && key !== initKey) {
-    setInitKey(key)
-    setNewEnd(currentEndAt ? new Date(currentEndAt) : null)
-    setReason('')
-  }
-  if (!opened && initKey !== null) setInitKey(null)
-
-  const startDate = startsAt ? new Date(startsAt) : null
-  const sameAsCurrent = newEnd && currentEndAt && newEnd.getTime() === new Date(currentEndAt).getTime()
-  const beforeStart = newEnd && startDate && newEnd < startDate
-  const invalid = !newEnd || sameAsCurrent || beforeStart
-
-  return (
-    <Modal opened={opened} onClose={onClose} title="Extend deadline" size="md">
-      <Stack gap="sm">
-        <Text size="sm" c="dimmed">
-          Current deadline: <b>{formatDate(currentEndAt)}</b>
-        </Text>
-        <DateInput
-          label="New deadline"
-          value={newEnd}
-          onChange={(v) => setNewEnd(v ? new Date(v as unknown as string) : null)}
-          clearable
-          leftSection={<TbCalendarEvent size={14} />}
-          error={beforeStart ? 'Must be after project start' : sameAsCurrent ? 'Same as current deadline' : undefined}
-        />
-        <Textarea
-          label="Reason (optional)"
-          placeholder="e.g. Scope expanded to include payment gateway integration"
-          value={reason}
-          onChange={(e) => setReason(e.currentTarget.value)}
-          autosize
-          minRows={2}
-          maxRows={5}
-        />
-        {error && (
-          <Text size="sm" c="red">
-            {error}
-          </Text>
-        )}
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={Boolean(invalid) || loading}
-            loading={loading}
-            onClick={() => newEnd && onSubmit({ newEndAt: newEnd.toISOString(), reason: reason.trim() || null })}
-          >
-            Save extension
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  )
-}

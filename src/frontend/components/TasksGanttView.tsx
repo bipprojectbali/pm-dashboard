@@ -39,15 +39,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Soft muted hex colors for Gantt bars — less saturated than Mantine filled colors
+// Distinct muted colors per status — identifiable at a glance in dark mode
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  OPEN:         '#5c8fd6',
-  IN_PROGRESS:  '#7c6dbf',
-  READY_FOR_QC: '#b8963e',
-  REOPENED:     '#c07a3a',
-  CLOSED:       '#3d9e7a',
+  OPEN:         '#4a7abf',  // steel blue
+  IN_PROGRESS:  '#7b5ea7',  // soft purple
+  READY_FOR_QC: '#c49a28',  // amber
+  REOPENED:     '#b86d2a',  // burnt orange
+  CLOSED:       '#3a8f6a',  // muted green
 }
-const OVERDUE_COLOR = '#b85c5c'
+const OVERDUE_COLOR = '#a84444'  // muted red
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Open', IN_PROGRESS: 'In Progress', READY_FOR_QC: 'Ready for QC',
@@ -283,12 +283,30 @@ export function TasksGanttView({
 
         {/* ── Stats bar ── */}
         <Group gap={6} wrap="wrap">
-          {stats.open > 0 && <Badge size="sm" color="blue" variant="light">{stats.open} Open</Badge>}
-          {stats.inProgress > 0 && <Badge size="sm" color="violet" variant="light">{stats.inProgress} In Progress</Badge>}
-          {stats.qc > 0 && <Badge size="sm" color="yellow" variant="light">{stats.qc} QC</Badge>}
-          {stats.reopened > 0 && <Badge size="sm" color="orange" variant="light">{stats.reopened} Reopened</Badge>}
-          {stats.closed > 0 && <Badge size="sm" color="teal" variant="light">{stats.closed} Closed</Badge>}
-          {stats.overdue > 0 && <Badge size="sm" color="red" variant="light" leftSection={<TbAlertTriangle size={10} />}>{stats.overdue} Overdue</Badge>}
+          {([
+            { count: stats.open,       label: 'Open',        color: STATUS_COLOR.OPEN },
+            { count: stats.inProgress, label: 'In Progress', color: STATUS_COLOR.IN_PROGRESS },
+            { count: stats.qc,         label: 'QC',          color: STATUS_COLOR.READY_FOR_QC },
+            { count: stats.reopened,   label: 'Reopened',    color: STATUS_COLOR.REOPENED },
+            { count: stats.closed,     label: 'Closed',      color: STATUS_COLOR.CLOSED },
+          ] as const).filter(s => s.count > 0).map(s => (
+            <Badge
+              key={s.label}
+              size="sm"
+              variant="default"
+              style={{ border: 'none' }}
+              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: s.color, flexShrink: 0 }} />}
+            >
+              {s.count} {s.label}
+            </Badge>
+          ))}
+          {stats.overdue > 0 && (
+            <Badge size="sm" variant="default" style={{ border: 'none' }}
+              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: OVERDUE_COLOR, flexShrink: 0 }} />}
+            >
+              {stats.overdue} Overdue
+            </Badge>
+          )}
           <Divider orientation="vertical" />
           <Text size="xs" c="dimmed">Total {withDates.length}</Text>
         </Group>

@@ -969,8 +969,7 @@ function ProjectCard({
           {health && (
             <Tooltip label="Derived from task-completion pace vs. time elapsed">
               <Badge
-                color={health.color}
-                variant="outline"
+                variant="default"
                 size="xs"
                 leftSection={
                   <div style={{
@@ -979,6 +978,7 @@ function ProjectCard({
                     flexShrink: 0,
                   }} />
                 }
+                style={{ border: 'none' }}
               >
                 {health.label.toUpperCase()}
               </Badge>

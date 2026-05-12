@@ -1,7 +1,7 @@
 import { Badge, Card, Divider, Group, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TbAlertTriangle, TbCalendarOff, TbListCheck } from 'react-icons/tb'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import { notifyError } from '../lib/notify'
@@ -228,6 +228,21 @@ export function TasksGanttView({
       timelineEnd: new Date(Math.max(...allMs) + 14 * 86_400_000),
     }
   }, [withDates])
+
+  // ─── Scroll to today on mount + view/data change ────────────────────────────
+  useEffect(() => {
+    if (!timelineStart) return
+    const t = setTimeout(() => {
+      const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) return
+      const daysSinceStart = Math.floor(
+        (now.getTime() - timelineStart.getTime()) / 86_400_000,
+      )
+      const todayPx = daysSinceStart * COL_WIDTH[viewMode]
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+    }, 80)
+    return () => clearTimeout(t)
+  }, [timelineStart, viewMode, ganttTasks.length])
 
   // ─── Empty state ────────────────────────────────────────────────────────────
   if (withDates.length === 0) {

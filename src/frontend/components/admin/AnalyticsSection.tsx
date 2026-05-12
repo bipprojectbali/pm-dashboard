@@ -107,10 +107,10 @@ const TIMELINE_COL_WIDTH = 22
 const TIMELINE_ROW_H = 42
 
 function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
-  const now = useMemo(() => new Date(), [])
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   const ganttTasks = useMemo<GanttTask[]>(() => {
+    const now = new Date()
     const weekOut = new Date(Date.now() + 7 * 86_400_000)
     return timeline
       .filter((p) => p.startsAt || p.endsAt)
@@ -132,7 +132,7 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
           color: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'),
         }
       })
-  }, [timeline, now])
+  }, [timeline])
 
   const allMs = ganttTasks.flatMap((t) => {
     const s = new Date(t.startDate).getTime()
@@ -147,35 +147,14 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
     return Array.from(seen)
   }, [timeline])
 
-  const tlStartRef = useRef(tlStart)
-  tlStartRef.current = tlStart
-
   const scrollToToday = useCallback(() => {
-    const start = tlStartRef.current
-    if (!start) return
+    if (!tlStart) return
     const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
-    const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / 86_400_000)
+    const daysSinceStart = Math.floor((Date.now() - tlStart.getTime()) / 86_400_000)
     const todayPx = daysSinceStart * TIMELINE_COL_WIDTH
     body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
-  }, [now])
-
-  useEffect(() => {
-    if (!tlStart) return
-    let attempts = 0
-    let done = false
-    const tryScroll = () => {
-      if (done) return
-      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body || body.scrollWidth <= body.clientWidth + 10) {
-        if (++attempts < 30) setTimeout(tryScroll, 100)
-        return
-      }
-      done = true
-      scrollToToday()
-    }
-    setTimeout(tryScroll, 100)
-  }, [tlStart, ganttTasks.length, scrollToToday])
+  }, [tlStart])
 
   return (
     <Card withBorder padding="md" radius="md">

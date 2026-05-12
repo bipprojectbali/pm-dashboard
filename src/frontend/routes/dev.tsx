@@ -312,7 +312,59 @@ function DevPage() {
 
       <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ display: 'flex', flexDirection: 'column' }}>
         <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          {/* navGroups hidden */}
+          {navGroups.map((group) => (
+            <Stack key={group.label} gap={4}>
+              {!(collapsed && !isMobile) && (
+                <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.6 }} px="xs" pt={4}>
+                  {group.label}
+                </Text>
+              )}
+              {group.items.map((item) => {
+                const badgeCount = item.badgeKey ? badges[item.badgeKey] : 0
+                if (collapsed && !isMobile) {
+                  return (
+                    <Tooltip key={item.key} label={badgeCount > 0 ? `${item.label} (${badgeCount})` : item.label} position="right" withArrow>
+                      <div style={{ position: 'relative' }}>
+                        <ActionIcon
+                          variant={active === item.key ? 'filled' : 'subtle'}
+                          color={active === item.key ? 'red' : 'gray'}
+                          size="lg"
+                          onClick={() => setActive(item.key)}
+                        >
+                          <item.icon size={18} />
+                        </ActionIcon>
+                        {badgeCount > 0 && (
+                          <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled"
+                            style={{ position: 'absolute', top: -4, right: -4, pointerEvents: 'none' }}>
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </Badge>
+                        )}
+                      </div>
+                    </Tooltip>
+                  )
+                }
+                return (
+                  <NavLink
+                    key={item.key}
+                    label={item.label}
+                    leftSection={<item.icon size={18} />}
+                    rightSection={
+                      badgeCount > 0 ? (
+                        <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
+                          {badgeCount > 99 ? '99+' : badgeCount}
+                        </Badge>
+                      ) : (
+                        <TbChevronRight size={14} />
+                      )
+                    }
+                    color="red"
+                    active={active === item.key}
+                    onClick={() => setActive(item.key)}
+                  />
+                )
+              })}
+            </Stack>
+          ))}
 
           <SidebarAppSwitcher current="dev" role={user?.role} collapsed={collapsed && !isMobile} />
         </Stack>

@@ -914,16 +914,15 @@ export function TasksPanel({
         opened={!!drawerTaskId}
         onClose={closeTask}
         centered
-        size="90vw"
+        size="min(90vw, 1100px)"
         withCloseButton={false}
-        padding={0}
         scrollAreaComponent={ScrollArea.Autosize}
-        overlayProps={{ blur: 3, backgroundOpacity: 0.4 }}
-        transitionProps={{ transition: 'fade-up', duration: 200 }}
-        radius="md"
+        overlayProps={{ blur: 4, backgroundOpacity: 0.45 }}
+        transitionProps={{ transition: 'fade-up', duration: 220 }}
+        radius="lg"
         styles={{
-          content: { maxHeight: '92vh' },
-          body: { padding: 0 },
+          content: { maxHeight: '90vh' },
+          body: { padding: 'var(--mantine-spacing-lg)' },
         }}
       >
         {drawerTaskId && (

@@ -1285,7 +1285,7 @@ function CreateProjectModal({
             )}
           </Group>
           <Group grow>
-            <DateInput
+            <DateInput highlightToday
               label="Mulai"
               placeholder="Opsional"
               value={startsAt}
@@ -1293,7 +1293,7 @@ function CreateProjectModal({
               clearable
               leftSection={<TbClock size={14} />}
             />
-            <DateInput
+            <DateInput highlightToday
               label="Selesai"
               placeholder="Opsional"
               value={endsAt}

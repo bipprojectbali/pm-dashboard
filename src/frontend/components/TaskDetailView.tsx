@@ -775,12 +775,12 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
               <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Planning</Text>
               {canWrite ? (
                 <Stack gap="xs">
-                  <DateInput label="Mulai" placeholder="Opsional" size="xs" clearable
+                  <DateInput highlightToday label="Mulai" placeholder="Opsional" size="xs" clearable
                     leftSection={<TbCalendarEvent size={13} />}
                     value={task.startsAt ? new Date(task.startsAt) : null}
                     onChange={(v) => update.mutate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })}
                   />
-                  <DateInput label="Tenggat" placeholder="Opsional" size="xs" clearable
+                  <DateInput highlightToday label="Tenggat" placeholder="Opsional" size="xs" clearable
                     leftSection={<TbCalendarEvent size={13} />}
                     value={task.dueAt ? new Date(task.dueAt) : null}
                     onChange={(v) => update.mutate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })}

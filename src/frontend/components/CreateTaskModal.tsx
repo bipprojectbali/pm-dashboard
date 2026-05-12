@@ -245,14 +245,14 @@ export function CreateTaskModal({
               />
             </Group>
             <Group grow>
-              <DateInput
+              <DateInput highlightToday
                 label="Start date"
                 placeholder="Optional"
                 value={startsAt}
                 onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
                 clearable
               />
-              <DateInput
+              <DateInput highlightToday
                 label="Due date"
                 placeholder="Optional"
                 value={dueAt}

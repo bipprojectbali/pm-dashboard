@@ -173,7 +173,7 @@ function ExtendDeadlineModal({
         <Text size="sm" c="dimmed">
           Current deadline: <b>{formatDate(currentEndAt)}</b>
         </Text>
-        <DateInput
+        <DateInput highlightToday
           label="New deadline"
           value={newEnd}
           onChange={(v) => setNewEnd(v ? new Date(v as unknown as string) : null)}

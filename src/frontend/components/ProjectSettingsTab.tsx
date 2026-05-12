@@ -193,7 +193,7 @@ export function ProjectSettingsTab({
             disabled={!canManage}
           />
           <Group grow>
-            <DateInput
+            <DateInput highlightToday
               label="Start date"
               placeholder="Optional"
               value={startsAt}
@@ -202,7 +202,7 @@ export function ProjectSettingsTab({
               leftSection={<TbClock size={14} />}
               disabled={!canManage}
             />
-            <DateInput
+            <DateInput highlightToday
               label="End date"
               placeholder="Optional"
               value={endsAt}

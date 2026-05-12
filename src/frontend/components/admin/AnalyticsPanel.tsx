@@ -13,8 +13,8 @@ import {
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import type { EChartsOption } from 'echarts'
-import { useMemo, useState } from 'react'
-import { TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { TbCalendarEvent, TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import { InfoTip } from '../shared/InfoTip'
@@ -459,12 +459,54 @@ export function AnalyticsPanel() {
       })
   }, [overviewData])
 
-  const tlMs = timelineTasks.flatMap((t) => {
-    const s = new Date(t.startDate).getTime()
-    return [s, s + t.duration * 86_400_000]
-  })
-  const tlStart = tlMs.length ? new Date(Math.min(...tlMs) - 7 * 86_400_000) : undefined
-  const tlEnd = tlMs.length ? new Date(Math.max(...tlMs) + 14 * 86_400_000) : undefined
+  const { tlStart, tlEnd } = useMemo(() => {
+    const ms = timelineTasks.flatMap((t) => {
+      const s = new Date(t.startDate).getTime()
+      return [s, s + t.duration * 86_400_000]
+    })
+    return {
+      tlStart: ms.length ? new Date(Math.min(...ms) - 7 * 86_400_000) : undefined,
+      tlEnd: ms.length ? new Date(Math.max(...ms) + 14 * 86_400_000) : undefined,
+    }
+  }, [timelineTasks])
+
+  // month view: effectiveColWidth = max(22/6, 7) ≈ 7px per day
+  const AP_EFFECTIVE_DAY_PX = Math.max(22 / 6, 7)
+  const tlWrapperRef = useRef<HTMLDivElement>(null)
+
+  const scrollToToday = useCallback(() => {
+    if (!tlStart) return
+    const body = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body) return
+    const daysSinceStart = Math.floor((Date.now() - tlStart.getTime()) / 86_400_000)
+    body.scrollTo({ left: Math.max(0, daysSinceStart * AP_EFFECTIVE_DAY_PX - body.clientWidth / 2), behavior: 'smooth' })
+  }, [tlStart, AP_EFFECTIVE_DAY_PX])
+
+  useEffect(() => {
+    if (!tlStart) return
+    let attempts = 0
+    const tryScroll = () => {
+      const content = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
+      if (!content || content.offsetWidth < 200) {
+        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        return
+      }
+      scrollToToday()
+    }
+    setTimeout(tryScroll, 80)
+  }, [tlStart, timelineTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // rows dari overviewData untuk sidebar (sebelum transform ke GanttTask)
+  const timelineRows = useMemo(() => {
+    const rows = overviewData?.timeline ?? []
+    const now = new Date()
+    const weekOut = new Date(Date.now() + 7 * 86_400_000)
+    return rows
+      .filter((r) => r.startsAt || r.endsAt)
+      .sort((a, b) => (a.endsAt ?? '').localeCompare(b.endsAt ?? ''))
+      .slice(0, 12)
+      .map((r) => ({ ...r, start: r.startsAt ? new Date(r.startsAt) : now, end: r.endsAt ? new Date(r.endsAt) : weekOut }))
+  }, [overviewData])
 
   const refetchAll = () => {
     refetchOverview()
@@ -584,19 +626,55 @@ export function AnalyticsPanel() {
             <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
           </Group>
         )}
+        {timelineTasks.length > 0 && (
+          <Group justify="flex-end" mb="xs">
+            <Tooltip label="Scroll ke hari ini" withArrow>
+              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+                <TbCalendarEvent size={13} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        )}
         {timelineTasks.length === 0 ? (
           <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
         ) : (
-          <Gantt
-            tasks={timelineTasks}
-            viewMode="month"
-            startDate={tlStart}
-            endDate={tlEnd}
-            columnWidth={22}
-            rowHeight={42}
-            taskListWidth={220}
-            showTodayMarker
-          />
+          <div style={{
+            display: 'flex',
+            height: Math.max(200, timelineTasks.length * 42 + 60),
+            border: '1px solid var(--mantine-color-default-border)',
+            borderRadius: 'var(--mantine-radius-md)',
+            overflow: 'hidden',
+          }}>
+            {/* Custom sidebar */}
+            <div style={{ width: 180, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
+              <div style={{ height: 56, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 10px 8px' }}>
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
+                {timelineRows.map((r) => (
+                  <div key={r.id} style={{ height: 42, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6, borderBottom: '1px solid var(--mantine-color-default-border)', overflow: 'hidden' }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: r.slipped ? '#b86d2a' : `var(--mantine-color-${AP_PROJ_COLOR[r.status] ?? 'blue'}-6)`, flexShrink: 0 }} />
+                    <Text size="xs" fw={500} truncate title={r.name}>{r.name}</Text>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Gantt timeline */}
+            <div ref={tlWrapperRef} style={{ flex: 1, overflow: 'hidden' }}>
+              <Gantt
+                tasks={timelineTasks}
+                viewMode="month"
+                startDate={tlStart}
+                endDate={tlEnd}
+                columnWidth={22}
+                rowHeight={42}
+                taskListWidth={0}
+                showTodayMarker
+                showTitle
+                styles={{ taskList: { display: 'none' } }}
+              />
+            </div>
+          </div>
         )}
       </ChartCard>
 

@@ -937,32 +937,39 @@ function ProjectCard({
         </Group>
 
         <Group gap={4} wrap="wrap">
-          <Badge color={STATUS_COLOR[p.status]} variant="outline" size="xs">
+          <Badge variant="default" size="xs" style={{ border: 'none' }}>
             {p.status.replace('_', ' ')}
           </Badge>
-          <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
+          <Badge
+            variant="default"
+            size="xs"
+            style={{ border: 'none' }}
+            leftSection={
+              <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`, flexShrink: 0 }} />
+            }
+          >
             {p.priority}
           </Badge>
           {p.myRole ? (
-            <Badge color={ROLE_COLOR[p.myRole]} variant="outline" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               {p.myRole}
             </Badge>
           ) : isAdmin ? (
-            <Badge color="gray" variant="outline" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               ADMIN VIEW
             </Badge>
           ) : (
-            <Badge color="gray" variant="outline" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               READ-ONLY
             </Badge>
           )}
           {p.visibility === 'PRIVATE' && (
-            <Badge color="orange" variant="outline" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               PRIVATE
             </Badge>
           )}
           {overdue && (
-            <Badge color="red" variant="outline" size="xs" leftSection={<TbAlertTriangle size={10} />}>
+            <Badge variant="default" size="xs" style={{ border: 'none' }} leftSection={<TbAlertTriangle size={10} color="var(--mantine-color-red-6)" />}>
               Overdue {daysOver}d
             </Badge>
           )}
@@ -971,14 +978,10 @@ function ProjectCard({
               <Badge
                 variant="default"
                 size="xs"
-                leftSection={
-                  <div style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    backgroundColor: `var(--mantine-color-${health.color}-6)`,
-                    flexShrink: 0,
-                  }} />
-                }
                 style={{ border: 'none' }}
+                leftSection={
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${health.color}-6)`, flexShrink: 0 }} />
+                }
               >
                 {health.label.toUpperCase()}
               </Badge>
@@ -986,7 +989,7 @@ function ProjectCard({
           )}
           {extended && (
             <Tooltip label={`Original deadline: ${formatDate(p.originalEndAt)}`}>
-              <Badge color="grape" variant="outline" size="xs">
+              <Badge variant="default" size="xs" style={{ border: 'none' }}>
                 Extended
               </Badge>
             </Tooltip>

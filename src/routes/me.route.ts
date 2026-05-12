@@ -332,6 +332,7 @@ export function meRoutes() {
         email: string
         role: string
         blocked: boolean
+        image: string | null
         sharedProjects: ShareEntry[]
       }
       const teammateMap = new Map<string, Teammate>()
@@ -344,6 +345,7 @@ export function meRoutes() {
           email: m.user.email,
           role: m.user.role,
           blocked: m.user.blocked,
+          image: m.user.image ?? null,
           sharedProjects: [],
         }
         existing.sharedProjects.push({

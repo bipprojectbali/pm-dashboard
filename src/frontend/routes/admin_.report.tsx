@@ -39,6 +39,7 @@ import {
   TbUsersGroup,
 } from 'react-icons/tb'
 import { EChart } from '@/frontend/components/charts/EChart'
+import { toLocalDateStr } from '@/frontend/lib/dates'
 
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -305,7 +306,7 @@ function ReportPage() {
     setPdfState({ busy: true, progress: { done: 0, total: 0 } })
     try {
       const { generateReportPdf } = await import('@/frontend/lib/report-pdf')
-      const filename = `portfolio-report-${preset}-${new Date().toISOString().slice(0, 10)}.pdf`
+      const filename = `portfolio-report-${preset}-${toLocalDateStr(new Date())}.pdf`
       await generateReportPdf(root, filename, (done, total) => setPdfState({ busy: true, progress: { done, total } }))
       setPdfState({ busy: false })
     } catch (err) {

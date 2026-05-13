@@ -18,6 +18,7 @@ import { TbCalendarEvent, TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } f
 import { EChart } from '../charts/EChart'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import { InfoTip } from '../shared/InfoTip'
+import { toLocalDateStr } from '../../lib/dates'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -451,7 +452,7 @@ export function AnalyticsPanel() {
         return {
           id: r.id,
           label: `${r.name}  —  ${suffix}`,
-          startDate: start.toISOString().slice(0, 10),
+          startDate: toLocalDateStr(start),
           duration,
           progress: 0,
           color: r.slipped ? 'orange' : (AP_PROJ_COLOR[r.status] ?? 'blue'),

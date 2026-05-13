@@ -196,12 +196,14 @@ export function TasksGanttView({
     withDates.map((t) => {
       const startDate = new Date(t.startsAt ?? t.createdAt)
       const endDate = new Date(t.dueAt as string)
-      const duration = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000))
+      const startMidnight = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+      const endMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+      const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
       const isOverdue = t.status !== 'CLOSED' && endDate < now
       return {
         id: t.id,
         label: t.title,
-        startDate: startDate.toISOString().slice(0, 10),
+        startDate: `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}T00:00:00`,
         duration,
         progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
         color: isOverdue ? OVERDUE_COLOR : STATUS_COLOR[t.status],
@@ -229,9 +231,13 @@ export function TasksGanttView({
       new Date(t.startsAt ?? t.createdAt).getTime(),
       new Date(t.dueAt as string).getTime(),
     ])
+    const toLocalMidnight = (ms: number) => {
+      const d = new Date(ms)
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    }
     return {
-      timelineStart: new Date(Math.min(...allMs) - 7 * 86_400_000),
-      timelineEnd: new Date(Math.max(...allMs) + 14 * 86_400_000),
+      timelineStart: toLocalMidnight(Math.min(...allMs) - 7 * 86_400_000),
+      timelineEnd: toLocalMidnight(Math.max(...allMs) + 14 * 86_400_000),
     }
   }, [withDates])
 

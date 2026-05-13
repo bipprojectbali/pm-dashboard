@@ -15,15 +15,15 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
-import { TbBrandTelegram, TbCheck, TbSend } from 'react-icons/tb'
+import { TbBrandTelegram, TbCheck, TbSend, TbPlugConnected } from 'react-icons/tb'
 
 type Settings = Record<string, string>
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`)
+    const err = await res.json().catch(() => ({})) as { error?: string; message?: string }
+    throw new Error(err.message ?? err.error ?? `HTTP ${res.status}`)
   }
   return res.json()
 }
@@ -42,6 +42,7 @@ export function ChannelSettingsPanel() {
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'app-settings'],
     queryFn: () => apiFetch<{ settings: Settings }>('/api/admin/app-settings'),
+    staleTime: 0,
   })
   const settings = data?.settings ?? {}
 
@@ -74,6 +75,18 @@ export function ChannelSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Gagal', message: e.message }),
   })
 
+  const testTelegram = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/test-telegram', { method: 'POST' }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        notifications.show({ color: 'teal', title: 'Test berhasil!', message: res.message })
+      } else {
+        notifications.show({ color: 'red', title: 'Test gagal', message: res.message })
+      }
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
   const sendNow = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
     onSuccess: (res) => {
@@ -88,6 +101,7 @@ export function ChannelSettingsPanel() {
   })
 
   const lastSent = settings['report.lastSentAt']
+  const hasApiKey = !!settings['ai.anthropicApiKey']
 
   return (
     <Stack gap="lg">
@@ -142,16 +156,29 @@ export function ChannelSettingsPanel() {
           )}
 
           <Group justify="space-between">
-            <Button
-              variant="light"
-              color="blue"
-              leftSection={<TbSend size={14} />}
-              onClick={() => sendNow.mutate()}
-              loading={sendNow.isPending}
-              disabled={!chatId || !botToken}
-            >
-              Kirim Test Sekarang
-            </Button>
+            <Group gap="xs">
+              <Button
+                variant="light"
+                color="cyan"
+                leftSection={<TbPlugConnected size={14} />}
+                onClick={() => testTelegram.mutate()}
+                loading={testTelegram.isPending}
+                disabled={!chatId || !botToken}
+              >
+                Test Koneksi
+              </Button>
+              <Button
+                variant="light"
+                color="blue"
+                leftSection={<TbSend size={14} />}
+                onClick={() => sendNow.mutate()}
+                loading={sendNow.isPending}
+                disabled={!chatId || !botToken || !hasApiKey}
+                title={!hasApiKey ? 'Anthropic API key belum dikonfigurasi' : undefined}
+              >
+                Kirim Laporan
+              </Button>
+            </Group>
             <Button
               leftSection={<TbCheck size={14} />}
               onClick={() => save.mutate()}

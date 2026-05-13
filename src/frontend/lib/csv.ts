@@ -1,3 +1,4 @@
+import { toLocalDateStr } from './dates'
 // Lightweight RFC 4180-style CSV utilities for Task bulk import.
 // Strict — does not coerce silently; surfaces structured errors.
 
@@ -184,8 +185,8 @@ export function parseTaskCsv(text: string): ParseResult {
 }
 
 export function buildSampleCsv(): string {
-  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
-  const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  const tomorrow = toLocalDateStr(new Date(Date.now() + 86_400_000))
+  const nextWeek = toLocalDateStr(new Date(Date.now() + 7 * 86_400_000))
   const lines: string[] = []
   lines.push(TASK_CSV_HEADERS.join(','))
   lines.push(

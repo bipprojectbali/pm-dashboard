@@ -16,6 +16,7 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
+import { toLocalDateStr } from '../lib/dates'
 import { useMemo, useState } from 'react'
 import {
   TbBrandGithub,
@@ -94,7 +95,7 @@ const WINDOWS: { label: string; days: number }[] = [
 
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
-  return new Date(iso).toISOString().slice(0, 10)
+  return toLocalDateStr(new Date(iso))
 }
 
 export function RetroTab({ projectId }: { projectId: string }) {

@@ -202,16 +202,17 @@ async function runDailyReport() {
   const enabled = await getSetting('telegram.enabled')
   if (enabled !== 'true') return
   const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
+  const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
   // Convert UTC to WIB (UTC+7)
   const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
-  if (nowWIB.getUTCHours() !== schedHour) return
+  if (nowWIB.getUTCHours() !== schedHour || nowWIB.getUTCMinutes() !== schedMinute) return
   // Dedup: jangan kirim dua kali dalam 1 jam
   const last = await getSetting('report.lastSentAt')
   if (last && Date.now() - new Date(last).getTime() < 60 * 60 * 1000) return
   await generateAndSendDailyReport()
 }
 
-setInterval(() => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`)), 60 * 60 * 1000)
+setInterval(() => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`)), 60 * 1000)
 
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'

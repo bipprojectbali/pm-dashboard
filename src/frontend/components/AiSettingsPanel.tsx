@@ -6,7 +6,6 @@ import {
   Divider,
   Group,
   Loader,
-  NumberInput,
   PasswordInput,
   ScrollArea,
   Select,
@@ -21,15 +20,16 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
-import { TbCheck, TbCopy, TbEye, TbRobot, TbSend } from 'react-icons/tb'
+import { TimePicker } from '@mantine/dates'
+import { TbCheck, TbCopy, TbEye, TbPlugConnected, TbRobot, TbSend } from 'react-icons/tb'
 
 type Settings = Record<string, string>
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`)
+    const err = await res.json().catch(() => ({})) as { error?: string; message?: string }
+    throw new Error(err.message ?? err.error ?? `HTTP ${res.status}`)
   }
   return res.json()
 }
@@ -60,7 +60,7 @@ export function AiSettingsPanel() {
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
-  const [scheduleHour, setScheduleHour] = useState<number | string>(18)
+  const [scheduleTime, setScheduleTime] = useState('18:00')
   const [dirty, setDirty] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
 
@@ -69,7 +69,9 @@ export function AiSettingsPanel() {
     setApiKey(settings['ai.anthropicApiKey'] ?? '')
     setBaseUrl(settings['ai.baseUrl'] ?? '')
     setModel(settings['ai.model'] ?? 'claude-opus-4-7')
-    setScheduleHour(parseInt(settings['report.scheduleHour'] ?? '18', 10))
+    const h = (settings['report.scheduleHour'] ?? '18').padStart(2, '0')
+    const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
+    setScheduleTime(`${h}:${m}`)
     setDirty(false)
   }, [data])
 
@@ -79,7 +81,8 @@ export function AiSettingsPanel() {
         saveSetting('ai.anthropicApiKey', apiKey),
         saveSetting('ai.baseUrl', baseUrl),
         saveSetting('ai.model', model),
-        saveSetting('report.scheduleHour', String(scheduleHour)),
+        saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
+        saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
       ])
     },
     onSuccess: () => {
@@ -102,6 +105,18 @@ export function AiSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
 
+  const testAi = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/test-ai', { method: 'POST' }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        notifications.show({ color: 'teal', title: 'Koneksi OK', message: res.message })
+      } else {
+        notifications.show({ color: 'red', title: 'Koneksi gagal', message: res.message })
+      }
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
   const sendNow = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
     onSuccess: (res) => {
@@ -116,8 +131,6 @@ export function AiSettingsPanel() {
   })
 
   const apiKeySet = settings['ai.anthropicApiKey'] === '***'
-  const schedHour = typeof scheduleHour === 'number' ? scheduleHour : parseInt(String(scheduleHour), 10)
-  const schedLabel = `${String(schedHour).padStart(2, '0')}:00 WIB`
 
   return (
     <Stack gap="lg">
@@ -163,15 +176,42 @@ export function AiSettingsPanel() {
             onChange={(v) => { if (v) { setModel(v); setDirty(true) } }}
           />
 
-          <NumberInput
-            label="Jam kirim laporan (WIB)"
-            description={`Laporan dikirim setiap hari jam ${schedLabel}. Server menggunakan UTC+7.`}
-            min={0}
-            max={23}
-            value={scheduleHour}
-            onChange={(v) => { setScheduleHour(v); setDirty(true) }}
-          />
+          <Group justify="space-between">
+            <Button
+              variant="light"
+              color="violet"
+              leftSection={<TbPlugConnected size={14} />}
+              onClick={() => testAi.mutate()}
+              loading={testAi.isPending}
+              disabled={!apiKeySet && !apiKey}
+            >
+              Test Koneksi AI
+            </Button>
+            <Button
+              leftSection={<TbCheck size={14} />}
+              onClick={() => save.mutate()}
+              loading={save.isPending || isLoading}
+              disabled={!dirty}
+            >
+              Simpan
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
 
+      <Card withBorder padding="lg" radius="md">
+        <Stack gap="md">
+          <Stack gap={0}>
+            <Text fw={500} size="sm">Jadwal Laporan</Text>
+            <Text size="xs" c="dimmed">Laporan harian dikirim otomatis ke Telegram sesuai jam yang dikonfigurasi.</Text>
+          </Stack>
+          <Divider />
+          <TimePicker
+            label="Jam kirim laporan (WIB)"
+            description="Laporan dikirim setiap hari pada waktu ini. Server menggunakan UTC+7."
+            value={scheduleTime}
+            onChange={(v) => { setScheduleTime(v); setDirty(true) }}
+          />
           <Group justify="flex-end">
             <Button
               leftSection={<TbCheck size={14} />}

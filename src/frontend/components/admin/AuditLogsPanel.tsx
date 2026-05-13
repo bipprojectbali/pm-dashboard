@@ -36,6 +36,7 @@ import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { toLocalDateStr } from '@/frontend/lib/dates'
 
 interface AdminUser {
   id: string
@@ -96,7 +97,7 @@ function downloadCsv(rows: AuditLogEntry[]) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `audit-logs-${toLocalDateStr(new Date())}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -164,13 +165,13 @@ export function AuditLogsPanel() {
       const d = new Date()
       d.setHours(0, 0, 0, 0)
       d.setDate(d.getDate() - i)
-      days.push({ key: d.toISOString().slice(0, 10), label: d.toISOString().slice(5, 10), ok: 0, fail: 0, blocked: 0 })
+      days.push({ key: toLocalDateStr(d), label: toLocalDateStr(d).slice(5), ok: 0, fail: 0, blocked: 0 })
     }
     const index = new Map(days.map((d, i) => [d.key, i]))
     for (const l of allLogs) {
       const d = new Date(l.createdAt)
       d.setHours(0, 0, 0, 0)
-      const i = index.get(d.toISOString().slice(0, 10))
+      const i = index.get(toLocalDateStr(d))
       if (i === undefined) continue
       if (l.action === 'LOGIN') days[i].ok++
       else if (l.action === 'LOGIN_FAILED') days[i].fail++

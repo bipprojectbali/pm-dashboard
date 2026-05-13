@@ -2,6 +2,7 @@ import { Card, SimpleGrid, Stack, Text } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { useMemo } from 'react'
 import { EChart } from './charts/EChart'
+import { toLocalDateStr } from '../lib/dates'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 
@@ -62,7 +63,7 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today)
       d.setDate(today.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
+      const key = toLocalDateStr(d)
       keyToIdx.set(key, buckets.length)
       buckets.push({ date: key, created: 0, closed: 0 })
     }

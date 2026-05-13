@@ -3,6 +3,7 @@ import type { EChartsOption } from 'echarts'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { TbCalendarEvent, TbChartDonut, TbChartLine, TbInfoCircle, TbTimeline } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
+import { toLocalDateStr } from '../../lib/dates'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -129,7 +130,7 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
         return {
           id: p.id,
           label: `${p.name}  —  ${suffix}`,
-          startDate: start.toISOString().slice(0, 10),
+          startDate: toLocalDateStr(start),
           duration,
           progress: 0,
           color: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'),

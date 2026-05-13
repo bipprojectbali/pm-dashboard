@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { generateAndSendDailyReport, generateReportPreview } from '../lib/daily-report'
-import { getAllSettings, setSetting } from '../lib/app-settings'
+import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 import { prisma } from '../lib/db'
 
@@ -45,6 +45,73 @@ export function settingsRoutes() {
       if (SENSITIVE_KEYS.includes(key) && value === '***') return { ok: true, skipped: true }
       await setSetting(key, value, user.id)
       return { ok: true }
+    })
+
+    .post('/api/admin/report/test-ai', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      const [apiKey, model, baseUrl] = await Promise.all([
+        getSetting('ai.anthropicApiKey'),
+        getSetting('ai.model'),
+        getSetting('ai.baseUrl'),
+      ])
+      if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
+      const endpoint = baseUrl
+        ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
+        : 'https://api.anthropic.com/v1/messages'
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model ?? 'claude-haiku-4-5-20251001',
+            max_tokens: 16,
+            messages: [{ role: 'user', content: 'Reply with: OK' }],
+          }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: { message?: string } }
+          set.status = 502
+          return { ok: false, message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` }
+        }
+        return { ok: true, message: `Koneksi Claude API berhasil (model: ${model ?? 'claude-haiku-4-5-20251001'})` }
+      } catch (e) {
+        set.status = 502
+        return { ok: false, message: e instanceof Error ? e.message : String(e) }
+      }
+    })
+
+    .post('/api/admin/report/test-telegram', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      const [botToken, chatId] = await Promise.all([
+        getSetting('telegram.botToken'),
+        getSetting('telegram.chatId'),
+      ])
+      if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
+      if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: '✅ Test berhasil! Koneksi Telegram pm-dashboard berjalan normal.' }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { description?: string }
+          set.status = 502
+          return { ok: false, message: `Telegram error ${res.status}: ${err.description ?? 'unknown'}` }
+        }
+        return { ok: true, message: 'Pesan test berhasil dikirim ke Telegram' }
+      } catch (e) {
+        set.status = 502
+        return { ok: false, message: e instanceof Error ? e.message : String(e) }
+      }
     })
 
     .post('/api/admin/report/send-now', async ({ request, set }) => {

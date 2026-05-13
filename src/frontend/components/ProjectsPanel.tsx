@@ -51,6 +51,7 @@ import {
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
+import { toLocalDateStr } from '../lib/dates'
 import { UserAvatar } from './shared/UserAvatar'
 
 export type MemberRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
@@ -1517,7 +1518,7 @@ function ProjectsGanttView({
       return {
         id: p.id,
         label: p.name,
-        startDate: start.toISOString().slice(0, 10),
+        startDate: toLocalDateStr(start),
         duration,
         progress: computeTaskProgress(p) ?? 0,
         color: isOverdue ? PROJECT_GANTT_OVERDUE : slipped ? '#b86d2a' : PROJECT_GANTT_COLOR[p.status],

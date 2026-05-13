@@ -55,6 +55,7 @@ import { TaskDetailView } from '@/frontend/components/TaskDetailView'
 import { TasksPanel } from '@/frontend/components/TasksPanel'
 import { TeamPanel } from '@/frontend/components/TeamPanel'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
+import { toLocalDateStr } from '@/frontend/lib/dates'
 
 const validTabs = ['overview', 'projects', 'tasks', 'activity', 'team'] as const
 type TabKey = (typeof validTabs)[number]
@@ -184,6 +185,7 @@ function PmPage() {
   }
   const setProjectDetailTab = (next: ProjectDetailTab) => {
     if (!activeProjectId) return
+    localStorage.setItem(`pm:project:${activeProjectId}:tab`, next)
     navigate({ to: '/pm', search: { tab: 'projects', projectId: activeProjectId, detailTab: next } })
   }
   const closeProjectDetail = () => {
@@ -338,7 +340,7 @@ function PmPage() {
                 (activeProjectId ? (
                   <ProjectDetailView
                     projectId={activeProjectId}
-                    tab={detailTab ?? 'overview'}
+                    tab={detailTab ?? (localStorage.getItem(`pm:project:${activeProjectId}:tab`) as ProjectDetailTab | null) ?? 'overview'}
                     onTabChange={setProjectDetailTab}
                     onBack={closeProjectDetail}
                     onDeleted={closeProjectDetail}
@@ -558,7 +560,7 @@ function OverviewPanel({
       const d = new Date()
       d.setHours(0, 0, 0, 0)
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
+      const key = toLocalDateStr(d)
       days.push({ key, label: key.slice(5), count: 0 })
     }
     const index = new Map(days.map((d, i) => [d.key, i]))
@@ -566,7 +568,7 @@ function OverviewPanel({
       if (!t.closedAt) continue
       const d = new Date(t.closedAt)
       d.setHours(0, 0, 0, 0)
-      const i = index.get(d.toISOString().slice(0, 10))
+      const i = index.get(toLocalDateStr(d))
       if (i !== undefined) days[i].count++
     }
     return {

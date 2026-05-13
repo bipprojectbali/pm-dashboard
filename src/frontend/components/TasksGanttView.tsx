@@ -1,7 +1,7 @@
 import { ActionIcon, Badge, Card, Divider, Group, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { TbAlertTriangle, TbCalendarOff, TbCalendarEvent, TbListCheck } from 'react-icons/tb'
 import { Gantt, type GanttTask } from 'mantine-gantt'
 import { notifyError } from '../lib/notify'
@@ -25,6 +25,7 @@ interface TaskListItem {
   estimateHours: number | null; actualHours: number | null; progressPercent: number | null
   createdAt: string; updatedAt: string; closedAt: string | null
   project: { id: string; name: string }; tags: TaskTag[]
+  blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }
 
@@ -68,7 +69,7 @@ const EFFECTIVE_DAY_PX: Record<ViewMode, number> = {
   month: Math.max(120 / 6, 7),
 }
 
-const TASK_LIST_WIDTH = 280
+const TASK_LIST_WIDTH = 300
 const ROW_HEIGHT = 52
 const HEADER_HEIGHT = 50
 
@@ -99,6 +100,7 @@ export function TasksGanttView({
 
   const pendingRef = useRef<Map<string, { startsAt: string; dueAt: string }>>(new Map())
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedScrollRef = useRef<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [listCollapsed, setListCollapsed] = useLocalStorage({
     key: 'pm:tasks:gantt-list-collapsed',
@@ -164,6 +166,40 @@ export function TasksGanttView({
     onError: (err) => { notifyError(err); setSaving(false) },
   })
 
+  const addDependency = useMutation({
+    mutationFn: ({ taskId, blockedById }: { taskId: string; blockedById: string }) =>
+      api(`/api/tasks/${taskId}/dependencies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockedById }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onError: (err) => notifyError(err),
+  })
+
+  const removeDependency = useMutation({
+    mutationFn: ({ taskId, blockedById }: { taskId: string; blockedById: string }) =>
+      api(`/api/tasks/${taskId}/dependencies/${blockedById}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onError: (err) => notifyError(err),
+  })
+
+  const handleLinkCreate = useCallback(
+    (fromTaskId: string, toTaskId: string) => {
+      // Simpan scroll position sebelum remount akibat key change
+      const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (body) savedScrollRef.current = body.scrollLeft
+      const already = withDates.find((t) => t.id === toTaskId)
+        ?.blockedBy.some((b) => b.blockedById === fromTaskId)
+      if (already) {
+        removeDependency.mutate({ taskId: toTaskId, blockedById: fromTaskId })
+      } else {
+        addDependency.mutate({ taskId: toTaskId, blockedById: fromTaskId })
+      }
+    },
+    [addDependency, removeDependency, withDates, ganttWrapperRef],
+  )
+
   const flushPending = useCallback(() => {
     const entries = Array.from(pendingRef.current.entries())
     pendingRef.current.clear()
@@ -207,7 +243,7 @@ export function TasksGanttView({
         duration,
         progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
         color: isOverdue ? OVERDUE_COLOR : STATUS_COLOR[t.status],
-        dependencies: [],
+        dependencies: t.blockedBy.map((b) => b.blockedById),
       }
     }), [withDates, now])
 
@@ -222,6 +258,8 @@ export function TasksGanttView({
       assigneeImage: t.assignee?.image ?? null,
       isOverdue: t.status !== 'CLOSED' && !!t.dueAt && new Date(t.dueAt) < now,
       progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
+      startsAt: t.startsAt,
+      dueAt: t.dueAt,
     })), [withDates, now])
 
   // ─── Timeline bounds ────────────────────────────────────────────────────────
@@ -241,18 +279,32 @@ export function TasksGanttView({
     }
   }, [withDates])
 
-  const scrollToToday = useCallback(() => {
+  const scrollToToday = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (!timelineStart) return
     const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
     const todayPx = daysSinceStart * EFFECTIVE_DAY_PX[viewMode]
-    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
   }, [timelineStart, viewMode, now])
 
-  // Auto-scroll on first render after columns are ready
+  // Restore scroll position setelah dependency toggle — sebelum browser paint agar tidak glide
+  useLayoutEffect(() => {
+    const saved = savedScrollRef.current
+    if (saved === null) return
+    savedScrollRef.current = null
+    let attempts = 0
+    const tryRestore = () => {
+      const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) { if (++attempts < 20) requestAnimationFrame(tryRestore); return }
+      body.scrollLeft = saved
+    }
+    requestAnimationFrame(tryRestore)
+  }, [ganttTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to today saat mount pertama atau viewMode berubah
   useEffect(() => {
-    if (!timelineStart) return
+    if (!timelineStart || savedScrollRef.current !== null) return
     let attempts = 0
     const tryScroll = () => {
       const content = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
@@ -260,7 +312,7 @@ export function TasksGanttView({
         if (++attempts < 40) { setTimeout(tryScroll, 80); return }
         return
       }
-      scrollToToday()
+      scrollToToday('instant')
     }
     setTimeout(tryScroll, 80)
   }, [timelineStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -310,7 +362,7 @@ export function TasksGanttView({
           </Group>
           <Group gap="xs" wrap="nowrap">
             <Tooltip label="Scroll ke hari ini" withArrow>
-              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+              <ActionIcon variant="light" size="sm" color="red" onClick={() => scrollToToday()}>
                 <TbCalendarEvent size={14} />
               </ActionIcon>
             </Tooltip>
@@ -384,6 +436,7 @@ export function TasksGanttView({
             onScroll={syncScrollFromGantt}
           >
             <Gantt
+              key={ganttTasks.map((t) => `${t.id}:${(t.dependencies ?? []).join('|')}`).join(',')}
               tasks={ganttTasks}
               viewMode={viewMode}
               startDate={timelineStart}
@@ -393,6 +446,7 @@ export function TasksGanttView({
               taskListWidth={0}
               showTodayMarker
               onTaskUpdate={handleTaskUpdate}
+              onLinkCreate={handleLinkCreate}
               onTaskClick={(t) => onSelect(t.id)}
               showTitle
               styles={{ taskList: { display: 'none' } }}
@@ -402,7 +456,7 @@ export function TasksGanttView({
 
         {/* ── Hint ── */}
         <Text size="xs" c="dimmed" ta="center">
-          💡 Seret bar untuk ubah jadwal · Tarik tepi bar untuk ubah durasi · Klik bar untuk buka detail
+          💡 Seret bar untuk ubah jadwal · Tarik tepi bar untuk ubah durasi · Klik bar untuk buka detail · Tarik ujung bar ke bar lain untuk tambah dependency · Hapus dependency via tab Dependencies di detail task
         </Text>
 
       </Stack>

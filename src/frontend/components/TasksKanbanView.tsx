@@ -382,7 +382,7 @@ export function TasksKanbanView({
                                   </Tooltip>
                                   {t.dueAt && (
                                     <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
-                                      {new Date(t.dueAt).toLocaleDateString()}
+                                      {new Date(t.dueAt).toLocaleDateString('id-ID')}
                                     </Text>
                                   )}
                                 </Group>

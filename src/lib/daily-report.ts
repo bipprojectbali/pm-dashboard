@@ -1,6 +1,18 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
 import { appLog } from './applog'
 import { getSetting, setSetting } from './app-settings'
+import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
+
+export const DEFAULT_REPORT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
+1. Cerdas dan manusiawi — bukan sekadar daftar angka
+2. Berikan pendapat nyata dan analisis tren kondisi tim & project
+3. Highlight risiko yang perlu perhatian segera dan alasannya
+4. Bandingkan kinerja antar anggota tim secara fair — siapa produktif, siapa perlu dukungan
+5. Identifikasi project yang paling kritis dan mengapa
+6. Berikan 2-3 rekomendasi konkret yang bisa dilakukan besok
+7. Panjang 400-600 kata, pakai format Telegram Markdown (*bold*, _italic_)
+8. Mulai dengan: "📊 *Laporan Harian — {TANGGAL}*" lalu ringkasan 1 kalimat kondisi keseluruhan
+9. Akhiri dengan footer: "_Laporan dibuat otomatis oleh AI pm-dashboard_"`
 
 // ─── Claude API ──────────────────────────────────────────────────────────────
 
@@ -56,11 +68,13 @@ async function sendToTelegram(botToken: string, chatId: string, text: string): P
 // ─── Prompt builder ──────────────────────────────────────────────────────────
 
 async function buildReportPrompt(): Promise<string> {
-  const [overview, health, load, risk] = await Promise.all([
+  const [overview, health, load, risk, customInstruction, snapshotContext] = await Promise.all([
     computeAdminOverview({ recentAuditLimit: 0 }),
     computeProjectHealth({ includeArchived: false, limit: 50 }),
     computeTeamLoad({ includeUnassigned: false, limit: 30 }),
     computeRiskReport(),
+    getSetting('report.promptInstruction'),
+    buildSnapshotContext(),
   ])
 
   const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
@@ -106,23 +120,79 @@ ${userLines || '- Tidak ada data tim'}
 
 ═══ SINYAL RISIKO (${risk.severity.toUpperCase()}) ═══
 ${riskLines}
-
+${snapshotContext}
 ═══ INSTRUKSI LAPORAN ═══
-Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
-1. Cerdas dan manusiawi — bukan sekadar daftar angka
-2. Berikan pendapat nyata dan analisis tren kondisi tim & project
-3. Highlight risiko yang perlu perhatian segera dan alasannya
-4. Bandingkan kinerja antar anggota tim secara fair — siapa produktif, siapa perlu dukungan
-5. Identifikasi project yang paling kritis dan mengapa
-6. Berikan 2-3 rekomendasi konkret yang bisa dilakukan besok
-7. Panjang 400-600 kata, pakai format Telegram Markdown (*bold*, _italic_)
-8. Mulai dengan: "📊 *Laporan Harian — ${tanggal}*" lalu ringkasan 1 kalimat kondisi keseluruhan
-9. Akhiri dengan footer: "_Laporan dibuat otomatis oleh AI pm-dashboard_"
+${(customInstruction ?? DEFAULT_REPORT_INSTRUCTION).replace('{TANGGAL}', tanggal)}
 
 Tulis laporan sekarang:`
 }
 
+// ─── Concurrency guard ────────────────────────────────────────────────────────
+// In-memory lock: hanya satu pengiriman boleh berjalan di proses ini pada satu
+// waktu. Mencegah race antara cron + tombol manual + double-click.
+let sendInFlight: Promise<{ ok: boolean; message: string }> | null = null
+
+// Minimum jeda antar pengiriman (manual atau cron). Bisa di-override via setting
+// `report.cooldownMinutes` (default 30 menit). Test endpoint tidak terpengaruh.
+const DEFAULT_COOLDOWN_MIN = 30
+
+async function getCooldownMs(): Promise<number> {
+  const raw = await getSetting('report.cooldownMinutes')
+  const min = raw ? parseInt(raw, 10) : DEFAULT_COOLDOWN_MIN
+  return (Number.isFinite(min) && min > 0 ? min : DEFAULT_COOLDOWN_MIN) * 60 * 1000
+}
+
+async function checkCooldown(force: boolean): Promise<{ blocked: boolean; remainingMs: number }> {
+  if (force) return { blocked: false, remainingMs: 0 }
+  const last = await getSetting('report.lastSentAt')
+  if (!last) return { blocked: false, remainingMs: 0 }
+  const cooldown = await getCooldownMs()
+  const elapsed = Date.now() - new Date(last).getTime()
+  if (elapsed < cooldown) return { blocked: true, remainingMs: cooldown - elapsed }
+  return { blocked: false, remainingMs: 0 }
+}
+
+function fmtMinutes(ms: number): string {
+  const min = Math.ceil(ms / 60_000)
+  return min >= 60 ? `${Math.ceil(min / 60)} jam` : `${min} menit`
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
+
+export async function buildPromptOnly(): Promise<string> {
+  return buildReportPrompt()
+}
+
+export async function sendCustomReport(text: string, opts: { force?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
+  if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
+  const cd = await checkCooldown(opts.force ?? false)
+  if (cd.blocked) {
+    return { ok: false, message: `Cooldown aktif — laporan terakhir dikirim baru-baru ini. Tunggu ${fmtMinutes(cd.remainingMs)} atau pakai opsi force.` }
+  }
+  sendInFlight = (async () => {
+    const [botToken, chatId] = await Promise.all([
+      getSetting('telegram.botToken'),
+      getSetting('telegram.chatId'),
+    ])
+    if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
+    if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+    // Set lastSentAt SEBELUM kirim — supaya request bersamaan langsung kena cooldown.
+    // Jika kirim gagal, kita rollback ke nilai semula.
+    const prevLastSent = await getSetting('report.lastSentAt')
+    await setSetting('report.lastSentAt', new Date().toISOString())
+    try {
+      await sendToTelegram(botToken, chatId, text)
+      appLog('info', 'Custom report: sent successfully')
+      return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
+    } catch (e) {
+      if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
+      const msg = e instanceof Error ? e.message : String(e)
+      appLog('error', `Custom report failed: ${msg}`)
+      return { ok: false, message: msg }
+    }
+  })()
+  try { return await sendInFlight } finally { sendInFlight = null }
+}
 
 export async function generateReportPreview(): Promise<string> {
   const [apiKey, model, baseUrl] = await Promise.all([
@@ -135,30 +205,43 @@ export async function generateReportPreview(): Promise<string> {
   return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
 }
 
-export async function generateAndSendDailyReport(): Promise<{ ok: boolean; message: string }> {
-  const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([
-    getSetting('ai.anthropicApiKey'),
-    getSetting('ai.model'),
-    getSetting('ai.baseUrl'),
-    getSetting('telegram.botToken'),
-    getSetting('telegram.chatId'),
-  ])
-
-  if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
-  if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
-  if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
-
-  try {
-    appLog('info', 'Daily report: generating...')
-    const prompt = await buildReportPrompt()
-    const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
-    await sendToTelegram(botToken, chatId, report)
-    await setSetting('report.lastSentAt', new Date().toISOString())
-    appLog('info', 'Daily report: sent successfully')
-    return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    appLog('error', `Daily report failed: ${msg}`)
-    return { ok: false, message: msg }
+export async function generateAndSendDailyReport(opts: { force?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
+  if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
+  const cd = await checkCooldown(opts.force ?? false)
+  if (cd.blocked) {
+    return { ok: false, message: `Cooldown aktif — laporan terakhir dikirim baru-baru ini. Tunggu ${fmtMinutes(cd.remainingMs)} atau pakai opsi force.` }
   }
+  sendInFlight = (async () => {
+    const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([
+      getSetting('ai.anthropicApiKey'),
+      getSetting('ai.model'),
+      getSetting('ai.baseUrl'),
+      getSetting('telegram.botToken'),
+      getSetting('telegram.chatId'),
+    ])
+    if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
+    if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
+    if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+    // Reserve lock di DB dulu — request lain yang masuk milidetik kemudian akan kena cooldown.
+    const prevLastSent = await getSetting('report.lastSentAt')
+    await setSetting('report.lastSentAt', new Date().toISOString())
+    try {
+      appLog('info', 'Daily report: generating...')
+      await captureSnapshot()
+      const prompt = await buildReportPrompt()
+      const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
+      await sendToTelegram(botToken, chatId, report)
+      // Update timestamp lagi ke waktu aktual setelah kirim sukses.
+      await setSetting('report.lastSentAt', new Date().toISOString())
+      appLog('info', 'Daily report: sent successfully')
+      return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
+    } catch (e) {
+      if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
+      else await setSetting('report.lastSentAt', '')
+      const msg = e instanceof Error ? e.message : String(e)
+      appLog('error', `Daily report failed: ${msg}`)
+      return { ok: false, message: msg }
+    }
+  })()
+  try { return await sendInFlight } finally { sendInFlight = null }
 }

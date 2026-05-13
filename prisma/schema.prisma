@@ -570,3 +570,16 @@ model AppSetting {
 
   @@map("app_setting")
 }
+
+model DailySnapshot {
+  id        String   @id @default(uuid())
+  date      DateTime @unique // midnight WIB stored as UTC
+  kpi       Json     // { totalTasks, openTasks, closedToday, overdueCount, staleCount, velocity7d, totalProjects, activeProjects }
+  projects  Json     // [{ id, name, status, score, grade, openTasks, overdueTasks, blockedTasks, daysUntilDue, pastDue }]
+  team      Json     // [{ userId, name, open, overdue, closed7d, estimateHours, overloaded }]
+  risks     Json     // { severity, pastDueProjects, overdueTasks, staleTasks, offlineAgents, pendingAgents }
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@map("daily_snapshot")
+}

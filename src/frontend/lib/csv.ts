@@ -240,6 +240,73 @@ function csvRow(cells: string[]): string {
     .join(',')
 }
 
+export interface ExportTaskRow {
+  id: string
+  title: string
+  description: string
+  kind: string
+  status: string
+  priority: string
+  startsAt: string | null
+  dueAt: string | null
+  estimateHours: number | null
+  actualHours: number | null
+  progressPercent: number | null
+  assigneeEmail: string | null
+  assigneeName: string | null
+  reporterEmail: string
+  projectName: string
+  tags: string[]
+  createdAt: string
+  closedAt: string | null
+}
+
+const EXPORT_HEADERS = [
+  'id', 'title', 'description', 'kind', 'status', 'priority',
+  'startsAt', 'dueAt', 'estimateHours', 'actualHours', 'progressPercent',
+  'assigneeEmail', 'assigneeName', 'reporterEmail', 'projectName', 'tags',
+  'createdAt', 'closedAt',
+] as const
+
+export function buildExportCsv(tasks: ExportTaskRow[]): string {
+  const lines: string[] = [EXPORT_HEADERS.join(',')]
+  for (const t of tasks) {
+    lines.push(csvRow([
+      t.id,
+      t.title,
+      t.description,
+      t.kind,
+      t.status,
+      t.priority,
+      t.startsAt ?? '',
+      t.dueAt ?? '',
+      t.estimateHours != null ? String(t.estimateHours) : '',
+      t.actualHours != null ? String(t.actualHours) : '',
+      t.progressPercent != null ? String(t.progressPercent) : '',
+      t.assigneeEmail ?? '',
+      t.assigneeName ?? '',
+      t.reporterEmail,
+      t.projectName,
+      t.tags.join(';'),
+      t.createdAt,
+      t.closedAt ?? '',
+    ]))
+  }
+  return lines.join('\n') + '\n'
+}
+
+export function downloadTasksCsv(tasks: ExportTaskRow[], filename: string) {
+  const blob = new Blob([buildExportCsv(tasks)], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export function downloadSampleCsv() {
   const blob = new Blob([buildSampleCsv()], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)

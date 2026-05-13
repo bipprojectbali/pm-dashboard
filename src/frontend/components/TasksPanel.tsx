@@ -29,6 +29,7 @@ import {
   TbChartBar,
   TbChevronRight,
   TbClock,
+  TbDownload,
   TbFilter,
   TbListCheck,
   TbPlus,
@@ -42,6 +43,7 @@ import {
 import { useLocalStorage } from '@mantine/hooks'
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
+import { downloadTasksCsv, type ExportTaskRow } from '../lib/csv'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDashboardOverlay } from './TaskDashboardOverlay'
 import { TaskDetailView } from './TaskDetailView'
@@ -87,6 +89,7 @@ interface TaskListItem {
   closedAt: string | null
   project: { id: string; name: string }
   tags: TaskTag[]
+  blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }
 
@@ -310,6 +313,33 @@ export function TasksPanel({
     })
   }, [rawTasks, search, quickFilter])
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
+
+  const handleExport = () => {
+    const rows: ExportTaskRow[] = tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      kind: t.kind,
+      status: t.status,
+      priority: t.priority,
+      startsAt: t.startsAt,
+      dueAt: t.dueAt,
+      estimateHours: t.estimateHours,
+      actualHours: t.actualHours,
+      progressPercent: t.progressPercent,
+      assigneeEmail: t.assignee?.email ?? null,
+      assigneeName: t.assignee?.name ?? null,
+      reporterEmail: t.reporter.email,
+      projectName: t.project.name,
+      tags: t.tags.map((tg) => tg.tag.name),
+      createdAt: t.createdAt,
+      closedAt: t.closedAt,
+    }))
+    const projectSlug = activeProject?.name.replace(/\s+/g, '-').toLowerCase() ?? 'all'
+    const statusSlug = status ?? 'all'
+    const date = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
+    downloadTasksCsv(rows, `tasks-${projectSlug}-${statusSlug}-${date}.csv`)
+  }
   const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pagedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
@@ -578,6 +608,17 @@ export function TasksPanel({
               ]}
               ml="auto"
             />
+            <Tooltip label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`} withArrow>
+              <ActionIcon
+                variant="light"
+                color="teal"
+                size="sm"
+                onClick={handleExport}
+                disabled={tasks.length === 0}
+              >
+                <TbDownload size={14} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
           <Group gap="xs" wrap="wrap">
             <Text size="xs" c="dimmed" fw={500}>
@@ -816,7 +857,7 @@ export function TasksPanel({
                           const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
                           return (
                             <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
-                              {new Date(t.dueAt).toLocaleDateString()}
+                              {new Date(t.dueAt).toLocaleDateString('id-ID')}
                             </Text>
                           )
                         })()

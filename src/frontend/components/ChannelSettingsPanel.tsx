@@ -88,7 +88,11 @@ export function ChannelSettingsPanel() {
   })
 
   const sendNow = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
+    mutationFn: (force?: boolean) => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: !!force }),
+    }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
       if (res.ok) {
@@ -171,10 +175,10 @@ export function ChannelSettingsPanel() {
                 variant="light"
                 color="blue"
                 leftSection={<TbSend size={14} />}
-                onClick={() => sendNow.mutate()}
+                onClick={() => sendNow.mutate(false)}
                 loading={sendNow.isPending}
                 disabled={!chatId || !botToken || !hasApiKey}
-                title={!hasApiKey ? 'Anthropic API key belum dikonfigurasi' : undefined}
+                title={!hasApiKey ? 'Anthropic API key belum dikonfigurasi' : 'Tunduk pada cooldown — pakai tombol ⚡ jika perlu paksa kirim'}
               >
                 Kirim Laporan
               </Button>

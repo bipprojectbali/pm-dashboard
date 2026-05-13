@@ -1463,6 +1463,15 @@ function ProjectsGrid({
   )
 }
 
+const THIS_YEAR = new Date().getFullYear()
+
+function fmtGanttDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const base = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
+  return d.getFullYear() !== THIS_YEAR ? `${base} '${String(d.getFullYear()).slice(2)}` : base
+}
+
 // Muted status colors for project Gantt bars
 const PROJECT_GANTT_COLOR: Record<ProjectStatus, string> = {
   DRAFT:     '#6c757d',
@@ -1491,7 +1500,7 @@ const PROJ_VIEW_OPTIONS: Array<{ value: ProjViewMode; label: string }> = [
 const ROW_H = 52
 const HDR_H = 56
 
-function ProjectsGanttView({
+export function ProjectsGanttView({
   projects,
   onSelect,
 }: {
@@ -1512,7 +1521,9 @@ function ProjectsGanttView({
     withDates.map((p) => {
       const start = new Date(p.startsAt as string)
       const end = new Date(p.endsAt as string)
-      const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
+      const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+      const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+      const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
       const isOverdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
       const slipped = !!(p.originalEndAt && p.endsAt && p.originalEndAt !== p.endsAt)
       return {
@@ -1528,26 +1539,27 @@ function ProjectsGanttView({
 
   const { tlStart, tlEnd } = useMemo(() => {
     if (withDates.length === 0) return { tlStart: undefined, tlEnd: undefined }
+    const toMidnight = (ms: number) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
     const allMs = withDates.flatMap((p) => [
       new Date(p.startsAt as string).getTime(),
       new Date(p.endsAt as string).getTime(),
     ])
     return {
-      tlStart: new Date(Math.min(...allMs) - 14 * 86_400_000),
-      tlEnd: new Date(Math.max(...allMs) + 14 * 86_400_000),
+      tlStart: toMidnight(Math.min(...allMs) - 14 * 86_400_000),
+      tlEnd: toMidnight(Math.max(...allMs) + 14 * 86_400_000),
     }
   }, [withDates])
 
-  const scrollToToday = useCallback(() => {
+  const scrollToToday = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (!tlStart) return
     const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
     const todayPx = daysSinceStart * PROJ_EFFECTIVE_DAY_PX[viewMode]
-    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior: 'smooth' })
+    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
   }, [tlStart, viewMode, now])
 
-  // Auto-scroll on first render
+  // Auto-scroll on first render — instant agar tidak glide
   useEffect(() => {
     if (!tlStart) return
     let attempts = 0
@@ -1557,7 +1569,7 @@ function ProjectsGanttView({
         if (++attempts < 40) { setTimeout(tryScroll, 80); return }
         return
       }
-      scrollToToday()
+      scrollToToday('instant')
     }
     setTimeout(tryScroll, 80)
   }, [tlStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1614,7 +1626,7 @@ function ProjectsGanttView({
           </Group>
           <Group gap="xs" wrap="nowrap">
             <Tooltip label="Scroll ke hari ini" withArrow>
-              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
+              <ActionIcon variant="light" size="sm" color="red" onClick={() => scrollToToday()}>
                 <TbCalendarEvent size={14} />
               </ActionIcon>
             </Tooltip>
@@ -1666,7 +1678,12 @@ function ProjectsGanttView({
                       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = '' }}
                     >
                       <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isOverdue ? PROJECT_GANTT_OVERDUE : PROJECT_GANTT_COLOR[p.status], flexShrink: 0 }} />
-                      <Text size="xs" fw={500} truncate style={{ minWidth: 0, flex: 1 }} title={p.name}>{p.name}</Text>
+                      <Stack gap={1} style={{ minWidth: 0, flex: 1 }}>
+                        <Text size="xs" fw={500} truncate style={{ minWidth: 0 }} title={p.name}>{p.name}</Text>
+                        <Text size="10px" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtGanttDate(p.startsAt)} → {fmtGanttDate(p.endsAt)}
+                        </Text>
+                      </Stack>
                     </div>
                   </Tooltip>
                 )
@@ -1677,6 +1694,7 @@ function ProjectsGanttView({
           {/* Gantt timeline */}
           <div ref={wrapperRef} style={{ flex: 1, overflow: 'hidden' }} onScroll={syncFromGantt}>
             <Gantt
+              key={ganttTasks.map((t) => t.id).join(',')}
               tasks={ganttTasks}
               viewMode={viewMode}
               startDate={tlStart}

@@ -9,6 +9,15 @@ import { forwardRef } from 'react'
 import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand } from 'react-icons/tb'
 import { UserAvatar } from './shared/UserAvatar'
 
+const THIS_YEAR = new Date().getFullYear()
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const base = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
+  return d.getFullYear() !== THIS_YEAR ? `${base} '${String(d.getFullYear()).slice(2)}` : base
+}
+
 export type GanttTaskMeta = {
   id: string
   title: string
@@ -19,6 +28,8 @@ export type GanttTaskMeta = {
   assigneeImage: string | null
   isOverdue: boolean
   progress: number
+  startsAt: string | null
+  dueAt: string | null
 }
 
 interface Props {
@@ -279,6 +290,11 @@ function TaskRow({
             <Text size="10px" c="dimmed">Unassigned</Text>
           )}
         </Group>
+
+        {/* Date row: start → due */}
+        <Text size="10px" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {fmtDate(task.startsAt)} → {fmtDate(task.dueAt)}
+        </Text>
       </Stack>
     </Box>
   )

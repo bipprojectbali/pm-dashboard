@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -7,7 +8,6 @@ import {
   Group,
   Loader,
   PasswordInput,
-  ScrollArea,
   Select,
   Stack,
   Text,
@@ -21,7 +21,19 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { TimePicker } from '@mantine/dates'
-import { TbCheck, TbCopy, TbEye, TbPlugConnected, TbRobot, TbSend } from 'react-icons/tb'
+import { TbCheck, TbCopy, TbEye, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
+import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
+
+const DEFAULT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
+1. Cerdas dan manusiawi — bukan sekadar daftar angka
+2. Berikan pendapat nyata dan analisis tren kondisi tim & project
+3. Highlight risiko yang perlu perhatian segera dan alasannya
+4. Bandingkan kinerja antar anggota tim secara fair — siapa produktif, siapa perlu dukungan
+5. Identifikasi project yang paling kritis dan mengapa
+6. Berikan 2-3 rekomendasi konkret yang bisa dilakukan besok
+7. Panjang 400-600 kata, pakai format Telegram Markdown (*bold*, _italic_)
+8. Mulai dengan: "📊 *Laporan Harian — {TANGGAL}*" lalu ringkasan 1 kalimat kondisi keseluruhan
+9. Akhiri dengan footer: "_Laporan dibuat otomatis oleh AI pm-dashboard_"`
 
 type Settings = Record<string, string>
 
@@ -61,6 +73,9 @@ export function AiSettingsPanel() {
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
   const [scheduleTime, setScheduleTime] = useState('18:00')
+  const [cooldownMin, setCooldownMin] = useState<number | string>(30)
+  const [promptInstruction, setPromptInstruction] = useState(DEFAULT_INSTRUCTION)
+  const [promptDirty, setPromptDirty] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
 
@@ -72,7 +87,10 @@ export function AiSettingsPanel() {
     const h = (settings['report.scheduleHour'] ?? '18').padStart(2, '0')
     const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
     setScheduleTime(`${h}:${m}`)
+    setCooldownMin(parseInt(settings['report.cooldownMinutes'] ?? '30', 10))
+    setPromptInstruction(settings['report.promptInstruction'] ?? DEFAULT_INSTRUCTION)
     setDirty(false)
+    setPromptDirty(false)
   }, [data])
 
   const save = useMutation({
@@ -83,6 +101,7 @@ export function AiSettingsPanel() {
         saveSetting('ai.model', model),
         saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
         saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
+        saveSetting('report.cooldownMinutes', String(cooldownMin || 30)),
       ])
     },
     onSuccess: () => {
@@ -93,11 +112,22 @@ export function AiSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Gagal', message: e.message }),
   })
 
+  const savePrompt = useMutation({
+    mutationFn: () => saveSetting('report.promptInstruction', promptInstruction),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
+      setPromptDirty(false)
+      notifications.show({ color: 'teal', title: 'Tersimpan', message: 'Instruksi prompt disimpan.' })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Gagal', message: e.message }),
+  })
+
   const previewReport = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; text?: string; error?: string }>('/api/admin/report/preview'),
     onSuccess: (res) => {
       if (res.ok && res.text) {
         setPreview(res.text)
+        setEditedReport(res.text)
       } else {
         notifications.show({ color: 'red', title: 'Gagal generate', message: res.error ?? 'Unknown error' })
       }
@@ -118,7 +148,12 @@ export function AiSettingsPanel() {
   })
 
   const sendNow = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
+    mutationFn: (force?: boolean) =>
+      apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: !!force }),
+      }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
       if (res.ok) {
@@ -126,6 +161,33 @@ export function AiSettingsPanel() {
       } else {
         notifications.show({ color: 'red', title: 'Gagal', message: res.message })
       }
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
+  const [rawPrompt, setRawPrompt] = useState<string | null>(null)
+  const [editedReport, setEditedReport] = useState<string | null>(null)
+
+  const fetchPrompt = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; prompt?: string; error?: string }>('/api/admin/report/prompt'),
+    onSuccess: (res) => {
+      if (res.ok && res.prompt) setRawPrompt(res.prompt)
+      else notifications.show({ color: 'red', title: 'Gagal ambil prompt', message: res.error ?? 'Unknown error' })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
+  const sendCustom = useMutation({
+    mutationFn: ({ text, force }: { text: string; force?: boolean }) =>
+      apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, force: !!force }),
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
+      if (res.ok) notifications.show({ color: 'teal', title: 'Terkirim!', message: res.message })
+      else notifications.show({ color: 'red', title: 'Gagal kirim', message: res.message })
     },
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
@@ -212,6 +274,15 @@ export function AiSettingsPanel() {
             value={scheduleTime}
             onChange={(v) => { setScheduleTime(v); setDirty(true) }}
           />
+          <TextInput
+            label="Cooldown antar kirim (menit)"
+            description="Jeda minimum antar pengiriman — mencegah laporan ganda kalau cron + manual atau double-click. Default 30 menit. Pakai tombol ⚡ untuk override saat butuh kirim ulang."
+            type="number"
+            min={1}
+            max={1440}
+            value={String(cooldownMin)}
+            onChange={(e) => { setCooldownMin(parseInt(e.currentTarget.value, 10) || 30); setDirty(true) }}
+          />
           <Group justify="flex-end">
             <Button
               leftSection={<TbCheck size={14} />}
@@ -227,70 +298,191 @@ export function AiSettingsPanel() {
 
       <Card withBorder padding="lg" radius="md">
         <Stack gap="md">
+          <Stack gap={0}>
+            <Text fw={500} size="sm">Instruksi Prompt</Text>
+            <Text size="xs" c="dimmed">
+              Instruksi yang dikirim ke AI untuk membentuk laporan. Gunakan <code style={{ fontFamily: 'monospace' }}>{'{TANGGAL}'}</code> sebagai placeholder tanggal. Kosongkan untuk pakai default.
+            </Text>
+          </Stack>
+          <Divider />
+          <Textarea
+            value={promptInstruction}
+            onChange={(e) => { setPromptInstruction(e.currentTarget.value); setPromptDirty(true) }}
+            autosize
+            minRows={8}
+            maxRows={20}
+            styles={{ input: { fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 } }}
+          />
           <Group justify="space-between">
+            <Button
+              variant="subtle"
+              color="gray"
+              size="xs"
+              leftSection={<TbRefresh size={13} />}
+              onClick={() => { setPromptInstruction(DEFAULT_INSTRUCTION); setPromptDirty(true) }}
+            >
+              Reset ke default
+            </Button>
+            <Button
+              leftSection={<TbCheck size={14} />}
+              onClick={() => savePrompt.mutate()}
+              loading={savePrompt.isPending}
+              disabled={!promptDirty}
+            >
+              Simpan
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="lg" radius="md">
+        <Stack gap="md">
+          <Group justify="space-between" align="flex-start">
             <Stack gap={0}>
-              <Text fw={500} size="sm">Preview & Test Laporan</Text>
-              <Text size="xs" c="dimmed">Generate laporan sekarang untuk melihat hasilnya sebelum dikirim.</Text>
+              <Text fw={500} size="sm">Preview & Kirim</Text>
+              <Text size="xs" c="dimmed">Lihat data mentah, generate laporan AI, edit hasilnya, lalu kirim ke Telegram.</Text>
             </Stack>
             <Group gap="xs">
               <Button
-                variant="light"
-                color="violet"
-                leftSection={previewReport.isPending ? <Loader size={14} /> : <TbEye size={14} />}
+                variant="light" color="gray" size="xs"
+                leftSection={<TbEye size={13} />}
+                onClick={() => fetchPrompt.mutate()}
+                loading={fetchPrompt.isPending}
+              >
+                Lihat Prompt
+              </Button>
+              <Button
+                variant="light" color="violet" size="xs"
+                leftSection={previewReport.isPending ? <Loader size={13} /> : <TbRobot size={13} />}
                 onClick={() => previewReport.mutate()}
                 loading={previewReport.isPending}
                 disabled={!apiKeySet && !apiKey}
               >
-                Preview Laporan
+                Generate AI
               </Button>
-              <Button
-                variant="light"
-                color="blue"
-                leftSection={<TbSend size={14} />}
-                onClick={() => sendNow.mutate()}
-                loading={sendNow.isPending}
-              >
-                Kirim Sekarang
-              </Button>
+              <Button.Group>
+                <Button
+                  variant="light" color="blue" size="xs"
+                  leftSection={<TbSend size={13} />}
+                  onClick={() => sendNow.mutate(false)}
+                  loading={sendNow.isPending}
+                  disabled={!apiKeySet && !apiKey}
+                >
+                  Kirim Otomatis
+                </Button>
+                <Tooltip label="Kirim paksa (override cooldown)" withArrow>
+                  <Button
+                    variant="light" color="orange" size="xs"
+                    onClick={() => {
+                      if (!confirm('Kirim paksa? Ini akan mengabaikan cooldown dan bisa menyebabkan laporan ganda.')) return
+                      sendNow.mutate(true)
+                    }}
+                    disabled={!apiKeySet && !apiKey}
+                  >
+                    ⚡
+                  </Button>
+                </Tooltip>
+              </Button.Group>
             </Group>
           </Group>
 
-          {preview && (
-            <Stack gap="xs">
-              <Group justify="space-between">
-                <Group gap="xs">
-                  <Text size="xs" fw={600} c="dimmed" tt="uppercase">Preview Laporan</Text>
-                  <Badge size="xs" variant="light" color="violet">{model}</Badge>
-                </Group>
-                <CopyButton value={preview} timeout={2000}>
-                  {({ copied, copy }) => (
-                    <Tooltip label={copied ? 'Disalin!' : 'Salin teks'} withArrow>
+          {(rawPrompt || preview || editedReport) && (
+            <div style={{ display: 'grid', gridTemplateColumns: rawPrompt ? '1fr 1fr' : '1fr', gap: 12 }}>
+              {rawPrompt && (
+                <Stack gap={4}>
+                  <Group gap="xs" justify="space-between">
+                    <Text size="xs" fw={600} c="dimmed" tt="uppercase">Data Mentah (Prompt)</Text>
+                    <CopyButton value={rawPrompt} timeout={2000}>
+                      {({ copied, copy }) => (
+                        <Tooltip label={copied ? 'Disalin!' : 'Salin'} withArrow>
+                          <ActionIcon size="xs" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={copy}>
+                            {copied ? <TbCheck size={12} /> : <TbCopy size={12} />}
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </CopyButton>
+                  </Group>
+                  <Textarea
+                    value={rawPrompt}
+                    readOnly
+                    autosize
+                    minRows={14}
+                    maxRows={30}
+                    styles={{ input: { fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5 } }}
+                  />
+                </Stack>
+              )}
+
+              {(preview || editedReport !== null) && (
+                <Stack gap={4}>
+                  <Group gap="xs" justify="space-between">
+                    <Group gap={6}>
+                      <Text size="xs" fw={600} c="dimmed" tt="uppercase">Hasil AI</Text>
+                      <Badge size="xs" variant="light" color="violet">{model}</Badge>
+                      {editedReport !== null && editedReport !== preview && (
+                        <Badge size="xs" variant="light" color="orange">diedit</Badge>
+                      )}
+                    </Group>
+                    <Group gap={4}>
+                      <CopyButton value={editedReport ?? preview ?? ''} timeout={2000}>
+                        {({ copied, copy }) => (
+                          <Tooltip label={copied ? 'Disalin!' : 'Salin'} withArrow>
+                            <ActionIcon size="xs" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={copy}>
+                              {copied ? <TbCheck size={12} /> : <TbCopy size={12} />}
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </CopyButton>
+                      {editedReport !== null && editedReport !== preview && (
+                        <Tooltip label="Reset ke hasil AI" withArrow>
+                          <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setEditedReport(preview)}>
+                            <TbRefresh size={12} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </Group>
+                  </Group>
+                  <Textarea
+                    value={editedReport ?? preview ?? ''}
+                    onChange={(e) => setEditedReport(e.currentTarget.value)}
+                    autosize
+                    minRows={14}
+                    maxRows={30}
+                    styles={{ input: { fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5 } }}
+                  />
+                  <Group justify="flex-end">
+                    <Button.Group>
                       <Button
-                        size="xs"
-                        variant="subtle"
-                        color={copied ? 'teal' : 'gray'}
-                        leftSection={copied ? <TbCheck size={12} /> : <TbCopy size={12} />}
-                        onClick={copy}
+                        color="teal" size="xs"
+                        leftSection={<TbSend size={13} />}
+                        onClick={() => sendCustom.mutate({ text: editedReport ?? preview ?? '' })}
+                        loading={sendCustom.isPending}
+                        disabled={!(editedReport ?? preview)}
                       >
-                        {copied ? 'Disalin' : 'Salin'}
+                        Kirim Laporan Ini
                       </Button>
-                    </Tooltip>
-                  )}
-                </CopyButton>
-              </Group>
-              <ScrollArea h={400} type="auto">
-                <Textarea
-                  value={preview}
-                  readOnly
-                  autosize
-                  minRows={10}
-                  styles={{ input: { fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 } }}
-                />
-              </ScrollArea>
-            </Stack>
+                      <Tooltip label="Kirim paksa (override cooldown)" withArrow>
+                        <Button
+                          color="orange" size="xs"
+                          variant="filled"
+                          onClick={() => {
+                            if (!confirm('Kirim paksa? Ini akan mengabaikan cooldown dan bisa menyebabkan laporan ganda.')) return
+                            sendCustom.mutate({ text: editedReport ?? preview ?? '', force: true })
+                          }}
+                          disabled={!(editedReport ?? preview)}
+                        >
+                          ⚡
+                        </Button>
+                      </Tooltip>
+                    </Button.Group>
+                  </Group>
+                </Stack>
+              )}
+            </div>
           )}
         </Stack>
       </Card>
+      <SnapshotHistoryPanel />
     </Stack>
   )
 }

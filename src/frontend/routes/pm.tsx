@@ -185,7 +185,7 @@ function PmPage() {
   }
   const setProjectDetailTab = (next: ProjectDetailTab) => {
     if (!activeProjectId) return
-    localStorage.setItem(`pm:project:${activeProjectId}:tab`, next)
+    localStorage.setItem('pm:project:last-tab', next)
     navigate({ to: '/pm', search: { tab: 'projects', projectId: activeProjectId, detailTab: next } })
   }
   const closeProjectDetail = () => {
@@ -340,7 +340,7 @@ function PmPage() {
                 (activeProjectId ? (
                   <ProjectDetailView
                     projectId={activeProjectId}
-                    tab={detailTab ?? (localStorage.getItem(`pm:project:${activeProjectId}:tab`) as ProjectDetailTab | null) ?? 'overview'}
+                    tab={detailTab ?? (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ?? 'overview'}
                     onTabChange={setProjectDetailTab}
                     onBack={closeProjectDetail}
                     onDeleted={closeProjectDetail}

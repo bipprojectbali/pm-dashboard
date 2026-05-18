@@ -60,6 +60,15 @@ const MODEL_OPTIONS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (cepat, hemat)' },
 ]
 
+const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Jakarta', label: 'WIB — Jakarta (UTC+7)', short: 'WIB' },
+  { value: 'Asia/Makassar', label: 'WITA — Makassar (UTC+8)', short: 'WITA' },
+  { value: 'Asia/Jayapura', label: 'WIT — Jayapura (UTC+9)', short: 'WIT' },
+  { value: 'UTC', label: 'UTC (UTC+0)', short: 'UTC' },
+]
+const DEFAULT_TIMEZONE = 'Asia/Jakarta'
+const tzShortLabel = (tz: string) => TIMEZONE_OPTIONS.find((t) => t.value === tz)?.short ?? tz
+
 export function AiSettingsPanel() {
   const qc = useQueryClient()
 
@@ -73,6 +82,7 @@ export function AiSettingsPanel() {
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
   const [scheduleTime, setScheduleTime] = useState('18:00')
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
   const [cooldownMin, setCooldownMin] = useState<number | string>(30)
   const [promptInstruction, setPromptInstruction] = useState(DEFAULT_INSTRUCTION)
   const [promptDirty, setPromptDirty] = useState(false)
@@ -87,6 +97,7 @@ export function AiSettingsPanel() {
     const h = (settings['report.scheduleHour'] ?? '18').padStart(2, '0')
     const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
     setScheduleTime(`${h}:${m}`)
+    setTimezone(settings['report.timezone'] || DEFAULT_TIMEZONE)
     setCooldownMin(parseInt(settings['report.cooldownMinutes'] ?? '30', 10))
     setPromptInstruction(settings['report.promptInstruction'] ?? DEFAULT_INSTRUCTION)
     setDirty(false)
@@ -101,6 +112,7 @@ export function AiSettingsPanel() {
         saveSetting('ai.model', model),
         saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
         saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
+        saveSetting('report.timezone', timezone),
         saveSetting('report.cooldownMinutes', String(cooldownMin || 30)),
       ])
     },
@@ -268,9 +280,17 @@ export function AiSettingsPanel() {
             <Text size="xs" c="dimmed">Laporan harian dikirim otomatis ke Telegram sesuai jam yang dikonfigurasi.</Text>
           </Stack>
           <Divider />
+          <Select
+            label="Zona waktu laporan"
+            description="Jam kirim, label tanggal, dan rollover snapshot harian mengikuti zona ini."
+            data={TIMEZONE_OPTIONS.map((t) => ({ value: t.value, label: t.label }))}
+            value={timezone}
+            onChange={(v) => { if (v) { setTimezone(v); setDirty(true) } }}
+            allowDeselect={false}
+          />
           <TimePicker
-            label="Jam kirim laporan (WIB)"
-            description="Laporan dikirim setiap hari pada waktu ini. Server menggunakan UTC+7."
+            label={`Jam kirim laporan (${tzShortLabel(timezone)})`}
+            description={`Laporan dikirim setiap hari pada waktu ini menurut ${timezone}.`}
             value={scheduleTime}
             onChange={(v) => { setScheduleTime(v); setDirty(true) }}
           />

@@ -10,7 +10,7 @@ Local MCP server lets Claude drive the app remotely. `.mcp.json` registers 4 ser
 Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
-- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `qc`, `redis`, `tags`, `tasks`, `tickets`, `webhooks` (19 modules, 106 tools). `shared.ts` is a helper, not a tool module.
+- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `qc`, `redis`, `report`, `tags`, `tasks`, `tickets`, `webhooks` (20 modules, 107 tools). `shared.ts` is a helper, not a tool module.
 - HTTP fallback: `POST /mcp` — Bearer `MCP_SECRET`. Response `x-mcp-scope` reflects the effective scope (readonly in prod, admin otherwise).
 
 ## Tools by module
@@ -24,6 +24,7 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 - **Overview** (readonly): `admin_overview` (KPIs across users/projects/tasks/agents/webhooks), `project_health` (per-project score A-F from overdue/blocked/extensions/velocity), `team_load` (per-user open/overdue/estimated hours, flags overloaded), `risk_report` (overdue tasks + stale IN_PROGRESS + past-due projects + pending agents + offline agents + missing env, severity rolled up)
 - **Effort** (readonly, in `overview` module): `effort_report` (estimate vs actual for many tasks), `task_effort` (single task detail), `ghost_tasks` (stalled IN_PROGRESS with user-online signal), `phantom_work` (per-user untracked activity)
 - **Retro** (readonly, in `overview` module): `project_retro` (automated retrospective snapshot — markdown by default, JSON optional)
+- **Report** (readonly, in `report` module): `report_diagnose` — daily Telegram report health check. Returns zoned now, schedule validity, would-fire-now, cooldown state, in-flight lock, and human-readable blockers. Mirrors `GET /api/admin/report/diagnose`. Never exposes secret values.
 - **Tickets** (in `tickets` module): `ticket_queue` (readonly — lists open tasks tagged `ai-queue` ordered by priority then age); `ticket_pick` (admin — atomic claim via `updateMany` on highest-priority open/reopened `ai-queue` task → `IN_PROGRESS`, optional `claimerEmail` assigns, returns full ticket incl. `project.githubRepo`), `ticket_submit` (admin — posts PR link as comment + transitions `IN_PROGRESS` → `READY_FOR_QC`).
   - QA/QC flow: tag a ticket with `ai-queue` → Claude runs `ticket_pick` → fix locally → open PR → `ticket_submit`.
   - Matches any project with an `ai-queue` tag regardless of self-project; in practice only the self-project has the tag, so hits are always QC tickets.

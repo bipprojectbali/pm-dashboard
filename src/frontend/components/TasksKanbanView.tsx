@@ -7,12 +7,14 @@ import {
   Stack,
   Text,
   Tooltip,
+  ThemeIcon,
 } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  TbAlertTriangle,
   TbArrowsMaximize,
   TbArrowsMinimize,
   TbChevronLeft,
@@ -121,15 +123,20 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const KANBAN_PAGE = 20
+const API_CEIL = 500
 
 export function TasksKanbanView({
   tasks,
   canWrite,
   onSelect,
+  totalFetched,
+  filterKey,
 }: {
   tasks: TaskListItem[]
   canWrite: boolean
   onSelect: (id: string) => void
+  totalFetched?: number
+  filterKey?: string
 }) {
   const qc = useQueryClient()
   // cols: per-kolom array, persis apa yang di-render.
@@ -153,11 +160,20 @@ export function TasksKanbanView({
     setCols(buildCols(tasks))
   }, [tasks])
 
-  // Per-column show-more limit
-  const [colLimit, setColLimit] = useState<Record<TaskStatus, number>>({
-    OPEN: KANBAN_PAGE, IN_PROGRESS: KANBAN_PAGE, READY_FOR_QC: KANBAN_PAGE,
-    REOPENED: KANBAN_PAGE, CLOSED: KANBAN_PAGE,
+  // Per-column current page (0-indexed).
+  // Reset hanya saat filterKey berubah (project/status/search ganti),
+  // bukan saat drag-drop — safePage clamp handle out-of-range otomatis.
+  const [colPage, setColPage] = useState<Record<TaskStatus, number>>({
+    OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0,
   })
+  const prevFilterKeyRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (filterKey === undefined || filterKey === prevFilterKeyRef.current) return
+    prevFilterKeyRef.current = filterKey
+    setColPage({ OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0 })
+  }, [filterKey])
+
+  const isMaybeTruncated = (totalFetched ?? 0) >= API_CEIL
 
   const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
     key: 'pm:kanban:col-hidden', defaultValue: {},
@@ -253,10 +269,14 @@ export function TasksKanbanView({
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
         {KANBAN_COLUMNS.map((col) => {
           const items = cols[col.status]
-          const limit = colLimit[col.status]
-          const visible = items.slice(0, limit)
-          const hiddenCount = items.length - visible.length
+          const page = colPage[col.status]
+          const totalPages = Math.max(1, Math.ceil(items.length / KANBAN_PAGE))
+          const safePage = Math.min(page, totalPages - 1)
+          const visible = items.slice(safePage * KANBAN_PAGE, (safePage + 1) * KANBAN_PAGE)
+          const rangeStart = safePage * KANBAN_PAGE + 1
+          const rangeEnd = Math.min((safePage + 1) * KANBAN_PAGE, items.length)
           const isHidden = !!colHidden[col.status]
+          const colMaybeTruncated = isMaybeTruncated && col.status === Object.entries(cols).sort((a, b) => b[1].length - a[1].length)[0]?.[0]
           const isMax = !!colMax[col.status]
           // A column is a valid drop target if the task can transition to it
           const isDropDisabled = !canWrite || isHidden ||
@@ -270,7 +290,9 @@ export function TasksKanbanView({
               withBorder
               padding="xs"
               radius="md"
-              style={{ minHeight: isHidden ? 0 : 240, overflow: 'visible' }}
+              style={{
+                minHeight: isHidden ? 0 : 240,
+              }}
             >
               {/* Column header — minimized: vertical stack */}
               {isHidden ? (
@@ -289,6 +311,13 @@ export function TasksKanbanView({
                       {col.label}
                     </Badge>
                     <Text size="xs" c="dimmed">{items.length}</Text>
+                    {colMaybeTruncated && (
+                      <Tooltip label="Data mungkin terpotong — batas 500 task tercapai. Gunakan filter untuk mempersempit." withArrow>
+                        <ThemeIcon size="xs" color="orange" variant="light" style={{ flexShrink: 0 }}>
+                          <TbAlertTriangle size={10} />
+                        </ThemeIcon>
+                      </Tooltip>
+                    )}
                   </Group>
                   <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
                     <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
@@ -307,6 +336,7 @@ export function TasksKanbanView({
 
               {/* Cards */}
               {!isHidden && (
+                <>
                 <Droppable droppableId={col.status} isDropDisabled={isDropDisabled}>
                   {(provided, snapshot) => (
                     <Stack
@@ -315,12 +345,14 @@ export function TasksKanbanView({
                       {...provided.droppableProps}
                       style={{
                         minHeight: 40,
+                        maxHeight: 'calc(100vh - 280px)',
+                        overflowY: 'auto',
+                        padding: snapshot.isDraggingOver && !isDropDisabled ? 4 : '0 2px 0 0',
                         background: snapshot.isDraggingOver && !isDropDisabled
                           ? 'var(--mantine-color-blue-light)'
                           : undefined,
                         borderRadius: 'var(--mantine-radius-md)',
                         transition: 'background 120ms ease',
-                        padding: snapshot.isDraggingOver ? '4px' : undefined,
                       }}
                     >
                       {visible.length === 0 && !snapshot.isDraggingOver && (
@@ -350,6 +382,7 @@ export function TasksKanbanView({
                                   ? '0 8px 24px rgba(0,0,0,0.18)'
                                   : undefined,
                                 ...dragProvided.draggableProps.style,
+                                flexShrink: 0,
                               }}
                             >
                               <Stack gap={4}>
@@ -394,21 +427,42 @@ export function TasksKanbanView({
 
                       {/* Required by @hello-pangea/dnd — reserves space for dragged item */}
                       {provided.placeholder}
-
-                      {hiddenCount > 0 && (
-                        <Button
-                          variant="subtle"
-                          size="compact-xs"
-                          color="gray"
-                          fullWidth
-                          onClick={() => setColLimit((prev) => ({ ...prev, [col.status]: prev[col.status] + KANBAN_PAGE }))}
-                        >
-                          +{hiddenCount} lainnya
-                        </Button>
-                      )}
                     </Stack>
                   )}
                 </Droppable>
+
+                {totalPages > 1 && (
+                  <Group
+                    justify="space-between"
+                    align="center"
+                    pt={6}
+                    mt={4}
+                    style={{ borderTop: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}
+                  >
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      disabled={safePage === 0}
+                      onClick={() => setColPage((p) => ({ ...p, [col.status]: safePage - 1 }))}
+                    >
+                      <TbChevronLeft size={12} />
+                    </ActionIcon>
+                    <Text size="xs" c="dimmed">
+                      {rangeStart}–{rangeEnd} / {items.length}
+                    </Text>
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      disabled={safePage >= totalPages - 1}
+                      onClick={() => setColPage((p) => ({ ...p, [col.status]: safePage + 1 }))}
+                    >
+                      <TbChevronRight size={12} />
+                    </ActionIcon>
+                  </Group>
+                )}
+                </>
               )}
             </Card>
           )

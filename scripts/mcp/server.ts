@@ -15,6 +15,7 @@ import { projectTools } from './tools/project'
 import { projectsReadonly, projectsTools } from './tools/projects'
 import { qcReadonly, qcTools } from './tools/qc'
 import { redisTools } from './tools/redis'
+import { reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
@@ -40,6 +41,7 @@ const READONLY_MODULES: ToolModule[] = [
   milestonesReadonly,
   overviewReadonly,
   qcReadonly,
+  reportReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [

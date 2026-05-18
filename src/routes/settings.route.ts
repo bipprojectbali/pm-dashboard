@@ -4,6 +4,7 @@ import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 import { prisma } from '../lib/db'
+import { getReportDiagnostic } from '../lib/report-diagnose'
 
 const SENSITIVE_KEYS = ['ai.anthropicApiKey', 'telegram.botToken']
 
@@ -25,6 +26,18 @@ async function getAdminUser(request: Request) {
   })
   if (!session || session.expiresAt < new Date() || !isSystemAdmin(session.user.role)) return null
   return session.user
+}
+
+function hasMcpSecretAuth(request: Request): boolean {
+  const secret = process.env.MCP_SECRET
+  if (!secret) return false
+  const header = request.headers.get('authorization') ?? ''
+  if (!header.startsWith('Bearer ')) return false
+  const provided = header.slice('Bearer '.length).trim()
+  if (provided.length !== secret.length) return false
+  let mismatch = 0
+  for (let i = 0; i < provided.length; i++) mismatch |= provided.charCodeAt(i) ^ secret.charCodeAt(i)
+  return mismatch === 0
 }
 
 export function settingsRoutes() {
@@ -177,5 +190,13 @@ export function settingsRoutes() {
         set.status = 502
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
+    })
+
+    // Diagnostic: accepts admin session OR Bearer MCP_SECRET (so ops can curl from anywhere).
+    // Never returns secret values — only set/unset flags. Safe to expose to any holder of MCP_SECRET.
+    .get('/api/admin/report/diagnose', async ({ request, set }) => {
+      const authed = hasMcpSecretAuth(request) || (await getAdminUser(request)) !== null
+      if (!authed) { set.status = 403; return { error: 'Forbidden' } }
+      return getReportDiagnostic()
     })
 }

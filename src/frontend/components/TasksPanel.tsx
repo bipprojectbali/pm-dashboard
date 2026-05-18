@@ -40,6 +40,7 @@ import {
   TbUserQuestion,
   TbX,
 } from 'react-icons/tb'
+import { DatePickerInput } from '@mantine/dates'
 import { useLocalStorage } from '@mantine/hooks'
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
@@ -188,6 +189,7 @@ export function TasksPanel({
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | null>(null)
+  const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 25
 
@@ -215,6 +217,7 @@ export function TasksPanel({
   if (kind) params.set('kind', kind)
   if (mine) params.set('mine', '1')
   if (tagFilter) params.set('tagId', tagFilter)
+  if (view === 'kanban') params.set('limit', '500')
   const query = params.toString()
 
   const tasksQ = useQuery({
@@ -309,9 +312,20 @@ export function TasksPanel({
         const hay = `${t.title} ${t.description}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
+      const [dueFrom, dueTo] = dueDateRange
+      if (dueFrom || dueTo) {
+        if (!t.dueAt) return false
+        const due = new Date(t.dueAt).getTime()
+        if (dueFrom && due < new Date(dueFrom).getTime()) return false
+        if (dueTo) {
+          const endOfDay = new Date(dueTo)
+          endOfDay.setHours(23, 59, 59, 999)
+          if (due > endOfDay.getTime()) return false
+        }
+      }
       return true
     })
-  }, [rawTasks, search, quickFilter])
+  }, [rawTasks, search, quickFilter, dueDateRange])
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
 
   const handleExport = () => {
@@ -444,7 +458,7 @@ export function TasksPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter])
+  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter, dueDateRange])
 
   return (
     <Stack gap="md">
@@ -520,8 +534,10 @@ export function TasksPanel({
 
       <Card withBorder padding="sm" radius="md">
         <Stack gap="sm">
-          <Group gap="sm" wrap="wrap">
-            <TbFilter size={14} />
+
+          {/* ─── Scope ─── */}
+          <Divider label={<Group gap={4}><TbFilter size={11} /><Text size="xs" c="dimmed" fw={600}>Scope</Text></Group>} labelPosition="left" />
+          <Group gap="sm" wrap="wrap" align="center">
             {activeProject ? (
               <Badge
                 color="blue"
@@ -529,13 +545,7 @@ export function TasksPanel({
                 size="lg"
                 leftSection={<TbTag size={12} />}
                 rightSection={
-                  <ActionIcon
-                    size="xs"
-                    variant="transparent"
-                    color="blue"
-                    onClick={() => changeProject(null)}
-                    aria-label="Clear project filter"
-                  >
+                  <ActionIcon size="xs" variant="transparent" color="blue" onClick={() => changeProject(null)} aria-label="Clear project filter">
                     <TbX size={12} />
                   </ActionIcon>
                 }
@@ -553,6 +563,12 @@ export function TasksPanel({
                 w={220}
               />
             )}
+            <Switch label="Assigned to me" checked={mine} onChange={(e) => setMine(e.currentTarget.checked)} size="sm" />
+          </Group>
+
+          {/* ─── Tipe Task ─── */}
+          <Divider label={<Text size="xs" c="dimmed" fw={600}>Tipe Task</Text>} labelPosition="left" />
+          <Group gap="sm" wrap="wrap" align="center">
             <Select
               placeholder="All kinds"
               data={['TASK', 'BUG', 'QC']}
@@ -560,7 +576,7 @@ export function TasksPanel({
               onChange={setKind}
               clearable
               size="xs"
-              w={140}
+              w={130}
             />
             <Select
               placeholder="All statuses"
@@ -580,50 +596,52 @@ export function TasksPanel({
                 onChange={setTagFilter}
                 clearable
                 size="xs"
-                w={160}
+                w={155}
               />
             ) : null}
+          </Group>
+
+          {/* ─── Tanggal ─── */}
+          <Divider label={<Text size="xs" c="dimmed" fw={600}>Tanggal Due</Text>} labelPosition="left" />
+          <Group gap="sm" wrap="wrap" align="center">
+            <DatePickerInput
+              type="range"
+              placeholder="Semua due date"
+              value={dueDateRange}
+              onChange={(v) => setDueDateRange(v as [Date | null, Date | null])}
+              clearable
+              size="xs"
+              w={260}
+              valueFormat="DD MMM YYYY"
+              getDayProps={(raw) => {
+                const date = new Date(raw)
+                const t = new Date()
+                const isToday = date.getDate() === t.getDate() && date.getMonth() === t.getMonth() && date.getFullYear() === t.getFullYear()
+                if (!isToday) return {}
+                return {
+                  style: {
+                    backgroundColor: 'var(--mantine-color-orange-6)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    borderRadius: 4,
+                  },
+                }
+              }}
+            />
+          </Group>
+
+          {/* ─── Cari & Tampilan ─── */}
+          <Divider />
+          <Group gap="sm" wrap="wrap" align="center">
             <TextInput
-              placeholder="Search title or description"
+              placeholder="Cari judul atau deskripsi"
               leftSection={<TbSearch size={12} />}
               value={search}
               onChange={(e) => setSearch(e.currentTarget.value)}
               size="xs"
-              w={240}
+              w={230}
             />
-            <Switch
-              label="Assigned to me"
-              checked={mine}
-              onChange={(e) => setMine(e.currentTarget.checked)}
-              size="sm"
-            />
-            <SegmentedControl
-              size="xs"
-              value={view}
-              onChange={(v) => setView(v as 'table' | 'gantt' | 'kanban')}
-              data={[
-                { value: 'table', label: 'Table' },
-                { value: 'kanban', label: 'Kanban' },
-                { value: 'gantt', label: 'Gantt' },
-              ]}
-              ml="auto"
-            />
-            <Tooltip label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`} withArrow>
-              <ActionIcon
-                variant="light"
-                color="teal"
-                size="sm"
-                onClick={handleExport}
-                disabled={tasks.length === 0}
-              >
-                <TbDownload size={14} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-          <Group gap="xs" wrap="wrap">
-            <Text size="xs" c="dimmed" fw={500}>
-              Quick
-            </Text>
+            <Text size="xs" c="dimmed" fw={500}>Quick</Text>
             <Badge
               color={quickFilter === 'openOnly' ? 'blue' : 'gray'}
               variant={quickFilter === 'openOnly' ? 'filled' : 'light'}
@@ -634,9 +652,7 @@ export function TasksPanel({
               Open only
             </Badge>
             <Divider orientation="vertical" />
-            <Text size="xs" c="dimmed" fw={500}>
-              Attention
-            </Text>
+            <Text size="xs" c="dimmed" fw={500}>Attention</Text>
             <Badge
               color={quickFilter === 'overdue' ? 'red' : 'gray'}
               variant={quickFilter === 'overdue' ? 'filled' : 'light'}
@@ -657,21 +673,34 @@ export function TasksPanel({
             >
               Unassigned
             </Badge>
-            {(quickFilter || search) && (
+            {(quickFilter || search || dueDateRange[0] || dueDateRange[1]) && (
               <Button
                 variant="subtle"
                 color="gray"
                 size="compact-xs"
-                ml="auto"
-                onClick={() => {
-                  setQuickFilter(null)
-                  setSearch('')
-                }}
+                onClick={() => { setQuickFilter(null); setSearch(''); setDueDateRange([null, null]) }}
               >
                 Clear
               </Button>
             )}
+            <SegmentedControl
+              size="xs"
+              value={view}
+              onChange={(v) => setView(v as 'table' | 'gantt' | 'kanban')}
+              data={[
+                { value: 'table', label: 'Table' },
+                { value: 'kanban', label: 'Kanban' },
+                { value: 'gantt', label: 'Gantt' },
+              ]}
+              ml="auto"
+            />
+            <Tooltip label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`} withArrow>
+              <ActionIcon variant="light" color="teal" size="sm" onClick={handleExport} disabled={tasks.length === 0}>
+                <TbDownload size={14} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
+
         </Stack>
       </Card>
 
@@ -712,6 +741,8 @@ export function TasksPanel({
             activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
           }
           onSelect={(id) => openTask(id)}
+          totalFetched={rawTasks.length}
+          filterKey={query}
         />
       ) : (
         <Card withBorder padding={0} radius="md">

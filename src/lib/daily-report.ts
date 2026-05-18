@@ -2,6 +2,7 @@ import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeT
 import { appLog } from './applog'
 import { getSetting, setSetting } from './app-settings'
 import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
+import { formatZonedDateLong, getReportTimezone } from './timezone'
 
 export const DEFAULT_REPORT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
 1. Cerdas dan manusiawi — bukan sekadar daftar angka
@@ -77,10 +78,8 @@ async function buildReportPrompt(): Promise<string> {
     buildSnapshotContext(),
   ])
 
-  const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
-  const tanggal = nowWIB.toLocaleDateString('id-ID', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
+  const tz = await getReportTimezone()
+  const tanggal = formatZonedDateLong(tz)
 
   const activeProjects = health.projects.filter((p) => p.status === 'ACTIVE')
   const projectLines = activeProjects.map((p) =>
@@ -158,6 +157,20 @@ function fmtMinutes(ms: number): string {
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
+
+export function isSendInFlight(): boolean {
+  return sendInFlight !== null
+}
+
+export async function getCooldownStatus(): Promise<{ active: boolean; remainingMs: number; lastSentAt: string | null; cooldownMinutes: number }> {
+  const last = await getSetting('report.lastSentAt')
+  const cooldownMs = await getCooldownMs()
+  const cooldownMinutes = Math.round(cooldownMs / 60_000)
+  if (!last) return { active: false, remainingMs: 0, lastSentAt: null, cooldownMinutes }
+  const elapsed = Date.now() - new Date(last).getTime()
+  if (elapsed < cooldownMs) return { active: true, remainingMs: cooldownMs - elapsed, lastSentAt: last, cooldownMinutes }
+  return { active: false, remainingMs: 0, lastSentAt: last, cooldownMinutes }
+}
 
 export async function buildPromptOnly(): Promise<string> {
   return buildReportPrompt()

@@ -1,8 +1,11 @@
 import { ActionIcon, Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
 import { UserAvatar } from './shared/UserAvatar'
 import { useNavigate } from '@tanstack/react-router'
-import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand, TbLogout } from 'react-icons/tb'
+import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand, TbLogout, TbSparkles } from 'react-icons/tb'
 import { ThemeToggle } from './ThemeToggle'
+import { WHATS_NEW_EVENT } from '../hooks/useWhatsNew'
+
+const openWhatsNew = () => window.dispatchEvent(new CustomEvent(WHATS_NEW_EVENT))
 
 type User = { name?: string; email?: string; role?: string; image?: string | null } | null | undefined
 
@@ -75,6 +78,11 @@ export function SidebarUserFooter({
           </div>
         </Tooltip>
         <ThemeToggle size="sm" />
+        <Tooltip label="Yang Baru" position="right" withArrow>
+          <ActionIcon variant="subtle" color="violet" size={34} radius="md" onClick={openWhatsNew}>
+            <TbSparkles size={15} />
+          </ActionIcon>
+        </Tooltip>
         <Tooltip label="Perluas sidebar" position="right" withArrow>
           <ActionIcon
             variant="subtle"
@@ -156,6 +164,11 @@ export function SidebarUserFooter({
       <Group justify="space-between" gap="xs" px={2}>
         <Group gap={4}>
           <ThemeToggle size="sm" />
+          <Tooltip label="Yang Baru" withArrow>
+            <ActionIcon variant="subtle" color="violet" size={32} radius="md" onClick={openWhatsNew}>
+              <TbSparkles size={15} />
+            </ActionIcon>
+          </Tooltip>
           <Tooltip label="Ciutkan sidebar" withArrow>
             <ActionIcon
               variant="subtle"

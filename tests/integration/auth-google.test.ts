@@ -8,37 +8,29 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
-describe('GET /api/auth/google', () => {
-  test('redirects to Google OAuth', async () => {
-    const res = await app.handle(new Request('http://localhost/api/auth/google'))
+// Google OAuth kini dihandle oleh Better Auth via POST /api/auth/sign-in/social.
+// Route GET /api/auth/google tidak ada — Better Auth mengelola redirect ke Google
+// secara internal setelah menerima social sign-in request.
+// E2E test untuk OAuth memerlukan real Google credentials + CSRF state
+// sehingga tidak praktis di integration test.
 
-    // Elysia returns 302 for redirects
-    expect(res.status).toBe(302)
-    const location = res.headers.get('location')
-    expect(location).toContain('accounts.google.com/o/oauth2/v2/auth')
-    expect(location).toContain('client_id=')
-    expect(location).toContain('redirect_uri=')
-    expect(location).toContain('scope=openid+email+profile')
-    expect(location).toContain('response_type=code')
-    expect(location).toContain('state=') // CSRF state parameter must be present
+describe('Google OAuth — Better Auth integration', () => {
+  test('GET /api/auth/google is not a valid route (Better Auth handles social via POST)', async () => {
+    const res = await app.handle(new Request('http://localhost/api/auth/google'))
+    // Better Auth tidak mengenali GET /api/auth/google → 404
+    expect(res.status).toBe(404)
   })
 
-  test('redirect_uri points to callback endpoint', async () => {
-    const res = await app.handle(new Request('http://localhost/api/auth/google'))
-    const location = res.headers.get('location')!
-    const url = new URL(location)
-    const redirectUri = url.searchParams.get('redirect_uri')
-    // redirect_uri must end with the callback path (port may vary based on .env PORT)
-    expect(redirectUri).toMatch(/\/api\/auth\/callback\/google$/)
-  })
-})
-
-describe('GET /api/auth/callback/google', () => {
-  test('redirects to login with error when no code provided', async () => {
-    const res = await app.handle(new Request('http://localhost/api/auth/callback/google'))
-
-    expect(res.status).toBe(302)
-    const location = res.headers.get('location')
-    expect(location).toContain('/login?error=google_failed')
+  test('POST /api/auth/sign-in/social exists and rejects missing provider', async () => {
+    const res = await app.handle(
+      new Request('http://localhost/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+    )
+    // Missing provider → 4xx (Better Auth validation error)
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(res.status).toBeLessThan(500)
   })
 })

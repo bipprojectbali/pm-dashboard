@@ -196,6 +196,7 @@ setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 // ─── Daily AI Report Cron ─────────────────────────────
 import { generateAndSendDailyReport } from './lib/daily-report'
 import { getSetting } from './lib/app-settings'
+import { getReportTimezone, getZonedParts } from './lib/timezone'
 import { appLog } from './lib/applog'
 
 // Cron menjalankan generateAndSendDailyReport saat jam:menit yang dikonfigurasi
@@ -207,8 +208,9 @@ async function runDailyReport() {
   if (enabled !== 'true') return
   const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
   const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
-  const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
-  if (nowWIB.getUTCHours() !== schedHour || nowWIB.getUTCMinutes() !== schedMinute) return
+  const tz = await getReportTimezone()
+  const now = getZonedParts(tz)
+  if (now.hour !== schedHour || now.minute !== schedMinute) return
   const result = await generateAndSendDailyReport()
   if (!result.ok) appLog('info', `Daily report cron skipped: ${result.message}`)
 }

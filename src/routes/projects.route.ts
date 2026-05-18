@@ -446,6 +446,12 @@ export function projectsRoutes() {
         set.status = access.status!
         return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
       }
+      // Retro contains sensitive data (estimates, velocity, contributor breakdown)
+      // — require explicit project membership, INTERNAL visibility alone is not enough.
+      if (!access.membership && !isSystemAdmin(auth.role)) {
+        set.status = 403
+        return { error: 'Project membership required' }
+      }
       const now = Date.now()
       const defaultSince = new Date(now - 14 * 24 * 60 * 60 * 1000)
       const since = typeof query.since === 'string' ? new Date(query.since) : defaultSince

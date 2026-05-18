@@ -1,5 +1,6 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
 import { prisma } from './db'
+import { formatDateKeyShort, getReportTimezone, getZonedDateKey } from './timezone'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,9 +67,9 @@ export async function captureSnapshot(): Promise<DailySnapshotData> {
     computeRiskReport(),
   ])
 
-  // midnight WIB (UTC+7) stored as UTC
-  const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
-  const dateKey = new Date(Date.UTC(nowWIB.getUTCFullYear(), nowWIB.getUTCMonth(), nowWIB.getUTCDate()))
+  // midnight of report timezone stored as UTC
+  const tz = await getReportTimezone()
+  const dateKey = getZonedDateKey(tz)
 
   const kpi: SnapshotKpi = {
     totalTasks: overview.tasks.total,
@@ -157,10 +158,7 @@ export async function buildSnapshotContext(): Promise<string> {
   const yesterday = snapshots[snapshots.length - 2]
   const weekAgo = snapshots[0]
 
-  const fmt = (d: Date) => {
-    const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000)
-    return wib.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
-  }
+  const fmt = (d: Date) => formatDateKeyShort(d)
 
   const delta = (a: number, b: number) => {
     const d = a - b

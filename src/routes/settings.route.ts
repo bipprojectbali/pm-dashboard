@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { buildPromptOnly, generateAndSendDailyReport, generateReportPreview, sendCustomReport } from '../lib/daily-report'
-import { runCronNow, resetCronGuard } from '../lib/report-cron'
+import { activateCronGuard, getCronGuardStatus, resetCronGuard, runCronNow } from '../lib/report-cron'
 import { getSendHistory } from '../lib/report-history'
 import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
@@ -219,11 +219,23 @@ export function settingsRoutes() {
       return result
     })
 
-    // Reset guard harian cron — memungkinkan cron kirim lagi hari ini.
+    .get('/api/admin/report/cron-guard', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      return getCronGuardStatus()
+    })
+
     .post('/api/admin/report/cron-reset', async ({ request, set }) => {
       const user = await getAdminUser(request)
       if (!user) { set.status = 403; return { error: 'Forbidden' } }
       await resetCronGuard()
-      return { ok: true, message: 'Guard harian direset — cron bisa kirim lagi hari ini.' }
+      return { ok: true, message: 'Guard dimatikan — cron bisa kirim lagi hari ini.' }
+    })
+
+    .post('/api/admin/report/cron-activate', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      await activateCronGuard()
+      return { ok: true, message: 'Guard diaktifkan — cron tidak akan kirim lagi hari ini.' }
     })
 }

@@ -16,12 +16,13 @@ import {
   ThemeIcon,
   Title,
   Tooltip,
+  Switch,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { TimePicker } from '@mantine/dates'
-import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend, TbTrash } from 'react-icons/tb'
+import { TbCheck, TbCopy, TbEye, TbLock, TbLockOpen, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 import { SendHistoryPanel } from './SendHistoryPanel'
 
@@ -244,11 +245,29 @@ export function AiSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
 
+  const { data: guardData, refetch: refetchGuard } = useQuery({
+    queryKey: ['admin', 'report-cron-guard'],
+    queryFn: () => apiFetch<{ active: boolean; date: string | null; today: string }>('/api/admin/report/cron-guard'),
+    refetchInterval: 10_000,
+  })
+  const guardActive = guardData?.active ?? false
+
   const resetCronGuard = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-reset', { method: 'POST' }),
     onSuccess: (res) => {
       setCronBlockedToday(false)
-      notifications.show({ color: 'blue', title: 'Guard direset', message: res.message })
+      refetchGuard()
+      notifications.show({ color: 'green', title: 'Guard dimatikan', message: res.message })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
+  const activateGuard = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-activate', { method: 'POST' }),
+    onSuccess: (res) => {
+      setCronBlockedToday(true)
+      refetchGuard()
+      notifications.show({ color: 'orange', title: 'Guard diaktifkan', message: res.message })
     },
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
@@ -413,8 +432,37 @@ export function AiSettingsPanel() {
             </Group>
           )}
 
-          <Group justify="space-between">
+          <Group
+            p="xs"
+            style={{ background: 'var(--mantine-color-default-hover)', borderRadius: 'var(--mantine-radius-sm)' }}
+            justify="space-between"
+          >
             <Group gap="xs">
+              <Text size="xs" c="dimmed" fw={500}>Guard Harian:</Text>
+              <Badge size="xs" variant="light" color={guardActive ? 'orange' : 'green'}>
+                {guardActive ? 'Aktif' : 'Nonaktif'}
+              </Badge>
+              <Switch
+                size="xs"
+                checked={guardActive}
+                onChange={(e) => e.currentTarget.checked ? activateGuard.mutate() : resetCronGuard.mutate()}
+                disabled={activateGuard.isPending || resetCronGuard.isPending}
+                color="orange"
+              />
+            </Group>
+            <Group gap="xs">
+              <Tooltip label={guardActive ? 'Matikan guard — cron bisa kirim hari ini' : 'Aktifkan guard — cron tidak kirim hari ini'} withArrow>
+                <Button
+                  variant="light"
+                  size="xs"
+                  color={guardActive ? 'red' : 'orange'}
+                  leftSection={guardActive ? <TbLockOpen size={13} /> : <TbLock size={13} />}
+                  onClick={() => guardActive ? resetCronGuard.mutate() : activateGuard.mutate()}
+                  loading={resetCronGuard.isPending || activateGuard.isPending}
+                >
+                  {guardActive ? 'Matikan Guard' : 'Aktifkan Guard'}
+                </Button>
+              </Tooltip>
               <Button
                 variant="light"
                 color="teal"
@@ -425,19 +473,10 @@ export function AiSettingsPanel() {
               >
                 Simulasi Cron
               </Button>
-              {cronBlockedToday && (
-                <Button
-                  variant="light"
-                  color="gray"
-                  size="xs"
-                  leftSection={<TbTrash size={13} />}
-                  onClick={() => resetCronGuard.mutate()}
-                  loading={resetCronGuard.isPending}
-                >
-                  Reset Guard Hari Ini
-                </Button>
-              )}
             </Group>
+          </Group>
+
+          <Group justify="flex-end">
             <Button
               leftSection={<TbCheck size={14} />}
               onClick={() => save.mutate()}

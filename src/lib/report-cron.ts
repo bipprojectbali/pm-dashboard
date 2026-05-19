@@ -50,9 +50,25 @@ export async function runCronNow(): Promise<CronRunResult> {
   return { ok: true, message: result.message }
 }
 
-// Reset guard harian sehingga cron bisa kirim lagi hari ini.
+// Status guard hari ini.
+export async function getCronGuardStatus(): Promise<{ active: boolean; date: string | null; today: string }> {
+  const tz = await getReportTimezone()
+  const now = getZonedParts(tz)
+  const today = todayKey(now)
+  const stored = await getSetting('report.cronLastSentDate')
+  return { active: stored === today, date: stored || null, today }
+}
+
+// Reset guard — cron bisa kirim lagi hari ini.
 export async function resetCronGuard(): Promise<void> {
   await setSetting('report.cronLastSentDate', '')
+}
+
+// Aktifkan guard — cron tidak akan kirim lagi hari ini.
+export async function activateCronGuard(): Promise<void> {
+  const tz = await getReportTimezone()
+  const now = getZonedParts(tz)
+  await setSetting('report.cronLastSentDate', todayKey(now))
 }
 
 // Dipanggil oleh setInterval: cek waktu dulu baru jalankan cron.

@@ -5,16 +5,28 @@ import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
 import { recordSendHistory, type SendTrigger } from './report-history'
 import { formatZonedDateLong, getReportTimezone } from './timezone'
 
-export const DEFAULT_REPORT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
-1. Cerdas dan manusiawi — bukan sekadar daftar angka
-2. Berikan pendapat nyata dan analisis tren kondisi tim & project
-3. Highlight risiko yang perlu perhatian segera dan alasannya
-4. Bandingkan kinerja antar anggota tim secara fair — siapa produktif, siapa perlu dukungan
-5. Identifikasi project yang paling kritis dan mengapa
-6. Berikan 2-3 rekomendasi konkret yang bisa dilakukan besok
-7. Panjang 400-600 kata, pakai format Telegram Markdown (*bold*, _italic_)
-8. Mulai dengan: "📊 *Laporan Harian — {TANGGAL}*" lalu ringkasan 1 kalimat kondisi keseluruhan
-9. Akhiri dengan footer: "_Laporan dibuat otomatis oleh AI pm-dashboard_"`
+export const DEFAULT_REPORT_INSTRUCTION = `Tulis laporan manajemen harian dalam *bahasa Indonesia*. Format: Telegram Markdown (*bold*, _italic_). Padat, berbasis data, tanpa narasi berlebihan.
+
+Struktur wajib:
+
+*📊 Laporan Harian — {TANGGAL}*
+[1 kalimat status keseluruhan: jumlah task aktif, velocity, level risiko]
+
+*Ringkasan Metrik*
+• Total task open: X | Overdue: X | Closed 7h: X | Stale: X
+• Velocity minggu ini: X task/minggu
+• Risiko: [NONE/LOW/MEDIUM/HIGH]
+
+*Status Project* (hanya project ACTIVE)
+Untuk setiap project: nama, grade (A–F), skor, open/overdue/blocked, sisa hari. Satu baris per project.
+
+*Performa Tim*
+Untuk setiap anggota: nama, open task, overdue, closed 7h. Tandai OVERLOADED jika relevan. Satu baris per orang.
+
+*Tindakan Diperlukan* (maks 3 poin)
+Hanya item yang membutuhkan keputusan atau eskalasi — disertai angka dan deadline konkret.
+
+_pm-dashboard AI report_`
 
 // ─── Claude API ──────────────────────────────────────────────────────────────
 

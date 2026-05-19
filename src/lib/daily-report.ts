@@ -26,6 +26,18 @@ Untuk setiap anggota: nama, open task, overdue, closed 7h. Tandai OVERLOADED jik
 *Tindakan Diperlukan* (maks 3 poin)
 Hanya item yang membutuhkan keputusan atau eskalasi — disertai angka dan deadline konkret.
 
+*Tanggapan & Analisis*
+Penilaian singkat kondisi hari ini: apa yang berjalan baik, apa yang mengkhawatirkan, pola atau tren yang perlu diperhatikan. Berbasis angka, bukan opini umum.
+
+*Rangkuman Eksekutif*
+3–5 poin ringkas kondisi keseluruhan tim dan project. Cocok dibaca dalam 30 detik.
+
+*Saran*
+Rekomendasi konkret berbasis data — maks 3 item, masing-masing dengan alasan singkat dan metrik pendukung.
+
+*Tindakan Segera*
+Daftar aksi spesifik yang harus diambil besok, dengan penanggung jawab (jika ada dari data tim) dan target waktu.
+
 _pm-dashboard AI report_`
 
 // ─── Claude API ──────────────────────────────────────────────────────────────

@@ -32,25 +32,41 @@ export async function runCronNow(): Promise<CronRunResult> {
   return { ok: true, message: result.message }
 }
 
-// Dipanggil oleh setInterval: cek waktu dulu baru jalankan cron.
-// Menggunakan window 30 menit SETELAH jadwal (bukan exact minute) agar
-// tahan terhadap server restart yang terlambat hingga 29 menit.
-// Double-fire dicegah oleh cronLastSentDate di runCronNow().
+// Dipanggil oleh Bun.cron('* * * * *'): exact minute check.
+// Bun.cron memiliki no-overlap guarantee — handler tidak akan fire lagi
+// selama Promise sebelumnya belum settle. Ini mencegah double-send
+// tanpa perlu guard atau cooldown apapun.
 export async function runCronIfScheduled(): Promise<void> {
   const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
   const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
 
-  const nowMin = now.hour * 60 + now.minute
-  const schedMin = schedHour * 60 + schedMinute
-  const delta = nowMin - schedMin
-
-  // Fire jika kita berada 0–29 menit SETELAH jadwal
-  if (delta < 0 || delta >= 30) return
+  if (now.hour !== schedHour || now.minute !== schedMinute) return
 
   const result = await runCronNow()
   if (!result.ok && result.skippedReason !== 'in_flight') {
     appLog('warn', `Daily report cron scheduled failed: ${result.message}`)
+  }
+}
+
+// Dipanggil sekali saat startup: tangani kasus server restart dalam
+// 5 menit setelah jadwal (window kecil, one-shot, tidak ada loop).
+export async function runCronAtStartup(): Promise<void> {
+  const enabled = await getSetting('telegram.enabled')
+  if (enabled !== 'true') return
+
+  const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
+  const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
+  const tz = await getReportTimezone()
+  const now = getZonedParts(tz)
+  const delta = (now.hour * 60 + now.minute) - (schedHour * 60 + schedMinute)
+
+  if (delta < 0 || delta >= 5) return
+
+  appLog('info', `Cron startup: dalam window jadwal (delta=${delta}m), mengirim...`)
+  const result = await runCronNow()
+  if (!result.ok && result.skippedReason !== 'in_flight') {
+    appLog('warn', `Cron startup gagal: ${result.message}`)
   }
 }

@@ -194,15 +194,18 @@ setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
 // ─── Daily AI Report Cron ─────────────────────────────
-import { runCronIfScheduled } from './lib/report-cron'
+import { runCronAtStartup, runCronIfScheduled } from './lib/report-cron'
 import { appLog } from './lib/applog'
 
 const _cronHandler = () =>
-  runCronIfScheduled().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`))
+  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`))
 
-// Startup check: tangani kasus server restart tepat di window jadwal
-_cronHandler()
-// Interval 30 detik: 2 chances per menit, tahan drift dan restart
+// Startup: kirim jika server restart dalam 5 menit setelah jadwal (one-shot)
+runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Error ? e.message : String(e)}`))
+
+// Cek setiap 30 detik. Exact minute check di dalam handler mencegah double-send
+// (hanya satu yang lolos per menit karena sendInFlight memblok yang kedua).
+// Bun.cron tersedia di Bun >= 2.x — untuk saat ini pakai setInterval.
 setInterval(_cronHandler, 30_000)
 
 // ─── Elysia App ────────────────────────────────────────

@@ -58,7 +58,7 @@ async function callClaudeAPI(apiKey: string, model: string, prompt: string, base
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(120_000),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: { message?: string } }

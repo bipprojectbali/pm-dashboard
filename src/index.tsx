@@ -199,23 +199,39 @@ import { getSetting } from './lib/app-settings'
 import { getReportTimezone, getZonedParts } from './lib/timezone'
 import { appLog } from './lib/applog'
 
-// Cron menjalankan generateAndSendDailyReport saat jam:menit yang dikonfigurasi
-// tercapai. Dedup global (cooldown + in-flight mutex) ditangani di dalam
-// generateAndSendDailyReport itu sendiri — jadi kalau manual sudah mengirim
-// dalam window cooldown, cron otomatis di-skip dengan ok=false.
+// Cron check: jalan setiap 30 detik dan saat startup.
+// - Interval 30 detik → dalam window 60 detik jadwal, ada 2 kesempatan fire, tahan restart.
+// - Startup check → tangani kasus server restart tepat di dalam window jadwal.
+// - 23-hour guard di sini (bukan cooldown 30-menit) → manual send tidak memblok cron.
 async function runDailyReport() {
   const enabled = await getSetting('telegram.enabled')
   if (enabled !== 'true') return
+
   const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
   const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
+
   if (now.hour !== schedHour || now.minute !== schedMinute) return
-  const result = await generateAndSendDailyReport({ trigger: 'cron' })
-  if (!result.ok) appLog('info', `Daily report cron skipped: ${result.message}`)
+
+  // 23-hour guard: cegah double-fire meski cron check jalan 2× per menit
+  const lastSent = await getSetting('report.lastSentAt')
+  if (lastSent && (Date.now() - new Date(lastSent).getTime()) < 23 * 3_600_000) {
+    appLog('info', `Daily report cron: sudah terkirim ${Math.round((Date.now() - new Date(lastSent).getTime()) / 60_000)} menit lalu, skip.`)
+    return
+  }
+
+  // force: true — bypass cooldown 30-menit (sudah diganti 23h guard di atas)
+  const result = await generateAndSendDailyReport({ trigger: 'cron', force: true })
+  if (!result.ok) appLog('warn', `Daily report cron gagal: ${result.message}`)
 }
 
-setInterval(() => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`)), 60 * 1000)
+const _cronHandler = () => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`))
+
+// Startup check: tangani kasus server restart saat tepat berada di window jadwal
+_cronHandler()
+// Interval 30 detik: 2 chances per menit, tahan drift dan restart
+setInterval(_cronHandler, 30_000)
 
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'

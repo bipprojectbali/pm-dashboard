@@ -2,6 +2,7 @@ import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeT
 import { appLog } from './applog'
 import { getSetting, setSetting } from './app-settings'
 import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
+import { recordSendHistory, type SendTrigger } from './report-history'
 import { formatZonedDateLong, getReportTimezone } from './timezone'
 
 export const DEFAULT_REPORT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
@@ -189,18 +190,18 @@ export async function sendCustomReport(text: string, opts: { force?: boolean } =
     ])
     if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
     if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
-    // Set lastSentAt SEBELUM kirim — supaya request bersamaan langsung kena cooldown.
-    // Jika kirim gagal, kita rollback ke nilai semula.
     const prevLastSent = await getSetting('report.lastSentAt')
     await setSetting('report.lastSentAt', new Date().toISOString())
     try {
       await sendToTelegram(botToken, chatId, text)
       appLog('info', 'Custom report: sent successfully')
+      await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger: 'custom' })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {
       if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
       const msg = e instanceof Error ? e.message : String(e)
       appLog('error', `Custom report failed: ${msg}`)
+      await recordSendHistory({ sentAt: new Date().toISOString(), ok: false, message: msg, trigger: 'custom' })
       return { ok: false, message: msg }
     }
   })()
@@ -218,12 +219,13 @@ export async function generateReportPreview(): Promise<string> {
   return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
 }
 
-export async function generateAndSendDailyReport(opts: { force?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
+export async function generateAndSendDailyReport(opts: { force?: boolean; trigger?: SendTrigger } = {}): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
   const cd = await checkCooldown(opts.force ?? false)
   if (cd.blocked) {
     return { ok: false, message: `Cooldown aktif — laporan terakhir dikirim baru-baru ini. Tunggu ${fmtMinutes(cd.remainingMs)} atau pakai opsi force.` }
   }
+  const trigger: SendTrigger = opts.trigger ?? 'manual'
   sendInFlight = (async () => {
     const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([
       getSetting('ai.anthropicApiKey'),
@@ -235,24 +237,24 @@ export async function generateAndSendDailyReport(opts: { force?: boolean } = {})
     if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
     if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
     if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
-    // Reserve lock di DB dulu — request lain yang masuk milidetik kemudian akan kena cooldown.
     const prevLastSent = await getSetting('report.lastSentAt')
     await setSetting('report.lastSentAt', new Date().toISOString())
     try {
-      appLog('info', 'Daily report: generating...')
+      appLog('info', `Daily report: generating... (trigger=${trigger})`)
       await captureSnapshot()
       const prompt = await buildReportPrompt()
       const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
       await sendToTelegram(botToken, chatId, report)
-      // Update timestamp lagi ke waktu aktual setelah kirim sukses.
       await setSetting('report.lastSentAt', new Date().toISOString())
       appLog('info', 'Daily report: sent successfully')
+      await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {
       if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
       else await setSetting('report.lastSentAt', '')
       const msg = e instanceof Error ? e.message : String(e)
       appLog('error', `Daily report failed: ${msg}`)
+      await recordSendHistory({ sentAt: new Date().toISOString(), ok: false, message: msg, trigger })
       return { ok: false, message: msg }
     }
   })()

@@ -1,4 +1,5 @@
 import { getReportDiagnostic } from '../../../src/lib/report-diagnose'
+import { getSendHistory } from '../../../src/lib/report-history'
 import { jsonText, type ToolModule } from './shared'
 
 export const reportReadonly: ToolModule = {
@@ -14,6 +15,17 @@ export const reportReadonly: ToolModule = {
         inputSchema: {},
       },
       async () => jsonText(await getReportDiagnostic()),
+    )
+
+    server.registerTool(
+      'report_send_history',
+      {
+        title: 'Report send history',
+        description:
+          'Returns the last 20 report send attempts (cron, manual, custom) with sentAt timestamp, ok/fail status, message, and trigger type. Useful for auditing whether automated sends are actually firing.',
+        inputSchema: {},
+      },
+      async () => jsonText({ history: await getSendHistory() }),
     )
   },
 }

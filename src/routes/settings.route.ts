@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { buildPromptOnly, generateAndSendDailyReport, generateReportPreview, sendCustomReport } from '../lib/daily-report'
+import { getSendHistory } from '../lib/report-history'
 import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
@@ -132,7 +133,7 @@ export function settingsRoutes() {
       const user = await getAdminUser(request)
       if (!user) { set.status = 403; return { error: 'Forbidden' } }
       const body = await request.json().catch(() => ({})) as { force?: boolean }
-      const result = await generateAndSendDailyReport({ force: !!body.force })
+      const result = await generateAndSendDailyReport({ force: !!body.force, trigger: 'manual' })
       if (!result.ok && !/cooldown|berlangsung/i.test(result.message)) set.status = 502
       return result
     })
@@ -198,5 +199,12 @@ export function settingsRoutes() {
       const authed = hasMcpSecretAuth(request) || (await getAdminUser(request)) !== null
       if (!authed) { set.status = 403; return { error: 'Forbidden' } }
       return getReportDiagnostic()
+    })
+
+    .get('/api/admin/report/send-history', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      const history = await getSendHistory()
+      return { history }
     })
 }

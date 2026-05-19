@@ -19,10 +19,11 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { TimePicker } from '@mantine/dates'
 import { TbCheck, TbCopy, TbEye, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
+import { SendHistoryPanel } from './SendHistoryPanel'
 
 const DEFAULT_INSTRUCTION = `Buat laporan harian manajerial dalam *bahasa Indonesia* yang:
 1. Cerdas dan manusiawi — bukan sekadar daftar angka
@@ -68,6 +69,32 @@ const TIMEZONE_OPTIONS = [
 ]
 const DEFAULT_TIMEZONE = 'Asia/Jakarta'
 const tzShortLabel = (tz: string) => TIMEZONE_OPTIONS.find((t) => t.value === tz)?.short ?? tz
+
+function getSecondsUntil(h: number, m: number, tz: string): number {
+  const now = new Date()
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false,
+  }).formatToParts(now)
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10)
+  const nowSecs = (get('hour') % 24) * 3600 + get('minute') * 60 + get('second')
+  const schedSecs = h * 3600 + m * 60
+  let delta = schedSecs - nowSecs
+  if (delta <= 0) delta += 86400
+  return delta
+}
+
+function fmtCountdown(secs: number): string {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+function fmtLocalTime(tz: string): string {
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date())
+}
 
 export function AiSettingsPanel() {
   const qc = useQueryClient()
@@ -179,6 +206,22 @@ export function AiSettingsPanel() {
 
   const [rawPrompt, setRawPrompt] = useState<string | null>(null)
   const [editedReport, setEditedReport] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState('')
+  const [localTime, setLocalTime] = useState('')
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    function tick() {
+      const [h, m] = scheduleTime.split(':').map(Number)
+      if (isNaN(h) || isNaN(m)) return
+      setCountdown(fmtCountdown(getSecondsUntil(h, m, timezone)))
+      setLocalTime(fmtLocalTime(timezone))
+    }
+    tick()
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    countdownRef.current = setInterval(tick, 1000)
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current) }
+  }, [scheduleTime, timezone])
 
   const fetchPrompt = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; prompt?: string; error?: string }>('/api/admin/report/prompt'),
@@ -303,6 +346,27 @@ export function AiSettingsPanel() {
             value={String(cooldownMin)}
             onChange={(e) => { setCooldownMin(parseInt(e.currentTarget.value, 10) || 30); setDirty(true) }}
           />
+
+          {countdown && (
+            <Group
+              gap="xs"
+              p="sm"
+              style={{
+                background: 'var(--mantine-color-default-hover)',
+                borderRadius: 'var(--mantine-radius-sm)',
+              }}
+            >
+              <Stack gap={2} style={{ flex: 1 }}>
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>Waktu sekarang ({tzShortLabel(timezone)})</Text>
+                <Text size="sm" fw={600} ff="monospace">{localTime}</Text>
+              </Stack>
+              <Stack gap={2} style={{ flex: 1 }}>
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>Kirim berikutnya dalam</Text>
+                <Text size="sm" fw={700} ff="monospace" c="blue">{countdown}</Text>
+              </Stack>
+            </Group>
+          )}
+
           <Group justify="flex-end">
             <Button
               leftSection={<TbCheck size={14} />}
@@ -502,6 +566,7 @@ export function AiSettingsPanel() {
           )}
         </Stack>
       </Card>
+      <SendHistoryPanel />
       <SnapshotHistoryPanel />
     </Stack>
   )

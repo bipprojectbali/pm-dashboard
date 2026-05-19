@@ -211,7 +211,7 @@ async function runDailyReport() {
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
   if (now.hour !== schedHour || now.minute !== schedMinute) return
-  const result = await generateAndSendDailyReport()
+  const result = await generateAndSendDailyReport({ trigger: 'cron' })
   if (!result.ok) appLog('info', `Daily report cron skipped: ${result.message}`)
 }
 

@@ -72,13 +72,21 @@ export async function activateCronGuard(): Promise<void> {
 }
 
 // Dipanggil oleh setInterval: cek waktu dulu baru jalankan cron.
+// Menggunakan window 30 menit SETELAH jadwal (bukan exact minute) agar
+// tahan terhadap server restart yang terlambat hingga 29 menit.
+// Double-fire dicegah oleh cronLastSentDate di runCronNow().
 export async function runCronIfScheduled(): Promise<void> {
   const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
   const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
 
-  if (now.hour !== schedHour || now.minute !== schedMinute) return
+  const nowMin = now.hour * 60 + now.minute
+  const schedMin = schedHour * 60 + schedMinute
+  const delta = nowMin - schedMin
+
+  // Fire jika kita berada 0–29 menit SETELAH jadwal
+  if (delta < 0 || delta >= 30) return
 
   const result = await runCronNow()
   if (!result.ok && result.skippedReason !== 'already_today' && result.skippedReason !== 'in_flight') {

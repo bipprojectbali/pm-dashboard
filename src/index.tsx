@@ -197,16 +197,17 @@ setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 import { runCronAtStartup, runCronIfScheduled } from './lib/report-cron'
 import { appLog } from './lib/applog'
 
-const _cronHandler = () =>
-  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`))
-
 // Startup: kirim jika server restart dalam 5 menit setelah jadwal (one-shot)
 runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Error ? e.message : String(e)}`))
 
-// Cek setiap 30 detik. Exact minute check di dalam handler mencegah double-send
-// (hanya satu yang lolos per menit karena sendInFlight memblok yang kedua).
-// Bun.cron tersedia di Bun >= 2.x — untuk saat ini pakai setInterval.
-setInterval(_cronHandler, 30_000)
+// Bun.cron: fires di exact UTC minute boundary setiap menit.
+// No-overlap guarantee built-in — handler tidak akan dipanggil lagi
+// selama Promise sebelumnya belum settle, sehingga tidak ada double-send
+// meski send butuh waktu > 60 detik.
+// @ts-ignore — in-process overload ditambahkan di Bun v1.3.12, bun-types belum update
+;(Bun as any).cron('* * * * *', () =>
+  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`))
+)
 
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'

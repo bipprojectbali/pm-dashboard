@@ -195,14 +195,15 @@ setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
 // ─── Daily AI Report Cron ─────────────────────────────
 import { generateAndSendDailyReport } from './lib/daily-report'
-import { getSetting } from './lib/app-settings'
+import { getSetting, setSetting } from './lib/app-settings'
 import { getReportTimezone, getZonedParts } from './lib/timezone'
 import { appLog } from './lib/applog'
 
 // Cron check: jalan setiap 30 detik dan saat startup.
 // - Interval 30 detik → dalam window 60 detik jadwal, ada 2 kesempatan fire, tahan restart.
 // - Startup check → tangani kasus server restart tepat di dalam window jadwal.
-// - 23-hour guard di sini (bukan cooldown 30-menit) → manual send tidak memblok cron.
+// - cronLastSentDate: key tersendiri (YYYY-MM-DD di timezone laporan) — tidak terpengaruh
+//   oleh manual send, sehingga test manual kapan pun tidak pernah memblok cron harian.
 async function runDailyReport() {
   const enabled = await getSetting('telegram.enabled')
   if (enabled !== 'true') return
@@ -214,16 +215,23 @@ async function runDailyReport() {
 
   if (now.hour !== schedHour || now.minute !== schedMinute) return
 
-  // 23-hour guard: cegah double-fire meski cron check jalan 2× per menit
-  const lastSent = await getSetting('report.lastSentAt')
-  if (lastSent && (Date.now() - new Date(lastSent).getTime()) < 23 * 3_600_000) {
-    appLog('info', `Daily report cron: sudah terkirim ${Math.round((Date.now() - new Date(lastSent).getTime()) / 60_000)} menit lalu, skip.`)
+  // Guard "sudah kirim hari ini" — pakai key cron-spesifik, BUKAN report.lastSentAt
+  // yang juga di-update manual send. Ini mencegah manual test memblok cron.
+  const todayKey = `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`
+  const cronLastDate = await getSetting('report.cronLastSentDate')
+  if (cronLastDate === todayKey) {
+    appLog('info', `Daily report cron: sudah terkirim hari ini (${todayKey}), skip.`)
     return
   }
 
-  // force: true — bypass cooldown 30-menit (sudah diganti 23h guard di atas)
+  appLog('info', `Daily report cron: mengirim laporan ${todayKey}...`)
+  // force: true — bypass cooldown 30-menit yang shared dengan manual send
   const result = await generateAndSendDailyReport({ trigger: 'cron', force: true })
-  if (!result.ok) appLog('warn', `Daily report cron gagal: ${result.message}`)
+  if (result.ok) {
+    await setSetting('report.cronLastSentDate', todayKey)
+  } else {
+    appLog('warn', `Daily report cron gagal: ${result.message}`)
+  }
 }
 
 const _cronHandler = () => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`))

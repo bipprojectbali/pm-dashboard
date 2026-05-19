@@ -1,5 +1,5 @@
 import { getAllSettings } from './app-settings'
-import { getCooldownStatus, isSendInFlight } from './daily-report'
+import { getLastSentAt, isSendInFlight } from './daily-report'
 import { getReportTimezone, getZonedParts } from './timezone'
 
 export interface ReportDiagnostic {
@@ -16,7 +16,7 @@ export interface ReportDiagnostic {
   }
   telegram: { enabled: boolean; botTokenSet: boolean; chatIdSet: boolean }
   ai: { apiKeySet: boolean; model: string | null; baseUrlSet: boolean }
-  cooldown: Awaited<ReturnType<typeof getCooldownStatus>>
+  lastSentAt: string | null
   sendInFlight: boolean
   blockers: string[]
   healthy: boolean
@@ -35,8 +35,8 @@ export async function getReportDiagnostic(): Promise<ReportDiagnostic> {
     schedHour >= 0 && schedHour < 24 && schedMinute >= 0 && schedMinute < 60
   const wouldFireNow = schedValid && zoned.hour === schedHour && zoned.minute === schedMinute
   const enabled = settings['telegram.enabled'] === 'true'
-  const cooldown = await getCooldownStatus()
   const inFlight = isSendInFlight()
+  const lastSentAt = await getLastSentAt()
 
   const minutesUntilNextFire = (() => {
     if (!schedValid) return null
@@ -53,7 +53,6 @@ export async function getReportDiagnostic(): Promise<ReportDiagnostic> {
   if (!settings['telegram.botToken']) blockers.push('telegram.botToken kosong')
   if (!settings['telegram.chatId']) blockers.push('telegram.chatId kosong')
   if (!settings['ai.anthropicApiKey']) blockers.push('ai.anthropicApiKey kosong')
-  if (cooldown.active) blockers.push(`cooldown aktif (sisa ${Math.ceil(cooldown.remainingMs / 60_000)} menit)`)
   if (inFlight) blockers.push('pengiriman sedang berlangsung (sendInFlight)')
 
   return {
@@ -82,7 +81,7 @@ export async function getReportDiagnostic(): Promise<ReportDiagnostic> {
       model: settings['ai.model'] ?? null,
       baseUrlSet: !!settings['ai.baseUrl'],
     },
-    cooldown,
+    lastSentAt,
     sendInFlight: inFlight,
     blockers,
     healthy: blockers.length === 0,

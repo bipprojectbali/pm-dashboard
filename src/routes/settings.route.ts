@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { buildPromptOnly, generateAndSendDailyReport, generateReportPreview, sendCustomReport } from '../lib/daily-report'
-import { activateCronGuard, getCronGuardStatus, resetCronGuard, runCronNow } from '../lib/report-cron'
+import { runCronNow } from '../lib/report-cron'
 import { getSendHistory } from '../lib/report-history'
 import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
@@ -133,9 +133,8 @@ export function settingsRoutes() {
     .post('/api/admin/report/send-now', async ({ request, set }) => {
       const user = await getAdminUser(request)
       if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const body = await request.json().catch(() => ({})) as { force?: boolean }
-      const result = await generateAndSendDailyReport({ force: !!body.force, trigger: 'manual' })
-      if (!result.ok && !/cooldown|berlangsung/i.test(result.message)) set.status = 502
+      const result = await generateAndSendDailyReport({ trigger: 'manual' })
+      if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
       return result
     })
 
@@ -175,10 +174,10 @@ export function settingsRoutes() {
     .post('/api/admin/report/send-custom', async ({ request, set }) => {
       const user = await getAdminUser(request)
       if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const { text, force } = await request.json() as { text?: string; force?: boolean }
+      const { text } = await request.json() as { text?: string }
       if (!text?.trim()) { set.status = 400; return { error: 'text wajib diisi' } }
-      const result = await sendCustomReport(text, { force: !!force })
-      if (!result.ok && !/cooldown|berlangsung/i.test(result.message)) set.status = 502
+      const result = await sendCustomReport(text)
+      if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
       return result
     })
 
@@ -219,23 +218,4 @@ export function settingsRoutes() {
       return result
     })
 
-    .get('/api/admin/report/cron-guard', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      return getCronGuardStatus()
-    })
-
-    .post('/api/admin/report/cron-reset', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      await resetCronGuard()
-      return { ok: true, message: 'Guard dimatikan — cron bisa kirim lagi hari ini.' }
-    })
-
-    .post('/api/admin/report/cron-activate', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      await activateCronGuard()
-      return { ok: true, message: 'Guard diaktifkan — cron tidak akan kirim lagi hari ini.' }
-    })
 }

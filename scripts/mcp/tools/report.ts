@@ -1,6 +1,6 @@
 import { getReportDiagnostic } from '../../../src/lib/report-diagnose'
 import { getSendHistory } from '../../../src/lib/report-history'
-import { activateCronGuard, getCronGuardStatus, resetCronGuard, runCronNow } from '../../../src/lib/report-cron'
+import { runCronNow } from '../../../src/lib/report-cron'
 import { jsonText, type ToolModule } from './shared'
 
 export const reportReadonly: ToolModule = {
@@ -16,16 +16,6 @@ export const reportReadonly: ToolModule = {
         inputSchema: {},
       },
       async () => jsonText(await getReportDiagnostic()),
-    )
-
-    server.registerTool(
-      'report_cron_guard_status',
-      {
-        title: 'Cron guard status',
-        description: 'Returns whether the daily cron guard is active (already sent today) or not, plus the stored date and today\'s date key in the configured timezone.',
-        inputSchema: {},
-      },
-      async () => jsonText(await getCronGuardStatus()),
     )
 
     server.registerTool(
@@ -56,24 +46,5 @@ export const reportAdmin: ToolModule = {
       async () => jsonText(await runCronNow()),
     )
 
-    server.registerTool(
-      'report_cron_reset',
-      {
-        title: 'Disable cron daily guard',
-        description: 'Clears cronLastSentDate so the cron can send again today. Use to re-test or re-send on the same day.',
-        inputSchema: {},
-      },
-      async () => { await resetCronGuard(); return jsonText({ ok: true, message: 'Guard dimatikan.' }) },
-    )
-
-    server.registerTool(
-      'report_cron_activate',
-      {
-        title: 'Activate cron daily guard',
-        description: 'Sets cronLastSentDate to today so the cron will not send again today. Use to prevent an extra cron fire.',
-        inputSchema: {},
-      },
-      async () => { await activateCronGuard(); return jsonText({ ok: true, message: 'Guard diaktifkan.' }) },
-    )
   },
 }

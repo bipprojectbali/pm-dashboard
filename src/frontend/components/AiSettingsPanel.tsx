@@ -16,13 +16,12 @@ import {
   ThemeIcon,
   Title,
   Tooltip,
-  Switch,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { TimePicker } from '@mantine/dates'
-import { TbCheck, TbCopy, TbEye, TbLock, TbLockOpen, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
+import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 import { SendHistoryPanel } from './SendHistoryPanel'
 
@@ -135,7 +134,6 @@ export function AiSettingsPanel() {
   const [model, setModel] = useState('claude-opus-4-7')
   const [scheduleTime, setScheduleTime] = useState('18:00')
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
-  const [cooldownMin, setCooldownMin] = useState<number | string>(30)
   const [promptInstruction, setPromptInstruction] = useState(DEFAULT_INSTRUCTION)
   const [promptDirty, setPromptDirty] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -150,7 +148,6 @@ export function AiSettingsPanel() {
     const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
     setScheduleTime(`${h}:${m}`)
     setTimezone(settings['report.timezone'] || DEFAULT_TIMEZONE)
-    setCooldownMin(parseInt(settings['report.cooldownMinutes'] ?? '30', 10))
     setPromptInstruction(settings['report.promptInstruction'] ?? DEFAULT_INSTRUCTION)
     setDirty(false)
     setPromptDirty(false)
@@ -165,7 +162,6 @@ export function AiSettingsPanel() {
         saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
         saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
         saveSetting('report.timezone', timezone),
-        saveSetting('report.cooldownMinutes', String(cooldownMin || 30)),
       ])
     },
     onSuccess: () => {
@@ -212,12 +208,8 @@ export function AiSettingsPanel() {
   })
 
   const sendNow = useMutation({
-    mutationFn: (force?: boolean) =>
-      apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: !!force }),
-      }),
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
       if (res.ok) {
@@ -231,43 +223,13 @@ export function AiSettingsPanel() {
 
   const [rawPrompt, setRawPrompt] = useState<string | null>(null)
   const [editedReport, setEditedReport] = useState<string | null>(null)
-  const [cronBlockedToday, setCronBlockedToday] = useState(false)
 
   const triggerCron = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; message: string; skippedReason?: string }>('/api/admin/report/cron-trigger', { method: 'POST' }),
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-trigger', { method: 'POST' }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'report-send-history'] })
-      setCronBlockedToday(res.skippedReason === 'already_today')
       if (res.ok) notifications.show({ color: 'teal', title: 'Cron berhasil', message: res.message })
-      else if (res.skippedReason === 'already_today') notifications.show({ color: 'orange', title: 'Sudah kirim hari ini', message: res.message })
       else notifications.show({ color: 'red', title: 'Gagal', message: res.message })
-    },
-    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
-  })
-
-  const { data: guardData, refetch: refetchGuard } = useQuery({
-    queryKey: ['admin', 'report-cron-guard'],
-    queryFn: () => apiFetch<{ active: boolean; date: string | null; today: string }>('/api/admin/report/cron-guard'),
-    refetchInterval: 10_000,
-  })
-  const guardActive = guardData?.active ?? false
-
-  const resetCronGuard = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-reset', { method: 'POST' }),
-    onSuccess: (res) => {
-      setCronBlockedToday(false)
-      refetchGuard()
-      notifications.show({ color: 'green', title: 'Guard dimatikan', message: res.message })
-    },
-    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
-  })
-
-  const activateGuard = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-activate', { method: 'POST' }),
-    onSuccess: (res) => {
-      setCronBlockedToday(true)
-      refetchGuard()
-      notifications.show({ color: 'orange', title: 'Guard diaktifkan', message: res.message })
     },
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
@@ -298,11 +260,11 @@ export function AiSettingsPanel() {
   })
 
   const sendCustom = useMutation({
-    mutationFn: ({ text, force }: { text: string; force?: boolean }) =>
+    mutationFn: ({ text }: { text: string }) =>
       apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, force: !!force }),
+        body: JSON.stringify({ text }),
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
@@ -402,16 +364,6 @@ export function AiSettingsPanel() {
             value={scheduleTime}
             onChange={(v) => { setScheduleTime(v); setDirty(true) }}
           />
-          <TextInput
-            label="Cooldown antar kirim (menit)"
-            description="Jeda minimum antar pengiriman — mencegah laporan ganda kalau cron + manual atau double-click. Default 30 menit. Pakai tombol ⚡ untuk override saat butuh kirim ulang."
-            type="number"
-            min={1}
-            max={1440}
-            value={String(cooldownMin)}
-            onChange={(e) => { setCooldownMin(parseInt(e.currentTarget.value, 10) || 30); setDirty(true) }}
-          />
-
           {countdown && (
             <Group
               gap="xs"
@@ -432,51 +384,17 @@ export function AiSettingsPanel() {
             </Group>
           )}
 
-          <Group
-            p="xs"
-            style={{ background: 'var(--mantine-color-default-hover)', borderRadius: 'var(--mantine-radius-sm)' }}
-            justify="space-between"
-          >
-            <Group gap="xs">
-              <Text size="xs" c="dimmed" fw={500}>Guard Harian:</Text>
-              <Badge size="xs" variant="light" color={guardActive ? 'orange' : 'green'}>
-                {guardActive ? 'Aktif' : 'Nonaktif'}
-              </Badge>
-              <Switch
-                size="xs"
-                checked={guardActive}
-                onChange={(e) => e.currentTarget.checked ? activateGuard.mutate() : resetCronGuard.mutate()}
-                disabled={activateGuard.isPending || resetCronGuard.isPending}
-                color="orange"
-              />
-            </Group>
-            <Group gap="xs">
-              <Tooltip label={guardActive ? 'Matikan guard — cron bisa kirim hari ini' : 'Aktifkan guard — cron tidak kirim hari ini'} withArrow>
-                <Button
-                  variant="light"
-                  size="xs"
-                  color={guardActive ? 'red' : 'orange'}
-                  leftSection={guardActive ? <TbLockOpen size={13} /> : <TbLock size={13} />}
-                  onClick={() => guardActive ? resetCronGuard.mutate() : activateGuard.mutate()}
-                  loading={resetCronGuard.isPending || activateGuard.isPending}
-                >
-                  {guardActive ? 'Matikan Guard' : 'Aktifkan Guard'}
-                </Button>
-              </Tooltip>
-              <Button
-                variant="light"
-                color="teal"
-                size="xs"
-                leftSection={<TbPlayerPlay size={13} />}
-                onClick={() => triggerCron.mutate()}
-                loading={triggerCron.isPending}
-              >
-                Simulasi Cron
-              </Button>
-            </Group>
-          </Group>
-
-          <Group justify="flex-end">
+          <Group justify="space-between">
+            <Button
+              variant="light"
+              color="teal"
+              size="xs"
+              leftSection={<TbPlayerPlay size={13} />}
+              onClick={() => triggerCron.mutate()}
+              loading={triggerCron.isPending}
+            >
+              Simulasi Cron
+            </Button>
             <Button
               leftSection={<TbCheck size={14} />}
               onClick={() => save.mutate()}
@@ -553,29 +471,15 @@ export function AiSettingsPanel() {
               >
                 Generate AI
               </Button>
-              <Button.Group>
-                <Button
-                  variant="light" color="blue" size="xs"
-                  leftSection={<TbSend size={13} />}
-                  onClick={() => sendNow.mutate(false)}
-                  loading={sendNow.isPending}
-                  disabled={!apiKeySet && !apiKey}
-                >
-                  Kirim Otomatis
-                </Button>
-                <Tooltip label="Kirim paksa (override cooldown)" withArrow>
-                  <Button
-                    variant="light" color="orange" size="xs"
-                    onClick={() => {
-                      if (!confirm('Kirim paksa? Ini akan mengabaikan cooldown dan bisa menyebabkan laporan ganda.')) return
-                      sendNow.mutate(true)
-                    }}
-                    disabled={!apiKeySet && !apiKey}
-                  >
-                    ⚡
-                  </Button>
-                </Tooltip>
-              </Button.Group>
+              <Button
+                variant="light" color="blue" size="xs"
+                leftSection={<TbSend size={13} />}
+                onClick={() => sendNow.mutate()}
+                loading={sendNow.isPending}
+                disabled={!apiKeySet && !apiKey}
+              >
+                Kirim Otomatis
+              </Button>
             </Group>
           </Group>
 
@@ -654,19 +558,6 @@ export function AiSettingsPanel() {
                       >
                         Kirim Laporan Ini
                       </Button>
-                      <Tooltip label="Kirim paksa (override cooldown)" withArrow>
-                        <Button
-                          color="orange" size="xs"
-                          variant="filled"
-                          onClick={() => {
-                            if (!confirm('Kirim paksa? Ini akan mengabaikan cooldown dan bisa menyebabkan laporan ganda.')) return
-                            sendCustom.mutate({ text: editedReport ?? preview ?? '', force: true })
-                          }}
-                          disabled={!(editedReport ?? preview)}
-                        >
-                          ⚡
-                        </Button>
-                      </Tooltip>
                     </Button.Group>
                   </Group>
                 </Stack>

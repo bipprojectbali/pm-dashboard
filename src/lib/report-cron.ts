@@ -1,22 +1,15 @@
 import { generateAndSendDailyReport } from './daily-report'
-import { getSetting, setSetting } from './app-settings'
+import { getSetting } from './app-settings'
 import { getReportTimezone, getZonedParts } from './timezone'
 import { appLog } from './applog'
-
-export type CronSkipReason = 'not_enabled' | 'already_today' | 'in_flight'
 
 export interface CronRunResult {
   ok: boolean
   message: string
-  skippedReason?: CronSkipReason
-}
-
-function todayKey(now: ReturnType<typeof getZonedParts>): string {
-  return `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`
+  skippedReason?: 'not_enabled' | 'in_flight'
 }
 
 // Jalankan cron sekarang tanpa cek waktu jadwal — untuk tombol "Simulasi Cron".
-// Guard cronLastSentDate tetap aktif agar perilaku identik dengan cron sungguhan.
 export async function runCronNow(): Promise<CronRunResult> {
   const enabled = await getSetting('telegram.enabled')
   if (enabled !== 'true') {
@@ -25,50 +18,18 @@ export async function runCronNow(): Promise<CronRunResult> {
 
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
-  const key = todayKey(now)
-
-  const cronLastDate = await getSetting('report.cronLastSentDate')
-  if (cronLastDate === key) {
-    return {
-      ok: false,
-      message: `Laporan cron sudah terkirim hari ini (${key}). Gunakan "Reset Guard" untuk kirim ulang.`,
-      skippedReason: 'already_today',
-    }
-  }
+  const key = `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`
 
   appLog('info', `Daily report cron: mengirim laporan ${key}...`)
-  const result = await generateAndSendDailyReport({ trigger: 'cron', force: true })
+  const result = await generateAndSendDailyReport({ trigger: 'cron' })
 
-  if (result.ok) {
-    await setSetting('report.cronLastSentDate', key)
-  } else {
-    const reason: CronSkipReason = result.message.includes('berlangsung') ? 'in_flight' : undefined as any
+  if (!result.ok) {
+    const reason = result.message.includes('berlangsung') ? 'in_flight' as const : undefined
     appLog('warn', `Daily report cron gagal: ${result.message}`)
     return { ok: false, message: result.message, skippedReason: reason }
   }
 
   return { ok: true, message: result.message }
-}
-
-// Status guard hari ini.
-export async function getCronGuardStatus(): Promise<{ active: boolean; date: string | null; today: string }> {
-  const tz = await getReportTimezone()
-  const now = getZonedParts(tz)
-  const today = todayKey(now)
-  const stored = await getSetting('report.cronLastSentDate')
-  return { active: stored === today, date: stored || null, today }
-}
-
-// Reset guard — cron bisa kirim lagi hari ini.
-export async function resetCronGuard(): Promise<void> {
-  await setSetting('report.cronLastSentDate', '')
-}
-
-// Aktifkan guard — cron tidak akan kirim lagi hari ini.
-export async function activateCronGuard(): Promise<void> {
-  const tz = await getReportTimezone()
-  const now = getZonedParts(tz)
-  await setSetting('report.cronLastSentDate', todayKey(now))
 }
 
 // Dipanggil oleh setInterval: cek waktu dulu baru jalankan cron.
@@ -89,7 +50,7 @@ export async function runCronIfScheduled(): Promise<void> {
   if (delta < 0 || delta >= 30) return
 
   const result = await runCronNow()
-  if (!result.ok && result.skippedReason !== 'already_today' && result.skippedReason !== 'in_flight') {
+  if (!result.ok && result.skippedReason !== 'in_flight') {
     appLog('warn', `Daily report cron scheduled failed: ${result.message}`)
   }
 }

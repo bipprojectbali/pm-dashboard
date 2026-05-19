@@ -156,57 +156,22 @@ Tulis laporan sekarang:`
 // waktu. Mencegah race antara cron + tombol manual + double-click.
 let sendInFlight: Promise<{ ok: boolean; message: string }> | null = null
 
-// Minimum jeda antar pengiriman (manual atau cron). Bisa di-override via setting
-// `report.cooldownMinutes` (default 30 menit). Test endpoint tidak terpengaruh.
-const DEFAULT_COOLDOWN_MIN = 30
-
-async function getCooldownMs(): Promise<number> {
-  const raw = await getSetting('report.cooldownMinutes')
-  const min = raw ? parseInt(raw, 10) : DEFAULT_COOLDOWN_MIN
-  return (Number.isFinite(min) && min > 0 ? min : DEFAULT_COOLDOWN_MIN) * 60 * 1000
-}
-
-async function checkCooldown(force: boolean): Promise<{ blocked: boolean; remainingMs: number }> {
-  if (force) return { blocked: false, remainingMs: 0 }
-  const last = await getSetting('report.lastSentAt')
-  if (!last) return { blocked: false, remainingMs: 0 }
-  const cooldown = await getCooldownMs()
-  const elapsed = Date.now() - new Date(last).getTime()
-  if (elapsed < cooldown) return { blocked: true, remainingMs: cooldown - elapsed }
-  return { blocked: false, remainingMs: 0 }
-}
-
-function fmtMinutes(ms: number): string {
-  const min = Math.ceil(ms / 60_000)
-  return min >= 60 ? `${Math.ceil(min / 60)} jam` : `${min} menit`
-}
-
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function isSendInFlight(): boolean {
   return sendInFlight !== null
 }
 
-export async function getCooldownStatus(): Promise<{ active: boolean; remainingMs: number; lastSentAt: string | null; cooldownMinutes: number }> {
-  const last = await getSetting('report.lastSentAt')
-  const cooldownMs = await getCooldownMs()
-  const cooldownMinutes = Math.round(cooldownMs / 60_000)
-  if (!last) return { active: false, remainingMs: 0, lastSentAt: null, cooldownMinutes }
-  const elapsed = Date.now() - new Date(last).getTime()
-  if (elapsed < cooldownMs) return { active: true, remainingMs: cooldownMs - elapsed, lastSentAt: last, cooldownMinutes }
-  return { active: false, remainingMs: 0, lastSentAt: last, cooldownMinutes }
+export async function getLastSentAt(): Promise<string | null> {
+  return getSetting('report.lastSentAt')
 }
 
 export async function buildPromptOnly(): Promise<string> {
   return buildReportPrompt()
 }
 
-export async function sendCustomReport(text: string, opts: { force?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
+export async function sendCustomReport(text: string): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
-  const cd = await checkCooldown(opts.force ?? false)
-  if (cd.blocked) {
-    return { ok: false, message: `Cooldown aktif — laporan terakhir dikirim baru-baru ini. Tunggu ${fmtMinutes(cd.remainingMs)} atau pakai opsi force.` }
-  }
   sendInFlight = (async () => {
     const [botToken, chatId] = await Promise.all([
       getSetting('telegram.botToken'),
@@ -243,12 +208,8 @@ export async function generateReportPreview(): Promise<string> {
   return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
 }
 
-export async function generateAndSendDailyReport(opts: { force?: boolean; trigger?: SendTrigger } = {}): Promise<{ ok: boolean; message: string }> {
+export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger } = {}): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
-  const cd = await checkCooldown(opts.force ?? false)
-  if (cd.blocked) {
-    return { ok: false, message: `Cooldown aktif — laporan terakhir dikirim baru-baru ini. Tunggu ${fmtMinutes(cd.remainingMs)} atau pakai opsi force.` }
-  }
   const trigger: SendTrigger = opts.trigger ?? 'manual'
   sendInFlight = (async () => {
     const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([

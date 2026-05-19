@@ -109,7 +109,7 @@ describe('GET /api/admin/report/diagnose — response shape', () => {
 
     const res = await req({ bearer: process.env.MCP_SECRET! })
     const body = await res.json() as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['ai', 'blockers', 'cooldown', 'healthy', 'now', 'schedule', 'sendInFlight', 'telegram', 'version'])
+    expect(Object.keys(body).sort()).toEqual(['ai', 'blockers', 'healthy', 'lastSentAt', 'now', 'schedule', 'sendInFlight', 'telegram', 'version'])
 
     const blockers = body.blockers as string[]
     expect(blockers).toContain('telegram.enabled !== "true"')
@@ -146,17 +146,14 @@ describe('GET /api/admin/report/diagnose — response shape', () => {
     expect(body.blockers.some((b) => b.startsWith('schedule invalid'))).toBe(true)
   })
 
-  test('reports active cooldown when lastSentAt recent', async () => {
-    await setKey('report.scheduleHour', '18')
-    await setKey('report.scheduleMinute', '0')
-    await setKey('report.cooldownMinutes', '30')
-    await setKey('report.lastSentAt', new Date(Date.now() - 5 * 60_000).toISOString())
+  test('lastSentAt tercatat di response', async () => {
+    const ts = new Date(Date.now() - 5 * 60_000).toISOString()
+    await setKey('report.lastSentAt', ts)
 
     const res = await req({ bearer: process.env.MCP_SECRET! })
-    const body = await res.json() as { cooldown: { active: boolean; remainingMs: number }; blockers: string[] }
-    expect(body.cooldown.active).toBe(true)
-    expect(body.cooldown.remainingMs).toBeGreaterThan(0)
-    expect(body.blockers.some((b) => b.startsWith('cooldown aktif'))).toBe(true)
+    const body = await res.json() as { lastSentAt: string | null; blockers: string[] }
+    expect(body.lastSentAt).toBe(ts)
+    expect(body.blockers.some((b) => b.startsWith('cooldown'))).toBe(false)
   })
 })
 

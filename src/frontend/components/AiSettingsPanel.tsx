@@ -21,7 +21,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { TimePicker } from '@mantine/dates'
-import { TbCheck, TbCopy, TbEye, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
+import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend, TbTrash } from 'react-icons/tb'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 import { SendHistoryPanel } from './SendHistoryPanel'
 
@@ -206,6 +206,28 @@ export function AiSettingsPanel() {
 
   const [rawPrompt, setRawPrompt] = useState<string | null>(null)
   const [editedReport, setEditedReport] = useState<string | null>(null)
+  const [cronBlockedToday, setCronBlockedToday] = useState(false)
+
+  const triggerCron = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string; skippedReason?: string }>('/api/admin/report/cron-trigger', { method: 'POST' }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'report-send-history'] })
+      setCronBlockedToday(res.skippedReason === 'already_today')
+      if (res.ok) notifications.show({ color: 'teal', title: 'Cron berhasil', message: res.message })
+      else if (res.skippedReason === 'already_today') notifications.show({ color: 'orange', title: 'Sudah kirim hari ini', message: res.message })
+      else notifications.show({ color: 'red', title: 'Gagal', message: res.message })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
+
+  const resetCronGuard = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/cron-reset', { method: 'POST' }),
+    onSuccess: (res) => {
+      setCronBlockedToday(false)
+      notifications.show({ color: 'blue', title: 'Guard direset', message: res.message })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+  })
   const [countdown, setCountdown] = useState('')
   const [localTime, setLocalTime] = useState('')
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -367,7 +389,31 @@ export function AiSettingsPanel() {
             </Group>
           )}
 
-          <Group justify="flex-end">
+          <Group justify="space-between">
+            <Group gap="xs">
+              <Button
+                variant="light"
+                color="teal"
+                size="xs"
+                leftSection={<TbPlayerPlay size={13} />}
+                onClick={() => triggerCron.mutate()}
+                loading={triggerCron.isPending}
+              >
+                Simulasi Cron
+              </Button>
+              {cronBlockedToday && (
+                <Button
+                  variant="light"
+                  color="gray"
+                  size="xs"
+                  leftSection={<TbTrash size={13} />}
+                  onClick={() => resetCronGuard.mutate()}
+                  loading={resetCronGuard.isPending}
+                >
+                  Reset Guard Hari Ini
+                </Button>
+              )}
+            </Group>
             <Button
               leftSection={<TbCheck size={14} />}
               onClick={() => save.mutate()}

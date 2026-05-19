@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { buildPromptOnly, generateAndSendDailyReport, generateReportPreview, sendCustomReport } from '../lib/daily-report'
+import { runCronNow, resetCronGuard } from '../lib/report-cron'
 import { getSendHistory } from '../lib/report-history'
 import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
@@ -206,5 +207,23 @@ export function settingsRoutes() {
       if (!user) { set.status = 403; return { error: 'Forbidden' } }
       const history = await getSendHistory()
       return { history }
+    })
+
+    // Jalankan cron sekarang tanpa menunggu waktu jadwal — untuk testing & debugging.
+    // Guard cronLastSentDate tetap aktif; gunakan cron-reset untuk bypass.
+    .post('/api/admin/report/cron-trigger', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      const result = await runCronNow()
+      if (!result.ok && !result.skippedReason) set.status = 502
+      return result
+    })
+
+    // Reset guard harian cron — memungkinkan cron kirim lagi hari ini.
+    .post('/api/admin/report/cron-reset', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) { set.status = 403; return { error: 'Forbidden' } }
+      await resetCronGuard()
+      return { ok: true, message: 'Guard harian direset — cron bisa kirim lagi hari ini.' }
     })
 }

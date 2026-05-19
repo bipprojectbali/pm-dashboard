@@ -194,49 +194,13 @@ setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
 // ─── Daily AI Report Cron ─────────────────────────────
-import { generateAndSendDailyReport } from './lib/daily-report'
-import { getSetting, setSetting } from './lib/app-settings'
-import { getReportTimezone, getZonedParts } from './lib/timezone'
+import { runCronIfScheduled } from './lib/report-cron'
 import { appLog } from './lib/applog'
 
-// Cron check: jalan setiap 30 detik dan saat startup.
-// - Interval 30 detik → dalam window 60 detik jadwal, ada 2 kesempatan fire, tahan restart.
-// - Startup check → tangani kasus server restart tepat di dalam window jadwal.
-// - cronLastSentDate: key tersendiri (YYYY-MM-DD di timezone laporan) — tidak terpengaruh
-//   oleh manual send, sehingga test manual kapan pun tidak pernah memblok cron harian.
-async function runDailyReport() {
-  const enabled = await getSetting('telegram.enabled')
-  if (enabled !== 'true') return
+const _cronHandler = () =>
+  runCronIfScheduled().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`))
 
-  const schedHour = parseInt((await getSetting('report.scheduleHour')) ?? '18', 10)
-  const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
-  const tz = await getReportTimezone()
-  const now = getZonedParts(tz)
-
-  if (now.hour !== schedHour || now.minute !== schedMinute) return
-
-  // Guard "sudah kirim hari ini" — pakai key cron-spesifik, BUKAN report.lastSentAt
-  // yang juga di-update manual send. Ini mencegah manual test memblok cron.
-  const todayKey = `${now.year}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`
-  const cronLastDate = await getSetting('report.cronLastSentDate')
-  if (cronLastDate === todayKey) {
-    appLog('info', `Daily report cron: sudah terkirim hari ini (${todayKey}), skip.`)
-    return
-  }
-
-  appLog('info', `Daily report cron: mengirim laporan ${todayKey}...`)
-  // force: true — bypass cooldown 30-menit yang shared dengan manual send
-  const result = await generateAndSendDailyReport({ trigger: 'cron', force: true })
-  if (result.ok) {
-    await setSetting('report.cronLastSentDate', todayKey)
-  } else {
-    appLog('warn', `Daily report cron gagal: ${result.message}`)
-  }
-}
-
-const _cronHandler = () => runDailyReport().catch((e) => appLog('error', `Daily report cron: ${e instanceof Error ? e.message : String(e)}`))
-
-// Startup check: tangani kasus server restart saat tepat berada di window jadwal
+// Startup check: tangani kasus server restart tepat di window jadwal
 _cronHandler()
 // Interval 30 detik: 2 chances per menit, tahan drift dan restart
 setInterval(_cronHandler, 30_000)

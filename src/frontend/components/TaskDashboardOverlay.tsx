@@ -72,11 +72,11 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
 
     for (const t of tasks) {
       byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1)
-      const ck = t.createdAt.slice(0, 10)
+      const ck = toLocalDateStr(new Date(t.createdAt))
       const ci = keyToIdx.get(ck)
       if (ci !== undefined) buckets[ci].created += 1
       if (t.closedAt) {
-        const xk = t.closedAt.slice(0, 10)
+        const xk = toLocalDateStr(new Date(t.closedAt))
         const xi = keyToIdx.get(xk)
         if (xi !== undefined) buckets[xi].closed += 1
       }

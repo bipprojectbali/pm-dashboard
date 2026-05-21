@@ -195,6 +195,9 @@ export function AiSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
 
+  const [testAiCooldown, setTestAiCooldown] = useState(0)
+  const testAiCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const testAi = useMutation({
     mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/test-ai', { method: 'POST' }),
     onSuccess: (res) => {
@@ -203,8 +206,25 @@ export function AiSettingsPanel() {
       } else {
         notifications.show({ color: 'red', title: 'Koneksi gagal', message: res.message })
       }
+      // Cooldown 15 detik setelah request selesai (sukses atau gagal)
+      setTestAiCooldown(15)
+      testAiCooldownRef.current = setInterval(() => {
+        setTestAiCooldown((v) => {
+          if (v <= 1) { clearInterval(testAiCooldownRef.current!); return 0 }
+          return v - 1
+        })
+      }, 1000)
     },
-    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
+    onError: (e: Error) => {
+      notifications.show({ color: 'red', title: 'Error', message: e.message })
+      setTestAiCooldown(15)
+      testAiCooldownRef.current = setInterval(() => {
+        setTestAiCooldown((v) => {
+          if (v <= 1) { clearInterval(testAiCooldownRef.current!); return 0 }
+          return v - 1
+        })
+      }, 1000)
+    },
   })
 
   const sendNow = useMutation({
@@ -327,9 +347,9 @@ export function AiSettingsPanel() {
               leftSection={<TbPlugConnected size={14} />}
               onClick={() => testAi.mutate()}
               loading={testAi.isPending}
-              disabled={!apiKeySet && !apiKey}
+              disabled={(!apiKeySet && !apiKey) || testAiCooldown > 0}
             >
-              Test Koneksi AI
+              {testAiCooldown > 0 ? `Test Koneksi AI (${testAiCooldown}s)` : 'Test Koneksi AI'}
             </Button>
             <Button
               leftSection={<TbCheck size={14} />}

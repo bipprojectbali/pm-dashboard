@@ -91,14 +91,29 @@ export function settingsRoutes() {
           signal: AbortSignal.timeout(15_000),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({})) as { error?: { message?: string } }
+          const err = await res.json().catch(() => ({})) as { error?: { message?: string; type?: string } }
+          const kind = err.error?.type ?? ''
+          const detail = err.error?.message ?? 'unknown'
+          if (res.status === 429 || kind === 'rate_limit_error') {
+            set.status = 429
+            const resetAt = res.headers.get('x-ratelimit-reset-tokens') ?? res.headers.get('x-ratelimit-reset-requests')
+            const resetHint = resetAt
+              ? ` Reset: ${new Date(resetAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' })} WITA.`
+              : ''
+            return { ok: false, message: `Rate limit proxy — quota request token ini habis.${resetHint} Coba rotate token atau tunggu reset.` }
+          }
+          if (res.status === 401 || res.status === 403) {
+            set.status = 401
+            return { ok: false, message: `API key tidak valid atau tidak punya akses (${res.status}).` }
+          }
           set.status = 502
-          return { ok: false, message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` }
+          return { ok: false, message: `Claude API error ${res.status}: ${detail}` }
         }
         return { ok: true, message: `Koneksi Claude API berhasil (model: ${model ?? 'claude-haiku-4-5-20251001'})` }
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
         set.status = 502
-        return { ok: false, message: e instanceof Error ? e.message : String(e) }
+        return { ok: false, message: `Tidak bisa menghubungi Claude API: ${msg}` }
       }
     })
 

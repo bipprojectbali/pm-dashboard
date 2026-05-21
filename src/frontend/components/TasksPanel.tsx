@@ -232,6 +232,19 @@ export function TasksPanel({
     queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks${query ? `?${query}` : ''}`),
   })
 
+  // Query khusus chart — hanya scope projectId, tanpa filter status/kind/mine/tag,
+  // limit 500 (max API). Chart harus mencerminkan data proyek, bukan hasil filter tabel.
+  const chartParams = new URLSearchParams()
+  if (activeProjectId) chartParams.set('projectId', activeProjectId)
+  chartParams.set('limit', '500')
+  const chartQuery = chartParams.toString()
+
+  const chartTasksQ = useQuery({
+    queryKey: ['tasks-chart', chartQuery],
+    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
+    staleTime: 60_000,
+  })
+
   const create = useMutation({
     mutationFn: (body: {
       projectId: string
@@ -562,7 +575,9 @@ export function TasksPanel({
         </Group>
       </Group>
 
-      {showCharts && tasks.length > 0 ? <TaskDashboardOverlay tasks={tasks} /> : null}
+      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0
+        ? <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
+        : null}
 
       <Card withBorder padding="sm" radius="md">
         <Stack gap="sm">

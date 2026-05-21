@@ -1,7 +1,7 @@
 -- Soft delete support for tasks: track who deleted, when, and why.
 -- Columns nullable so existing rows are unaffected.
 ALTER TABLE "task"
-  ADD COLUMN IF NOT EXISTS "deletedAt"    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS "deletedAt"    TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "deletedById"  TEXT,
   ADD COLUMN IF NOT EXISTS "deleteReason" TEXT;
 

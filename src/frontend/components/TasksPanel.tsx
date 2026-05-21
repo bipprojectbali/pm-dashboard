@@ -26,15 +26,19 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
+  TbCalendarOff,
   TbChartBar,
   TbChevronRight,
   TbClock,
   TbDownload,
   TbFilter,
   TbListCheck,
+  TbLock,
   TbPlus,
   TbRefresh,
   TbSearch,
+  TbSortAscending,
+  TbSortDescending,
   TbTag,
   TbTrash,
   TbUserQuestion,
@@ -188,8 +192,11 @@ export function TasksPanel({
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | null>(null)
+  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(null)
   const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
+  const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 25
 
@@ -300,14 +307,21 @@ export function TasksPanel({
   const tasks = useMemo(() => {
     const now = Date.now()
     const q = search.trim().toLowerCase()
-    return rawTasks.filter((t) => {
+    const PRIO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }
+
+    let filtered = rawTasks.filter((t) => {
       if (quickFilter === 'overdue') {
         if (t.status === 'CLOSED' || !t.dueAt || new Date(t.dueAt).getTime() >= now) return false
       } else if (quickFilter === 'unassigned') {
         if (t.assignee) return false
       } else if (quickFilter === 'openOnly') {
         if (t.status === 'CLOSED') return false
+      } else if (quickFilter === 'blocked') {
+        if (t._count.blockedBy === 0 || t.status === 'CLOSED') return false
+      } else if (quickFilter === 'nodue') {
+        if (t.dueAt) return false
       }
+      if (priorityFilter && t.priority !== priorityFilter) return false
       if (q) {
         const hay = `${t.title} ${t.description}`.toLowerCase()
         if (!hay.includes(q)) return false
@@ -325,7 +339,25 @@ export function TasksPanel({
       }
       return true
     })
-  }, [rawTasks, search, quickFilter, dueDateRange])
+
+    if (sortBy) {
+      filtered = [...filtered].sort((a, b) => {
+        let va: number | string = 0
+        let vb: number | string = 0
+        if (sortBy === 'priority') { va = PRIO[a.priority]; vb = PRIO[b.priority] }
+        else if (sortBy === 'title') { va = a.title.toLowerCase(); vb = b.title.toLowerCase() }
+        else if (sortBy === 'dueAt') { va = a.dueAt ? new Date(a.dueAt).getTime() : Infinity; vb = b.dueAt ? new Date(b.dueAt).getTime() : Infinity }
+        else if (sortBy === 'createdAt') { va = new Date(a.createdAt).getTime(); vb = new Date(b.createdAt).getTime() }
+        else if (sortBy === 'updatedAt') { va = new Date(a.updatedAt).getTime(); vb = new Date(b.updatedAt).getTime() }
+        else if (sortBy === 'estimateHours') { va = a.estimateHours ?? Infinity; vb = b.estimateHours ?? Infinity }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1
+        if (va > vb) return sortDir === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+
+    return filtered
+  }, [rawTasks, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
 
   const handleExport = () => {
@@ -458,7 +490,7 @@ export function TasksPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter, dueDateRange])
+  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
 
   return (
     <Stack gap="md">
@@ -587,6 +619,20 @@ export function TasksPanel({
               size="xs"
               w={160}
             />
+            <Select
+              placeholder="All priorities"
+              data={[
+                { value: 'CRITICAL', label: 'Critical' },
+                { value: 'HIGH', label: 'High' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'LOW', label: 'Low' },
+              ]}
+              value={priorityFilter}
+              onChange={setPriorityFilter}
+              clearable
+              size="xs"
+              w={140}
+            />
             {activeProjectId && tagsQ.data?.tags.length ? (
               <Select
                 placeholder="All tags"
@@ -599,6 +645,37 @@ export function TasksPanel({
                 w={155}
               />
             ) : null}
+          </Group>
+
+          {/* ─── Urutan ─── */}
+          <Divider label={<Text size="xs" c="dimmed" fw={600}>Urutan</Text>} labelPosition="left" />
+          <Group gap="sm" wrap="wrap" align="center">
+            <Select
+              placeholder="Default order"
+              data={[
+                { value: 'dueAt', label: 'Due date' },
+                { value: 'priority', label: 'Priority' },
+                { value: 'title', label: 'Title (A–Z)' },
+                { value: 'createdAt', label: 'Created' },
+                { value: 'updatedAt', label: 'Updated' },
+                { value: 'estimateHours', label: 'Estimate hours' },
+              ]}
+              value={sortBy}
+              onChange={setSortBy}
+              clearable
+              size="xs"
+              w={170}
+            />
+            <Tooltip label={sortDir === 'asc' ? 'Ascending — klik untuk DESC' : 'Descending — klik untuk ASC'}>
+              <ActionIcon
+                variant="light"
+                size="sm"
+                disabled={!sortBy}
+                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              >
+                {sortDir === 'asc' ? <TbSortAscending size={14} /> : <TbSortDescending size={14} />}
+              </ActionIcon>
+            </Tooltip>
           </Group>
 
           {/* ─── Tanggal ─── */}
@@ -673,14 +750,41 @@ export function TasksPanel({
             >
               Unassigned
             </Badge>
-            {(quickFilter || search || dueDateRange[0] || dueDateRange[1]) && (
+            <Badge
+              color={quickFilter === 'blocked' ? 'gray' : 'gray'}
+              variant={quickFilter === 'blocked' ? 'filled' : 'light'}
+              size="sm"
+              leftSection={<TbLock size={10} />}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setQuickFilter(quickFilter === 'blocked' ? null : 'blocked')}
+            >
+              Blocked
+            </Badge>
+            <Badge
+              color={quickFilter === 'nodue' ? 'gray' : 'gray'}
+              variant={quickFilter === 'nodue' ? 'filled' : 'light'}
+              size="sm"
+              leftSection={<TbCalendarOff size={10} />}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setQuickFilter(quickFilter === 'nodue' ? null : 'nodue')}
+            >
+              No due date
+            </Badge>
+            {(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy) && (
               <Button
                 variant="subtle"
                 color="gray"
                 size="compact-xs"
-                onClick={() => { setQuickFilter(null); setSearch(''); setDueDateRange([null, null]) }}
+                onClick={() => {
+                  setQuickFilter(null)
+                  setSearch('')
+                  setDueDateRange([null, null])
+                  setPriorityFilter(null)
+                  setSortBy(null)
+                  setSortDir('asc')
+                }}
               >
-                Clear
+                Clear all
               </Button>
             )}
             <SegmentedControl

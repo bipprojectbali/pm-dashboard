@@ -14,6 +14,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { authClient } from '@/frontend/lib/authClient'
 import type { IconType } from 'react-icons'
 import { FcGoogle } from 'react-icons/fc'
 import { SiBun, SiPostgresql, SiPrisma, SiRedis, SiTypescript, SiVite } from 'react-icons/si'
@@ -331,12 +332,16 @@ function HomePage() {
                     Mulai sekarang
                   </Button>
                   <Button
-                    component="a"
-                    href="https://github.com/bipproduction"
-                    target="_blank"
                     size="lg"
                     variant="default"
                     leftSection={<FcGoogle size={18} />}
+                    onClick={() =>
+                      authClient.signIn.social({
+                        provider: 'google',
+                        callbackURL: '/admin',
+                        errorCallbackURL: '/login?error=google_failed',
+                      })
+                    }
                     style={{
                       height: 52,
                       paddingInline: 24,

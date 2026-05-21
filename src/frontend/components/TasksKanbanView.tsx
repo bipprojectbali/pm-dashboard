@@ -17,8 +17,11 @@ import {
   TbAlertTriangle,
   TbArrowsMaximize,
   TbArrowsMinimize,
+  TbCheck,
+  TbChecks,
   TbChevronLeft,
   TbChevronRight,
+  TbX,
 } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 
@@ -171,7 +174,20 @@ export function TasksKanbanView({
     if (filterKey === undefined || filterKey === prevFilterKeyRef.current) return
     prevFilterKeyRef.current = filterKey
     setColPage({ OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0 })
+    setSelectedIds(new Set())
+    setSelectMode(false)
   }, [filterKey])
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectMode, setSelectMode] = useState(false)
+
+  const exitSelect = () => { setSelectedIds(new Set()); setSelectMode(false) }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exitSelect() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const isMaybeTruncated = (totalFetched ?? 0) >= API_CEIL
 
@@ -201,7 +217,20 @@ export function TasksKanbanView({
     const srcStatus = source.droppableId as TaskStatus
     const dstStatus = destination.droppableId as TaskStatus
 
-    // 1. Update cols state optimistically (immediate visual feedback)
+    const allTasks = Object.values(cols).flat()
+    const primaryTask = allTasks.find((t) => t.id === draggableId)
+    if (!primaryTask) return
+
+    // Multi-drag: dragged card is in selection and selection has >1 task
+    const isMulti = selectedIds.has(draggableId) && selectedIds.size > 1
+    const tasksToMove = isMulti
+      ? allTasks.filter((t) => selectedIds.has(t.id) && kanbanAllowed(t.status, t.kind).includes(dstStatus))
+      : [primaryTask]
+
+    const movedIds = new Set(tasksToMove.map((t) => t.id))
+    // Track original statuses before mutation so we know which columns were affected
+    const originalStatusOf = new Map(tasksToMove.map((t) => [t.id, t.status]))
+
     let newCols: Record<TaskStatus, TaskListItem[]> | null = null
     setCols((prev) => {
       const next: Record<TaskStatus, TaskListItem[]> = {
@@ -211,37 +240,54 @@ export function TasksKanbanView({
         REOPENED: [...prev.REOPENED],
         CLOSED: [...prev.CLOSED],
       }
-      const [moved] = next[srcStatus].splice(source.index, 1)
-      if (!moved) return prev
 
-      if (srcStatus !== dstStatus) {
-        const allowed = kanbanAllowed(srcStatus, moved.kind)
-        if (!allowed.includes(dstStatus)) {
-          next[srcStatus].splice(source.index, 0, moved)
-          return prev
+      if (!isMulti) {
+        // Original single-task logic — unchanged
+        const [moved] = next[srcStatus].splice(source.index, 1)
+        if (!moved) return prev
+        if (srcStatus !== dstStatus) {
+          const allowed = kanbanAllowed(srcStatus, moved.kind)
+          if (!allowed.includes(dstStatus)) {
+            next[srcStatus].splice(source.index, 0, moved)
+            return prev
+          }
+          next[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
+        } else {
+          next[dstStatus].splice(destination.index, 0, moved)
         }
-        next[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
       } else {
-        next[dstStatus].splice(destination.index, 0, moved)
+        // Multi-drag: pull all selected tasks out of their current columns first
+        for (const status of Object.keys(next) as TaskStatus[]) {
+          next[status] = next[status].filter((t) => !movedIds.has(t.id))
+        }
+        // Insert at drop index: primary card first, then the rest in original order
+        const others = tasksToMove.filter((t) => t.id !== draggableId)
+        next[dstStatus].splice(
+          destination.index, 0,
+          { ...primaryTask, status: dstStatus },
+          ...others.map((t) => ({ ...t, status: dstStatus })),
+        )
       }
 
       newCols = next
       return next
     })
 
-    // 2. Persist new order to server — assign kanbanOrder = array index
+    if (isMulti) setSelectedIds(new Set())
+
     setTimeout(() => {
       if (!newCols) return
       const updates: Array<{ id: string; kanbanOrder: number; status?: string }> = []
+      const affectedStatuses = isMulti
+        ? new Set<TaskStatus>([...(originalStatusOf.values() as unknown as TaskStatus[]), dstStatus])
+        : new Set<TaskStatus>(srcStatus === dstStatus ? [srcStatus] : [srcStatus, dstStatus])
 
-      // Collect all tasks from affected columns with their new index as kanbanOrder
-      const affectedStatuses = srcStatus === dstStatus ? [srcStatus] : [srcStatus, dstStatus]
       for (const status of affectedStatuses) {
         newCols[status].forEach((t, idx) => {
           updates.push({
             id: t.id,
             kanbanOrder: idx,
-            ...(t.id === draggableId && srcStatus !== dstStatus ? { status: dstStatus } : {}),
+            ...(movedIds.has(t.id) && originalStatusOf.get(t.id) !== dstStatus ? { status: dstStatus } : {}),
           })
         })
       }
@@ -255,13 +301,64 @@ export function TasksKanbanView({
         .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
     }, 0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qc, cols])
+  }, [qc, cols, selectedIds])
 
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)'
   ).join(' ')
 
+  const allTaskIds = Object.values(cols).flat().map((t) => t.id)
+  const allSelected = allTaskIds.length > 0 && allTaskIds.every((id) => selectedIds.has(id))
+
   return (
+    <>
+    <Group mb={8} justify="space-between" align="center">
+      {/* Kiri: info pilihan (hanya muncul saat ada pilihan atau selectMode aktif) */}
+      <Group gap={6} align="center">
+        {(selectMode || selectedIds.size > 0) ? (
+          <>
+            <Badge size="sm" color="blue" variant="light" style={{ flexShrink: 0 }}>
+              {selectedIds.size} dipilih
+            </Badge>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              color="blue"
+              onClick={() => {
+                if (allSelected) setSelectedIds(new Set())
+                else setSelectedIds(new Set(allTaskIds))
+              }}
+            >
+              {allSelected ? 'Batal semua' : `Pilih semua (${allTaskIds.length})`}
+            </Button>
+            {selectedIds.size > 0 && (
+              <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                · drag ke kolom tujuan
+              </Text>
+            )}
+            <Button size="compact-xs" variant="subtle" color="gray" onClick={exitSelect}>
+              Keluar
+            </Button>
+          </>
+        ) : (
+          <Text size="xs" c="dimmed">Ctrl+klik atau aktifkan Select untuk pilih banyak</Text>
+        )}
+      </Group>
+
+      {/* Kanan: tombol masuk/keluar select mode */}
+      <Button
+        size="compact-xs"
+        variant={selectMode ? 'filled' : 'light'}
+        color={selectMode ? 'blue' : 'gray'}
+        leftSection={<TbChecks size={12} />}
+        onClick={() => {
+          if (selectMode) exitSelect()
+          else setSelectMode(true)
+        }}
+      >
+        {selectMode ? 'Select ON' : 'Select'}
+      </Button>
+    </Group>
     <DragDropContext
       onDragStart={(initial) => setDraggingTaskId(initial.draggableId)}
       onDragEnd={handleDragEnd}
@@ -320,6 +417,29 @@ export function TasksKanbanView({
                     )}
                   </Group>
                   <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
+                    {selectMode && items.length > 0 && (() => {
+                      const colIds = items.map((t) => t.id)
+                      const colAllSelected = colIds.every((id) => selectedIds.has(id))
+                      return (
+                        <Tooltip label={colAllSelected ? 'Batal pilih kolom ini' : `Pilih semua ${items.length} task`}>
+                          <ActionIcon
+                            size="xs"
+                            variant={colAllSelected ? 'filled' : 'light'}
+                            color="blue"
+                            onClick={() =>
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev)
+                                if (colAllSelected) colIds.forEach((id) => next.delete(id))
+                                else colIds.forEach((id) => next.add(id))
+                                return next
+                              })
+                            }
+                          >
+                            <TbChecks size={11} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )
+                    })()}
                     <Tooltip label={isMax ? 'Perkecil kolom' : 'Perbesar kolom'}>
                       <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleMax(col.status)}>
                         {isMax ? <TbArrowsMinimize size={12} /> : <TbArrowsMaximize size={12} />}
@@ -366,7 +486,10 @@ export function TasksKanbanView({
                           index={idx}
                           isDragDisabled={!canWrite}
                         >
-                          {(dragProvided, dragSnapshot) => (
+                          {(dragProvided, dragSnapshot) => {
+                            const isSelected = selectedIds.has(t.id)
+                            const isMultiDrag = dragSnapshot.isDragging && isSelected && selectedIds.size > 1
+                            return (
                             <Card
                               withBorder
                               padding="xs"
@@ -374,10 +497,25 @@ export function TasksKanbanView({
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               {...dragProvided.dragHandleProps}
-                              onClick={() => !dragSnapshot.isDragging && onSelect(t.id)}
+                              onClick={(e) => {
+                                if (dragSnapshot.isDragging) return
+                                if (selectMode || e.ctrlKey || e.metaKey) {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setSelectedIds((prev) => {
+                                    const next = new Set(prev)
+                                    next.has(t.id) ? next.delete(t.id) : next.add(t.id)
+                                    return next
+                                  })
+                                } else {
+                                  onSelect(t.id)
+                                }
+                              }}
                               style={{
                                 cursor: canWrite ? 'grab' : 'pointer',
+                                position: 'relative',
                                 opacity: dragSnapshot.isDragging ? 0.85 : 1,
+                                background: isSelected ? 'var(--mantine-color-blue-light)' : undefined,
                                 boxShadow: dragSnapshot.isDragging
                                   ? '0 8px 24px rgba(0,0,0,0.18)'
                                   : undefined,
@@ -385,43 +523,72 @@ export function TasksKanbanView({
                                 flexShrink: 0,
                               }}
                             >
-                              <Stack gap={4}>
-                                <Group gap={4} wrap="wrap">
-                                  <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">{t.kind}</Badge>
-                                  <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">{t.priority}</Badge>
-                                </Group>
-                                <Text size="sm" fw={500} lineClamp={2}>{t.title}</Text>
-                                {t.tags.length > 0 && (
+                              {/* Checkbox indicator — muncul saat select mode aktif */}
+                              {selectMode && !dragSnapshot.isDragging && (
+                                <div style={{
+                                  position: 'absolute', top: 6, right: 6, zIndex: 5,
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  border: `2px solid ${isSelected ? 'var(--mantine-color-blue-5)' : 'var(--mantine-color-gray-4)'}`,
+                                  background: isSelected ? 'var(--mantine-color-blue-5)' : 'var(--mantine-color-body)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  pointerEvents: 'none',
+                                }}>
+                                  {isSelected && <TbCheck size={10} color="#fff" />}
+                                </div>
+                              )}
+
+                              {dragSnapshot.isDragging ? (
+                                /* Drag preview — hanya tampilkan jumlah + asal */
+                                <Stack align="center" justify="center" gap={2} style={{ minHeight: 72 }}>
+                                  <Text fw={900} style={{ fontSize: 40, lineHeight: 1, color: 'var(--mantine-color-blue-6)' }}>
+                                    {isMultiDrag ? selectedIds.size : 1}
+                                  </Text>
+                                  <Text size="xs" fw={600} c="dimmed">
+                                    {(isMultiDrag ? selectedIds.size : 1) === 1 ? 'task' : 'tasks'}
+                                  </Text>
+                                  <Text size="xs" c="dimmed">
+                                    dari <b>{KANBAN_COLUMNS.find((c) => c.status === t.status)?.label ?? t.status}</b>
+                                  </Text>
+                                </Stack>
+                              ) : (
+                                <Stack gap={4}>
                                   <Group gap={4} wrap="wrap">
-                                    {t.tags.slice(0, 3).map((tg) => (
-                                      <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>{tg.tag.name}</Badge>
-                                    ))}
+                                    <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">{t.kind}</Badge>
+                                    <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">{t.priority}</Badge>
                                   </Group>
-                                )}
-                                {t.progressPercent != null && t.progressPercent > 0 && (
-                                  <div style={{ height: 4, background: 'var(--mantine-color-gray-2)', borderRadius: 2, overflow: 'hidden' }}>
-                                    <div style={{
-                                      width: `${t.progressPercent}%`, height: '100%',
-                                      background: t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
-                                    }} />
-                                  </div>
-                                )}
-                                <Group justify="space-between" wrap="nowrap">
-                                  <Tooltip label={t.assignee ? t.assignee.name : 'Unassigned'} withArrow position="bottom">
-                                    <Group gap={4} wrap="nowrap">
-                                      <UserAvatar name={t.assignee?.name} image={t.assignee?.image} size={18} color="blue" />
-                                      <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name.split(' ')[0] : 'Unassigned'}</Text>
+                                  <Text size="sm" fw={500} lineClamp={2}>{t.title}</Text>
+                                  {t.tags.length > 0 && (
+                                    <Group gap={4} wrap="wrap">
+                                      {t.tags.slice(0, 3).map((tg) => (
+                                        <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>{tg.tag.name}</Badge>
+                                      ))}
                                     </Group>
-                                  </Tooltip>
-                                  {t.dueAt && (
-                                    <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
-                                      {new Date(t.dueAt).toLocaleDateString('id-ID')}
-                                    </Text>
                                   )}
-                                </Group>
-                              </Stack>
+                                  {t.progressPercent != null && t.progressPercent > 0 && (
+                                    <div style={{ height: 4, background: 'var(--mantine-color-gray-2)', borderRadius: 2, overflow: 'hidden' }}>
+                                      <div style={{
+                                        width: `${t.progressPercent}%`, height: '100%',
+                                        background: t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
+                                      }} />
+                                    </div>
+                                  )}
+                                  <Group justify="space-between" wrap="nowrap">
+                                    <Tooltip label={t.assignee ? t.assignee.name : 'Unassigned'} withArrow position="bottom">
+                                      <Group gap={4} wrap="nowrap">
+                                        <UserAvatar name={t.assignee?.name} image={t.assignee?.image} size={18} color="blue" />
+                                        <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name.split(' ')[0] : 'Unassigned'}</Text>
+                                      </Group>
+                                    </Tooltip>
+                                    {t.dueAt && (
+                                      <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
+                                        {new Date(t.dueAt).toLocaleDateString('id-ID')}
+                                      </Text>
+                                    )}
+                                  </Group>
+                                </Stack>
+                              )}
                             </Card>
-                          )}
+                          )}}
                         </Draggable>
                       ))}
 
@@ -469,5 +636,6 @@ export function TasksKanbanView({
         })}
       </div>
     </DragDropContext>
+    </>
   )
 }

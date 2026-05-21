@@ -209,6 +209,18 @@ runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Er
   runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`))
 )
 
+// ─── Auto-purge Trash ─────────────────────────────────
+// Setiap hari jam 03:00 UTC, hapus permanen task yang sudah di-trash > 30 hari
+;(Bun as any).cron('0 3 * * *', async () => {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const { count } = await prisma.task.deleteMany({ where: { deletedAt: { not: null, lt: cutoff } } })
+    if (count > 0) appLog('info', `Auto-purge trash: ${count} task dihapus permanen (>30 hari)`)
+  } catch (e) {
+    appLog('error', `Auto-purge trash gagal: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})
+
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'
 

@@ -22,7 +22,7 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -44,6 +44,33 @@ import {
   TbUserQuestion,
   TbX,
 } from 'react-icons/tb'
+
+// Modal kecil untuk input alasan hapus — dipakai oleh confirmDeleteOne & confirmDeleteSelected
+function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) => void; label: string }) {
+  const [reason, setReason] = useState('')
+  return (
+    <Stack gap="sm">
+      <Text size="sm">{label}</Text>
+      <TextInput
+        placeholder="Tulis alasan penghapusan..."
+        value={reason}
+        onChange={(e) => setReason(e.currentTarget.value)}
+        autoFocus
+      />
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>Batal</Button>
+        <Button
+          color="red"
+          size="xs"
+          disabled={reason.trim().length < 3}
+          onClick={() => { onConfirm(reason.trim()); modals.closeAll() }}
+        >
+          Hapus
+        </Button>
+      </Group>
+    </Stack>
+  )
+}
 import { DatePickerInput } from '@mantine/dates'
 import { useLocalStorage } from '@mantine/hooks'
 import { useSession } from '../hooks/useAuth'
@@ -54,6 +81,7 @@ import { TaskDashboardOverlay } from './TaskDashboardOverlay'
 import { TaskDetailView } from './TaskDetailView'
 import { TasksGanttView } from './TasksGanttView'
 import { TasksKanbanView } from './TasksKanbanView'
+import { TasksTrashView } from './TasksTrashView'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
@@ -441,63 +469,73 @@ export function TasksPanel({
   }
   const clearSelection = () => setSelectedIds(new Set())
 
+  const [trashView, setTrashView] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _reasonRef = useRef('')
+
   const deleteOne = useMutation({
-    mutationFn: (id: string) => api(`/api/tasks/${id}`, { method: 'DELETE' }),
-    onSuccess: (_, id) => {
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api(`/api/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       setSelectedIds((prev) => {
         if (!prev.has(id)) return prev
         const next = new Set(prev)
         next.delete(id)
         return next
       })
-      notifySuccess({ message: 'Task dihapus.' })
+      notifySuccess({ message: 'Task dipindahkan ke Trash.' })
     },
     onError: (err) => notifyError(err),
   })
+
   const deleteBulk = useMutation({
-    mutationFn: (ids: string[]) =>
+    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
       api<{ deleted: number; denied: number; deniedIds: string[] }>('/api/tasks/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ ids, reason }),
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       clearSelection()
-      const tail = res.denied > 0 ? ` (${res.denied} ditolak — bukan kamu yang membuat)` : ''
-      notifySuccess({ message: `${res.deleted} task dihapus${tail}.` })
+      const tail = res.denied > 0 ? ` (${res.denied} ditolak)` : ''
+      notifySuccess({ message: `${res.deleted} task dipindahkan ke Trash${tail}.` })
     },
     onError: (err) => notifyError(err),
   })
 
   const confirmDeleteOne = (t: TaskListItem) => {
-    modals.openConfirmModal({
+    modals.open({
       title: 'Hapus task ini?',
+      size: 'sm',
       children: (
-        <Text size="sm">
-          "{t.title}" akan dihapus permanen beserta komentar, evidence, dan checklist-nya. Tidak bisa di-undo.
-        </Text>
+        <DeleteReasonModal
+          label={`"${t.title}" akan dipindahkan ke Trash. Bisa di-restore dalam 30 hari.`}
+          onConfirm={(reason) => deleteOne.mutate({ id: t.id, reason })}
+        />
       ),
-      labels: { confirm: 'Hapus', cancel: 'Batal' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => deleteOne.mutate(t.id),
     })
   }
+
   const confirmDeleteSelected = () => {
     const ids = deletableSelected
     if (ids.length === 0) return
-    modals.openConfirmModal({
+    modals.open({
       title: `Hapus ${ids.length} task terpilih?`,
+      size: 'sm',
       children: (
-        <Text size="sm">
-          {ids.length} task akan dihapus permanen. Hanya task yang kamu boleh hapus (reporter, OWNER/PM, atau admin)
-          yang ikut terhapus.
-        </Text>
+        <DeleteReasonModal
+          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
+          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
+        />
       ),
-      labels: { confirm: `Hapus ${ids.length}`, cancel: 'Batal' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => deleteBulk.mutate(ids),
     })
   }
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
@@ -547,6 +585,15 @@ export function TasksPanel({
           <Tooltip label={showCharts ? 'Hide dashboard' : 'Show dashboard'}>
             <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}>
               <TbChartBar size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={trashView ? 'Kembali ke task' : 'Lihat Trash'}>
+            <ActionIcon
+              variant={trashView ? 'filled' : 'light'}
+              color={trashView ? 'red' : 'gray'}
+              onClick={() => setTrashView((v) => !v)}
+            >
+              <TbTrash size={16} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Refresh">
@@ -823,7 +870,9 @@ export function TasksPanel({
         </Stack>
       </Card>
 
-      {tasks.length === 0 && !tasksQ.isLoading ? (
+      {trashView ? (
+        <TasksTrashView projectId={activeProjectId} />
+      ) : tasks.length === 0 && !tasksQ.isLoading ? (
         <Card withBorder p="xl" radius="md">
           <Stack align="center" gap="sm">
             <TbListCheck size={40} />
@@ -1068,7 +1117,7 @@ export function TasksPanel({
                             variant="subtle"
                             color="red"
                             onClick={() => confirmDeleteOne(t)}
-                            loading={deleteOne.isPending && deleteOne.variables === t.id}
+                            loading={deleteOne.isPending && deleteOne.variables?.id === t.id}
                           >
                             <TbTrash size={14} />
                           </ActionIcon>

@@ -7,6 +7,7 @@ import {
   Divider,
   Group,
   Loader,
+  NumberInput,
   PasswordInput,
   Select,
   Stack,
@@ -19,7 +20,7 @@ import {
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { TimePicker } from '@mantine/dates'
 import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
@@ -132,6 +133,7 @@ export function AiSettingsPanel() {
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
+  const [timeoutSeconds, setTimeoutSeconds] = useState(120)
   const [scheduleTime, setScheduleTime] = useState('18:00')
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
   const [promptInstruction, setPromptInstruction] = useState(DEFAULT_INSTRUCTION)
@@ -144,6 +146,7 @@ export function AiSettingsPanel() {
     setApiKey(settings['ai.anthropicApiKey'] ?? '')
     setBaseUrl(settings['ai.baseUrl'] ?? '')
     setModel(settings['ai.model'] ?? 'claude-opus-4-7')
+    setTimeoutSeconds(Number(settings['ai.timeoutSeconds'] ?? 120))
     const h = (settings['report.scheduleHour'] ?? '18').padStart(2, '0')
     const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
     setScheduleTime(`${h}:${m}`)
@@ -159,6 +162,7 @@ export function AiSettingsPanel() {
         saveSetting('ai.anthropicApiKey', apiKey),
         saveSetting('ai.baseUrl', baseUrl),
         saveSetting('ai.model', model),
+        saveSetting('ai.timeoutSeconds', String(timeoutSeconds)),
         saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
         saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
         saveSetting('report.timezone', timezone),
@@ -182,18 +186,77 @@ export function AiSettingsPanel() {
     onError: (e: Error) => notifications.show({ color: 'red', title: 'Gagal', message: e.message }),
   })
 
-  const previewReport = useMutation({
-    mutationFn: () => apiFetch<{ ok: boolean; text?: string; error?: string }>('/api/admin/report/preview'),
-    onSuccess: (res) => {
-      if (res.ok && res.text) {
-        setPreview(res.text)
-        setEditedReport(res.text)
-      } else {
-        notifications.show({ color: 'red', title: 'Gagal generate', message: res.error ?? 'Unknown error' })
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamPhase, setStreamPhase] = useState<string | null>(null)
+  const [streamingText, setStreamingText] = useState('')
+  const [streamError, setStreamError] = useState<string | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startStream = useCallback(async () => {
+    setIsStreaming(true)
+    setStreamPhase('Memulai...')
+    setStreamingText('')
+    setStreamError(null)
+    setPreview(null)
+    setEditedReport(null)
+    setElapsed(0)
+    elapsedRef.current = setInterval(() => setElapsed((v) => v + 1), 1000)
+
+    try {
+      const res = await fetch('/api/admin/report/preview/stream', { credentials: 'include' })
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(err.error ?? `HTTP ${res.status}`)
       }
-    },
-    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
-  })
+
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      let accumulated = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+
+        const parts = buf.split('\n\n')
+        buf = parts.pop() ?? ''
+
+        for (const part of parts) {
+          let eventName = ''
+          let eventData = ''
+          for (const line of part.split('\n')) {
+            if (line.startsWith('event: ')) eventName = line.slice(7).trim()
+            if (line.startsWith('data: ')) eventData = line.slice(6).trim()
+          }
+          if (!eventData) continue
+          try {
+            const data = JSON.parse(eventData) as Record<string, string>
+            if (eventName === 'phase') setStreamPhase(data.label)
+            else if (eventName === 'token') {
+              accumulated += data.text
+              setStreamingText(accumulated)
+            } else if (eventName === 'done') {
+              const full = data.full || accumulated
+              setPreview(full)
+              setEditedReport(full)
+              setStreamingText('')
+              setStreamPhase(null)
+            } else if (eventName === 'error') {
+              setStreamError(data.message)
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e) {
+      setStreamError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIsStreaming(false)
+      setStreamPhase(null)
+      if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null }
+    }
+  }, [])
 
   const [testAiCooldown, setTestAiCooldown] = useState(0)
   const testAiCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -340,6 +403,18 @@ export function AiSettingsPanel() {
             onChange={(v) => { if (v) { setModel(v); setDirty(true) } }}
           />
 
+          <NumberInput
+            label="Timeout Claude API (detik)"
+            description="Batas waktu tunggu response dari Claude. Naikkan jika sering timeout saat generate laporan panjang."
+            value={timeoutSeconds}
+            onChange={(v) => { setTimeoutSeconds(Number(v) || 120); setDirty(true) }}
+            min={30}
+            max={600}
+            step={30}
+            suffix=" detik"
+            w={220}
+          />
+
           <Group justify="space-between">
             <Button
               variant="light"
@@ -484,12 +559,11 @@ export function AiSettingsPanel() {
               </Button>
               <Button
                 variant="light" color="violet" size="xs"
-                leftSection={previewReport.isPending ? <Loader size={13} /> : <TbRobot size={13} />}
-                onClick={() => previewReport.mutate()}
-                loading={previewReport.isPending}
-                disabled={!apiKeySet && !apiKey}
+                leftSection={isStreaming ? <Loader size={13} color="violet" /> : <TbRobot size={13} />}
+                onClick={startStream}
+                disabled={isStreaming || (!apiKeySet && !apiKey)}
               >
-                Generate AI
+                {isStreaming ? `Generate AI (${elapsed}s)` : 'Generate AI'}
               </Button>
               <Button
                 variant="light" color="blue" size="xs"
@@ -503,7 +577,29 @@ export function AiSettingsPanel() {
             </Group>
           </Group>
 
-          {(rawPrompt || preview || editedReport) && (
+          {/* Phase indicator — tampil saat streaming */}
+          {(isStreaming || streamError) && (
+            <Group
+              gap="sm"
+              p="sm"
+              style={{
+                background: streamError
+                  ? 'var(--mantine-color-red-light)'
+                  : 'var(--mantine-color-violet-light)',
+                borderRadius: 'var(--mantine-radius-sm)',
+              }}
+            >
+              {isStreaming && <Loader size="xs" color="violet" />}
+              <Text size="xs" fw={500} c={streamError ? 'red' : 'violet'} style={{ flex: 1 }}>
+                {streamError ?? streamPhase ?? '...'}
+              </Text>
+              {isStreaming && (
+                <Text size="xs" c="dimmed" ff="monospace">{elapsed}s</Text>
+              )}
+            </Group>
+          )}
+
+          {(rawPrompt || preview || editedReport || streamingText) && (
             <div style={{ display: 'grid', gridTemplateColumns: rawPrompt ? '1fr 1fr' : '1fr', gap: 12 }}>
               {rawPrompt && (
                 <Stack gap={4}>
@@ -530,7 +626,7 @@ export function AiSettingsPanel() {
                 </Stack>
               )}
 
-              {(preview || editedReport !== null) && (
+              {(preview || editedReport !== null || streamingText) && (
                 <Stack gap={4}>
                   <Group gap="xs" justify="space-between">
                     <Group gap={6}>
@@ -560,12 +656,18 @@ export function AiSettingsPanel() {
                     </Group>
                   </Group>
                   <Textarea
-                    value={editedReport ?? preview ?? ''}
-                    onChange={(e) => setEditedReport(e.currentTarget.value)}
+                    value={streamingText ? streamingText + '▋' : (editedReport ?? preview ?? '')}
+                    onChange={(e) => !isStreaming && setEditedReport(e.currentTarget.value)}
+                    readOnly={isStreaming}
                     autosize
                     minRows={14}
                     maxRows={30}
-                    styles={{ input: { fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5 } }}
+                    styles={{
+                      input: {
+                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5,
+                        opacity: isStreaming ? 0.85 : 1,
+                      },
+                    }}
                   />
                   <Group justify="flex-end">
                     <Button.Group>

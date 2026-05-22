@@ -42,7 +42,7 @@ _pm-dashboard AI report_`
 
 // ─── Claude API ──────────────────────────────────────────────────────────────
 
-async function callClaudeAPI(apiKey: string, model: string, prompt: string, baseUrl?: string): Promise<string> {
+async function callClaudeAPI(apiKey: string, model: string, prompt: string, baseUrl?: string, timeoutMs?: number): Promise<string> {
   const endpoint = baseUrl
     ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
     : 'https://api.anthropic.com/v1/messages'
@@ -58,7 +58,7 @@ async function callClaudeAPI(apiKey: string, model: string, prompt: string, base
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(timeoutMs ?? 120_000),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: { message?: string } }
@@ -72,7 +72,7 @@ async function callClaudeAPI(apiKey: string, model: string, prompt: string, base
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
 
-async function sendToTelegram(botToken: string, chatId: string, text: string): Promise<void> {
+async function sendToTelegram(botToken: string, chatId: string, text: string, timeoutMs = 30_000): Promise<void> {
   // Telegram Markdown mode: split if >4096 chars
   const chunks: string[] = []
   for (let i = 0; i < text.length; i += 4000) chunks.push(text.slice(i, i + 4000))
@@ -82,7 +82,7 @@ async function sendToTelegram(botToken: string, chatId: string, text: string): P
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({})) as { description?: string }
@@ -173,16 +173,18 @@ export async function buildPromptOnly(): Promise<string> {
 export async function sendCustomReport(text: string): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
   sendInFlight = (async () => {
-    const [botToken, chatId] = await Promise.all([
+    const [botToken, chatId, tgTimeoutRaw] = await Promise.all([
       getSetting('telegram.botToken'),
       getSetting('telegram.chatId'),
+      getSetting('telegram.timeoutSeconds'),
     ])
     if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
     if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+    const tgTimeoutMs = (Number(tgTimeoutRaw) || 30) * 1000
     const prevLastSent = await getSetting('report.lastSentAt')
     await setSetting('report.lastSentAt', new Date().toISOString())
     try {
-      await sendToTelegram(botToken, chatId, text)
+      await sendToTelegram(botToken, chatId, text, tgTimeoutMs)
       appLog('info', 'Custom report: sent successfully')
       await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger: 'custom' })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
@@ -198,26 +200,30 @@ export async function sendCustomReport(text: string): Promise<{ ok: boolean; mes
 }
 
 export async function generateReportPreview(): Promise<string> {
-  const [apiKey, model, baseUrl] = await Promise.all([
+  const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
     getSetting('ai.anthropicApiKey'),
     getSetting('ai.model'),
     getSetting('ai.baseUrl'),
+    getSetting('ai.timeoutSeconds'),
   ])
   if (!apiKey) throw new Error('Anthropic API key belum dikonfigurasi')
   const prompt = await buildReportPrompt()
-  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
+  const timeoutMs = (Number(timeoutRaw) || 120) * 1000
+  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined, timeoutMs)
 }
 
 export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger } = {}): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
   const trigger: SendTrigger = opts.trigger ?? 'manual'
   sendInFlight = (async () => {
-    const [apiKey, model, baseUrl, botToken, chatId] = await Promise.all([
+    const [apiKey, model, baseUrl, botToken, chatId, timeoutRaw, tgTimeoutRaw] = await Promise.all([
       getSetting('ai.anthropicApiKey'),
       getSetting('ai.model'),
       getSetting('ai.baseUrl'),
       getSetting('telegram.botToken'),
       getSetting('telegram.chatId'),
+      getSetting('ai.timeoutSeconds'),
+      getSetting('telegram.timeoutSeconds'),
     ])
     if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
     if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
@@ -228,8 +234,10 @@ export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger }
       appLog('info', `Daily report: generating... (trigger=${trigger})`)
       await captureSnapshot()
       const prompt = await buildReportPrompt()
-      const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined)
-      await sendToTelegram(botToken, chatId, report)
+      const timeoutMs = (Number(timeoutRaw) || 120) * 1000
+      const tgTimeoutMs = (Number(tgTimeoutRaw) || 30) * 1000
+      const report = await callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined, timeoutMs)
+      await sendToTelegram(botToken, chatId, report, tgTimeoutMs)
       await setSetting('report.lastSentAt', new Date().toISOString())
       appLog('info', 'Daily report: sent successfully')
       await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger })

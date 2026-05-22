@@ -1,10 +1,11 @@
 import { ActionIcon, Badge, Card, Group, Loader, Stack, Table, Text, Tooltip } from '@mantine/core'
-import { useQuery } from '@tanstack/react-query'
-import { TbRefresh } from 'react-icons/tb'
+import { notifications } from '@mantine/notifications'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { TbRefresh, TbSend } from 'react-icons/tb'
 import type { SendHistoryEntry } from '../../lib/report-history'
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: 'include' })
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: string }
     throw new Error(err.error ?? `HTTP ${res.status}`)
@@ -24,11 +25,23 @@ function fmtTs(iso: string) {
 }
 
 export function SendHistoryPanel() {
+  const qc = useQueryClient()
+
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['admin', 'report-send-history'],
     queryFn: () => apiFetch<{ history: SendHistoryEntry[] }>('/api/admin/report/send-history'),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  })
+
+  const sendNow = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'report-send-history'] })
+      if (res.ok) notifications.show({ color: 'teal', title: 'Terkirim', message: res.message })
+      else notifications.show({ color: 'red', title: 'Gagal', message: res.message })
+    },
+    onError: (e: Error) => notifications.show({ color: 'red', title: 'Error', message: e.message }),
   })
 
   const history = data?.history ?? []
@@ -69,6 +82,7 @@ export function SendHistoryPanel() {
                   <Table.Th style={{ width: 90 }}>Trigger</Table.Th>
                   <Table.Th style={{ width: 80 }}>Status</Table.Th>
                   <Table.Th>Pesan</Table.Th>
+                  <Table.Th style={{ width: 40 }} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -87,6 +101,19 @@ export function SendHistoryPanel() {
                     </Table.Td>
                     <Table.Td>
                       <Text size="xs" c="dimmed" lineClamp={1}>{entry.message}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="Kirim ulang laporan sekarang" withArrow>
+                        <ActionIcon
+                          size="sm"
+                          variant="subtle"
+                          color="blue"
+                          loading={sendNow.isPending}
+                          onClick={() => sendNow.mutate()}
+                        >
+                          <TbSend size={13} />
+                        </ActionIcon>
+                      </Tooltip>
                     </Table.Td>
                   </Table.Tr>
                 ))}

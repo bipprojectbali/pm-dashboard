@@ -4,6 +4,7 @@ import {
   Card,
   Divider,
   Group,
+  NumberInput,
   PasswordInput,
   Stack,
   Switch,
@@ -49,6 +50,7 @@ export function ChannelSettingsPanel() {
   const [botToken, setBotToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [enabled, setEnabled] = useState(false)
+  const [tgTimeout, setTgTimeout] = useState(30)
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export function ChannelSettingsPanel() {
     setBotToken(settings['telegram.botToken'] ?? '')
     setChatId(settings['telegram.chatId'] ?? '')
     setEnabled(settings['telegram.enabled'] === 'true')
+    setTgTimeout(Number(settings['telegram.timeoutSeconds'] ?? 30))
     setDirty(false)
   }, [data])
 
@@ -65,6 +68,7 @@ export function ChannelSettingsPanel() {
         saveSetting('telegram.botToken', botToken),
         saveSetting('telegram.chatId', chatId),
         saveSetting('telegram.enabled', enabled ? 'true' : 'false'),
+        saveSetting('telegram.timeoutSeconds', String(tgTimeout)),
       ])
     },
     onSuccess: () => {
@@ -148,6 +152,18 @@ export function ChannelSettingsPanel() {
             description="ID group atau channel Telegram. Untuk group: tambahkan bot ke group, lalu gunakan ID negatif (contoh: -1001234567890)."
             value={chatId}
             onChange={(e) => { setChatId(e.currentTarget.value); setDirty(true) }}
+          />
+
+          <NumberInput
+            label="Timeout Telegram (detik)"
+            description="Batas waktu tunggu response dari Telegram per chunk pesan. Naikkan jika koneksi ke Telegram lambat."
+            value={tgTimeout}
+            onChange={(v) => { setTgTimeout(Number(v) || 30); setDirty(true) }}
+            min={10}
+            max={120}
+            step={10}
+            suffix=" detik"
+            w={220}
           />
 
           {lastSent && (

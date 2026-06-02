@@ -255,6 +255,6 @@ const app = createApp()
     // undefined → lanjut ke Elysia route matching
   })
 
-  .listen(env.PORT)
+  .listen({ port: env.PORT, idleTimeout: 255 })
 
 console.log(`Server running at http://localhost:${app.server!.port}`)

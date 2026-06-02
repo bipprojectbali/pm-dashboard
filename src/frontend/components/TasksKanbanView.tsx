@@ -21,6 +21,7 @@ import {
   TbChecks,
   TbChevronLeft,
   TbChevronRight,
+  TbTrash,
   TbX,
 } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
@@ -63,6 +64,7 @@ interface TaskListItem {
   closedAt: string | null
   project: { id: string; name: string }
   tags: TaskTag[]
+  blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }
 
@@ -108,7 +110,7 @@ function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
   }
   const m: Record<TaskStatus, TaskStatus[]> = {
     OPEN: ['IN_PROGRESS', 'CLOSED'],
-    IN_PROGRESS: ['READY_FOR_QC', 'CLOSED'],
+    IN_PROGRESS: ['OPEN', 'READY_FOR_QC', 'CLOSED'],
     READY_FOR_QC: ['CLOSED', 'REOPENED'],
     REOPENED: ['IN_PROGRESS', 'CLOSED'],
     CLOSED: ['REOPENED'],
@@ -134,12 +136,18 @@ export function TasksKanbanView({
   onSelect,
   totalFetched,
   filterKey,
+  onDeleteOne,
+  onDeleteSelected,
+  canDeleteTask,
 }: {
   tasks: TaskListItem[]
   canWrite: boolean
   onSelect: (id: string) => void
   totalFetched?: number
   filterKey?: string
+  onDeleteOne?: (task: TaskListItem) => void
+  onDeleteSelected?: (ids: string[]) => void
+  canDeleteTask?: (task: TaskListItem) => boolean
 }) {
   const qc = useQueryClient()
   // cols: per-kolom array, persis apa yang di-render.
@@ -309,6 +317,10 @@ export function TasksKanbanView({
 
   const allTaskIds = Object.values(cols).flat().map((t) => t.id)
   const allSelected = allTaskIds.length > 0 && allTaskIds.every((id) => selectedIds.has(id))
+  const deletableSelectedIds = Array.from(selectedIds).filter((id) => {
+    const t = Object.values(cols).flat().find((x) => x.id === id)
+    return t && canDeleteTask ? canDeleteTask(t) : !!t
+  })
 
   return (
     <>
@@ -335,6 +347,17 @@ export function TasksKanbanView({
               <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                 · drag ke kolom tujuan
               </Text>
+            )}
+            {selectedIds.size > 0 && onDeleteSelected && deletableSelectedIds.length > 0 && (
+              <Button
+                size="compact-xs"
+                variant="light"
+                color="red"
+                leftSection={<TbTrash size={11} />}
+                onClick={() => onDeleteSelected(deletableSelectedIds)}
+              >
+                Hapus terpilih ({deletableSelectedIds.length})
+              </Button>
             )}
             <Button size="compact-xs" variant="subtle" color="gray" onClick={exitSelect}>
               Keluar
@@ -579,11 +602,28 @@ export function TasksKanbanView({
                                         <Text size="xs" c="dimmed" truncate>{t.assignee ? t.assignee.name.split(' ')[0] : 'Unassigned'}</Text>
                                       </Group>
                                     </Tooltip>
-                                    {t.dueAt && (
-                                      <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
-                                        {new Date(t.dueAt).toLocaleDateString('id-ID')}
-                                      </Text>
-                                    )}
+                                    <Group gap={4} wrap="nowrap">
+                                      {t.dueAt && (
+                                        <Text size="xs" c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}>
+                                          {new Date(t.dueAt).toLocaleDateString('id-ID')}
+                                        </Text>
+                                      )}
+                                      {selectMode && onDeleteOne && (!canDeleteTask || canDeleteTask(t)) && (
+                                        <Tooltip label="Hapus task" withArrow position="top">
+                                          <ActionIcon
+                                            size="xs"
+                                            variant="subtle"
+                                            color="red"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              onDeleteOne(t)
+                                            }}
+                                          >
+                                            <TbTrash size={12} />
+                                          </ActionIcon>
+                                        </Tooltip>
+                                      )}
+                                    </Group>
                                   </Group>
                                 </Stack>
                               )}

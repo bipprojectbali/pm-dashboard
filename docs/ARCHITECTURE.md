@@ -5,7 +5,7 @@ Elysia.js on Bun. React 19 + Vite 8 frontend. PostgreSQL via Prisma v6. Redis vi
 ## Server
 
 - `src/app.ts` — Elysia app factory with all API routes (auth, admin, logs, presence, hello, health, Google OAuth). Testable via `app.handle(request)`.
-- `src/index.tsx` — Server entry. Adds Vite middleware (dev) or static file serving (prod), click-to-source editor integration, audit log rotation, and `.listen()`.
+- `src/index.tsx` — Server entry. Adds Vite middleware (dev) or static file serving (prod), click-to-source editor integration, audit log rotation, and `.listen({ port, idleTimeout: 255 })`. `idleTimeout` is set to the Bun max (255s) because endpoints that wait on the Claude API (`/api/admin/report/send-now`, `/api/admin/report/preview/stream`, `/api/admin/report/send-custom`) can stay idle for 30–120s while the LLM thinks; Bun's default 10s would close the socket mid-call and the browser sees a 502.
 - `src/serve.ts` — Dev entry (`bun --watch src/serve.ts`). Dynamic import workaround for Bun EADDRINUSE race.
 
 ## Database

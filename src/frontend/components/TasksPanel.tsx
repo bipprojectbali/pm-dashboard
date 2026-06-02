@@ -538,6 +538,21 @@ export function TasksPanel({
       ),
     })
   }
+
+  const confirmDeleteByIds = (ids: string[]) => {
+    if (ids.length === 0) return
+    modals.open({
+      title: `Hapus ${ids.length} task terpilih?`,
+      size: 'sm',
+      children: (
+        <DeleteReasonModal
+          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
+          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
+        />
+      ),
+    })
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
@@ -911,6 +926,9 @@ export function TasksPanel({
           onSelect={(id) => openTask(id)}
           totalFetched={rawTasks.length}
           filterKey={query}
+          onDeleteOne={confirmDeleteOne}
+          onDeleteSelected={confirmDeleteByIds}
+          canDeleteTask={canDeleteTask}
         />
       ) : (
         <Card withBorder padding={0} radius="md">

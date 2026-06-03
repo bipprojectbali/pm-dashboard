@@ -803,9 +803,7 @@ function ProjectListRow({
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        borderLeft: `3px solid ${overdue ? OVERDUE_ACCENT : STATUS_ACCENT[p.status]}`,
-        transition: 'box-shadow 120ms ease',
-        boxShadow: hover && onOpen ? '0 2px 8px rgba(0,0,0,0.06)' : undefined,
+        transition: 'box-shadow 120ms ease'
       }}
       onClick={onOpen}
     >

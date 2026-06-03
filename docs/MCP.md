@@ -28,6 +28,7 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 - **Tickets** (in `tickets` module): `ticket_queue` (readonly — lists open tasks tagged `ai-queue` ordered by priority then age); `ticket_pick` (admin — atomic claim via `updateMany` on highest-priority open/reopened `ai-queue` task → `IN_PROGRESS`, optional `claimerEmail` assigns, returns full ticket incl. `project.githubRepo`), `ticket_submit` (admin — posts PR link as comment + transitions `IN_PROGRESS` → `READY_FOR_QC`).
   - QA/QC flow: tag a ticket with `ai-queue` → Claude runs `ticket_pick` → fix locally → open PR → `ticket_submit`.
   - Matches any project with an `ai-queue` tag regardless of self-project; in practice only the self-project has the tag, so hits are always QC tickets.
+- **Events** (in `events` module): `event_list` (readonly — filter upcoming/past, limit); `event_create`, `event_update`, `event_delete` (admin)
 - **QC** (in `qc` module):
   - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list`, `qc_ticket_get`
   - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`

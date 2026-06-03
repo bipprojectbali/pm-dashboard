@@ -31,6 +31,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `TaskDependency` (id, taskId, blockedById) — self-relation on Task via named relations `TaskDependents`/`TaskBlockers`; unique per (taskId, blockedById)
   - `TaskChecklistItem` (id, taskId, title, done, order, timestamps)
   - `TaskStatusChange` (id, taskId, authorId?, fromStatus, toStatus, createdAt) — written by PATCH /api/tasks/:id whenever status changes, used by activity timeline
+  - `Event` (id, title, description?, startsAt, endsAt?, location?, projectId?, createdById?, timestamps) — team-wide shared events/reminders; anyone can create, only creator or admin can edit/delete
   - `TaskComment`, `TaskEvidence` — comments + attachments on tasks
 - Enums: `Role` = `USER | QC | ADMIN | SUPER_ADMIN` (default `USER`); `TaskKind` = `TASK | BUG | QC`; `TaskStatus` = `OPEN | IN_PROGRESS | READY_FOR_QC | REOPENED | CLOSED`; `TaskPriority` = `LOW | MEDIUM | HIGH | CRITICAL`; `AgentStatus` = `PENDING | APPROVED | REVOKED`; `WebhookTokenStatus` = `ACTIVE | DISABLED | REVOKED`; `GithubEventKind` = `PUSH_COMMIT | PR_OPENED | PR_CLOSED | PR_MERGED | PR_REVIEWED`
 - Client singleton: `src/lib/db.ts` — import `{ prisma }` from here

@@ -32,6 +32,15 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - `GET /api/admin/webhooks/stats` — aggregate stats (24h + 7d windows): total/success/fail/auth-fail/events, perToken, perAgent
 - `GET /api/admin/webhooks/logs?status=all|ok|fail|auth&limit=N` — recent webhook request logs with token/agent relations
 
+## Events (Team Reminders)
+
+Team-wide events/reminders. All authenticated users can read and create. Only creator or admin can edit/delete.
+
+- `GET /api/events` — list events ordered by startsAt asc. Filters: `upcoming=true` (only future events), `limit` (default 50, max 200), `offset`. Returns `{ count, events }` with `createdBy` and `project` joined.
+- `POST /api/events` — create event. Body: `title` (required), `startsAt` (required ISO 8601), `endsAt?`, `description?`, `location?`, `projectId?` (optional link to a project).
+- `PATCH /api/events/:id` — partial update (creator or ADMIN/SUPER_ADMIN). Accepts same fields as POST. `endsAt: null` to clear.
+- `DELETE /api/events/:id` — permanent delete (creator or ADMIN/SUPER_ADMIN).
+
 ## Projects + Tasks
 
 Projects and tasks are project-scoped; all write endpoints gate on `requireProjectMember`. Role hierarchy (inside a project): `OWNER > PM > MEMBER > VIEWER`. `SUPER_ADMIN` bypasses membership checks.

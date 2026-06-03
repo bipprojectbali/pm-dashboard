@@ -33,6 +33,7 @@ export async function createTestSession(userId: string, expiresAt?: Date) {
 
 /** Clean up test data */
 export async function cleanupTestData() {
+  await prisma.event.deleteMany()
   await prisma.session.deleteMany()
   await prisma.user.deleteMany()
 }

@@ -13,6 +13,7 @@ import { qcRoutes } from './routes/qc.route'
 import { tasksRoutes } from './routes/tasks.route'
 import { webhooksRoutes } from './routes/webhooks.route'
 import { settingsRoutes } from './routes/settings.route'
+import { eventsRoutes } from './routes/events.route'
 
 export function createApp() {
   appLog('info', 'Server starting')
@@ -80,4 +81,5 @@ export function createApp() {
     .use(meRoutes())
     .use(webhooksRoutes())
     .use(settingsRoutes())
+    .use(eventsRoutes())
 }

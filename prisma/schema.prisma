@@ -122,6 +122,7 @@ model User {
   notifications      Notification[]     @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
   matchedGithubEvents    ProjectGithubEvent[] @relation("GithubEventMatchedUser")
+  createdEvents          Event[]              @relation("EventCreatedBy")
 
   @@map("user")
 }
@@ -276,6 +277,7 @@ model Project {
   tags         Tag[]
   githubEvents ProjectGithubEvent[]
   githubLogs   GithubWebhookLog[]
+  events       Event[]
 
   @@index([ownerId])
   @@index([archivedAt])
@@ -588,4 +590,47 @@ model DailySnapshot {
 
   @@index([date])
   @@map("daily_snapshot")
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  location    String?
+  projectId   String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project   Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?          @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  tags      EventTagLink[]
+
+  @@index([startsAt])
+  @@index([projectId])
+  @@map("event")
+}
+
+model EventTag {
+  id    String @id @default(uuid())
+  name  String @unique
+  color String @default("blue")
+
+  events EventTagLink[]
+
+  @@map("event_tag")
+}
+
+model EventTagLink {
+  eventId String
+  tagId   String
+
+  event Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag   EventTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, tagId])
+  @@index([tagId])
+  @@map("event_tag_link")
 }

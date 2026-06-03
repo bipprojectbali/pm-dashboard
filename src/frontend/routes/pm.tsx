@@ -577,6 +577,12 @@ function OverviewPanel({
     queryFn: () => fetch('/api/me/notifications?limit=10', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 60_000,
   })
+  // Reuse key ['events','badge'] — shared cache dengan badge query di PmPage, gratis tanpa request baru
+  const upcomingEventsQ = useQuery<{ events: Array<{ id: string; title: string; startsAt: string; endsAt: string | null; location: string | null; tags: Array<{ tagId: string; tag: { name: string; color: string } }>; project: { id: string; name: string } | null }> }>({
+    queryKey: ['events', 'badge'],
+    queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
+  })
 
   const projects = projectsQ.data?.projects ?? []
   const activeProjects = projects.filter((p) => !p.archivedAt)
@@ -610,6 +616,14 @@ function OverviewPanel({
   const bugsAssignedThisWeek = myTasks.filter((t) => t.kind === 'BUG' && new Date(t.createdAt).getTime() > weekAgo)
   const inProgressCount = activeMine.filter((t) => t.status === 'IN_PROGRESS').length
   const notifs = notifsQ.data?.notifications ?? []
+  const upcomingEvents = upcomingEventsQ.data?.events ?? []
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const weekKey = new Date(Date.now() + 7 * dayMs).toISOString().slice(0, 10)
+  const eventsToday = upcomingEvents.filter((e) => e.startsAt.slice(0, 10) === todayKey)
+  const eventsThisWeek = upcomingEvents.filter((e) => {
+    const k = e.startsAt.slice(0, 10)
+    return k > todayKey && k <= weekKey
+  })
 
   const statusDonutOption = useMemo(() => {
     const buckets: Record<OverviewTask['status'], number> = {
@@ -911,6 +925,60 @@ function OverviewPanel({
               </>
             )}
           </Paper>
+
+          <SectionCard
+            title="Events Mendatang"
+            subtitle="Jadwal tim hari ini dan 7 hari ke depan."
+            icon={TbCalendarEvent}
+            color="orange"
+            count={eventsToday.length + eventsThisWeek.length}
+            loading={upcomingEventsQ.isLoading}
+            emptyMessage="Tidak ada event mendatang. Kosong!"
+            tip="Event tim yang akan datang dalam 7 hari ke depan. Merah = hari ini. Klik untuk buka detail event."
+            action={
+              eventsToday.length + eventsThisWeek.length > 0 ? (
+                <Button variant="subtle" size="xs" onClick={() => navigate({ to: '/pm', search: { tab: 'events' } })}>
+                  Semua events
+                </Button>
+              ) : null
+            }
+          >
+            {eventsToday.length > 0 && (
+              <>
+                <Text size="xs" fw={600} c="red" tt="uppercase" mb={4}>Hari ini</Text>
+                {eventsToday.slice(0, 3).map((e) => (
+                  <UnstyledButton
+                    key={e.id}
+                    onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
+                    style={{ borderRadius: 6, padding: '4px 8px', width: '100%' }}
+                  >
+                    <Group gap="xs" wrap="nowrap">
+                      <TbCalendarEvent size={13} color="var(--mantine-color-red-6)" style={{ flexShrink: 0 }} />
+                      <Text size="sm" truncate style={{ flex: 1 }}>{e.title}</Text>
+                      <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                        {new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </Group>
+                  </UnstyledButton>
+                ))}
+              </>
+            )}
+            {eventsThisWeek.slice(0, 5 - Math.min(eventsToday.length, 3)).map((e) => (
+              <UnstyledButton
+                key={e.id}
+                onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
+                style={{ borderRadius: 6, padding: '4px 8px', width: '100%' }}
+              >
+                <Group gap="xs" wrap="nowrap">
+                  <TbCalendarEvent size={13} color="var(--mantine-color-blue-5)" style={{ flexShrink: 0 }} />
+                  <Text size="sm" truncate style={{ flex: 1 }}>{e.title}</Text>
+                  <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                    {new Date(e.startsAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </Text>
+                </Group>
+              </UnstyledButton>
+            ))}
+          </SectionCard>
 
           <SectionCard
             title="Aktivitas Terbaru"

@@ -1,26 +1,7 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Indicator,
-  Stack,
-  Text,
-  ThemeIcon,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Group, Indicator, Stack, Text, ThemeIcon, Tooltip } from '@mantine/core'
 import { DatePicker } from '@mantine/dates'
 import { useMemo, useState } from 'react'
-import {
-  TbCalendarEvent,
-  TbClock,
-  TbEdit,
-  TbMapPin,
-  TbPlayerSkipForward,
-  TbTag,
-  TbTrash,
-} from 'react-icons/tb'
+import { TbCalendarEvent, TbClock, TbEdit, TbMapPin, TbPlayerSkipForward, TbTag, TbTrash } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 
 type EventUser = { id: string; name: string; email: string; image?: string | null }
@@ -92,20 +73,27 @@ function EventItem({
           </ThemeIcon>
           <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Group gap={4} wrap="wrap" align="center">
-              <Text fw={600} size="sm" lineClamp={1}>{event.title}</Text>
-              <Badge size="xs" color={cd.color} variant="light">{cd.label}</Badge>
+              <Text fw={600} size="sm" lineClamp={1}>
+                {event.title}
+              </Text>
+              <Badge size="xs" color={cd.color} variant="light">
+                {cd.label}
+              </Badge>
             </Group>
             <Group gap="xs" wrap="wrap">
               <Group gap={4} wrap="nowrap">
                 <TbClock size={11} style={{ color: 'var(--mantine-color-dimmed)', flexShrink: 0 }} />
                 <Text size="xs" c="dimmed">
-                  {formatTime(event.startsAt)}{event.endsAt ? ` – ${formatTime(event.endsAt)}` : ''}
+                  {formatTime(event.startsAt)}
+                  {event.endsAt ? ` – ${formatTime(event.endsAt)}` : ''}
                 </Text>
               </Group>
               {event.location && (
                 <Group gap={4} wrap="nowrap">
                   <TbMapPin size={11} style={{ color: 'var(--mantine-color-dimmed)', flexShrink: 0 }} />
-                  <Text size="xs" c="dimmed" lineClamp={1}>{event.location}</Text>
+                  <Text size="xs" c="dimmed" lineClamp={1}>
+                    {event.location}
+                  </Text>
                 </Group>
               )}
             </Group>
@@ -113,14 +101,18 @@ function EventItem({
               <Group gap={4} wrap="wrap">
                 <TbTag size={11} style={{ color: 'var(--mantine-color-dimmed)' }} />
                 {event.tags.map((t) => (
-                  <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">{t.tag.name}</Badge>
+                  <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">
+                    {t.tag.name}
+                  </Badge>
                 ))}
               </Group>
             )}
             {event.createdBy && (
               <Group gap={4} wrap="nowrap">
                 <UserAvatar name={event.createdBy.name} image={event.createdBy.image} size={12} color="gray" />
-                <Text size="xs" c="dimmed">{event.createdBy.name}</Text>
+                <Text size="xs" c="dimmed">
+                  {event.createdBy.name}
+                </Text>
               </Group>
             )}
           </Stack>
@@ -128,14 +120,29 @@ function EventItem({
         {canEdit && (
           <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
             <Tooltip label="Edit" withArrow>
-              <ActionIcon size="xs" variant="subtle" color="gray"
-                onClick={(e) => { e.stopPropagation(); onEdit() }}>
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="gray"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+              >
                 <TbEdit size={12} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Hapus" withArrow>
-              <ActionIcon size="xs" variant="subtle" color="red" loading={deleteLoading}
-                onClick={(e) => { e.stopPropagation(); onDelete() }}>
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="red"
+                loading={deleteLoading}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+              >
                 <TbTrash size={12} />
               </ActionIcon>
             </Tooltip>
@@ -202,7 +209,10 @@ export function EventsCalendarView({
   }
 
   const selectedLabel = selectedDate.toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   })
 
   return (
@@ -216,8 +226,13 @@ export function EventsCalendarView({
             </Text>
             <Group gap={6}>
               <Tooltip label="Hari ini" withArrow>
-                <Button size="compact-xs" variant={isToday ? 'filled' : 'light'} color="blue"
-                  disabled={isToday} onClick={jumpToToday}>
+                <Button
+                  size="compact-xs"
+                  variant={isToday ? 'filled' : 'light'}
+                  color="blue"
+                  disabled={isToday}
+                  onClick={jumpToToday}
+                >
                   Hari ini
                 </Button>
               </Tooltip>
@@ -231,9 +246,13 @@ export function EventsCalendarView({
 
           <DatePicker
             value={selectedDate}
-            onChange={(d) => { if (d) setSelectedDate(new Date(d as unknown as string)) }}
+            onChange={(d) => {
+              if (d) setSelectedDate(new Date(d as unknown as string))
+            }}
             date={month}
-            onDateChange={(d) => { if (d) setMonth(new Date(d as unknown as string)) }}
+            onDateChange={(d) => {
+              if (d) setMonth(new Date(d as unknown as string))
+            }}
             size="sm"
             renderDay={(dateInput) => {
               const d = new Date(dateInput as unknown as string)
@@ -253,7 +272,15 @@ export function EventsCalendarView({
           <Group gap={6} wrap="wrap" mt={4}>
             {(['red', 'orange', 'blue', 'gray'] as const).map((c) => (
               <Group key={c} gap={4} wrap="nowrap">
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: `var(--mantine-color-${c}-5)`, flexShrink: 0 }} />
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: `var(--mantine-color-${c}-5)`,
+                    flexShrink: 0,
+                  }}
+                />
                 <Text size="xs" c="dimmed">
                   {c === 'red' ? 'Hari ini' : c === 'orange' ? 'Besok' : c === 'blue' ? 'Akan datang' : 'Lewat'}
                 </Text>
@@ -266,16 +293,26 @@ export function EventsCalendarView({
       {/* Day events panel */}
       <Stack gap="xs" style={{ flex: 1, minWidth: 240 }}>
         <Group gap={6} align="center">
-          <Text fw={700} size="sm">{selectedLabel}</Text>
-          {isToday && <Badge size="xs" color="red" variant="filled">Today</Badge>}
-          <Badge size="xs" color="blue" variant="light">{selectedEvents.length} event</Badge>
+          <Text fw={700} size="sm">
+            {selectedLabel}
+          </Text>
+          {isToday && (
+            <Badge size="xs" color="red" variant="filled">
+              Today
+            </Badge>
+          )}
+          <Badge size="xs" color="blue" variant="light">
+            {selectedEvents.length} event
+          </Badge>
         </Group>
 
         {selectedEvents.length === 0 ? (
           <Card withBorder radius="md" p="lg">
             <Stack align="center" gap={4}>
               <TbCalendarEvent size={28} style={{ color: 'var(--mantine-color-dimmed)' }} />
-              <Text size="sm" c="dimmed">Tidak ada event pada hari ini</Text>
+              <Text size="sm" c="dimmed">
+                Tidak ada event pada hari ini
+              </Text>
             </Stack>
           </Card>
         ) : (

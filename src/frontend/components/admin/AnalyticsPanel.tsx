@@ -13,12 +13,12 @@ import {
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import type { EChartsOption } from 'echarts'
+import { Gantt, type GanttTask } from 'mantine-gantt'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TbCalendarEvent, TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
-import { EChart } from '../charts/EChart'
-import { Gantt, type GanttTask } from 'mantine-gantt'
-import { InfoTip } from '../shared/InfoTip'
 import { toLocalDateStr } from '../../lib/dates'
+import { EChart } from '../charts/EChart'
+import { InfoTip } from '../shared/InfoTip'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -427,10 +427,18 @@ export function AnalyticsPanel() {
   }, [overviewData])
 
   const AP_PROJ_COLOR: Record<string, string> = {
-    ACTIVE: 'blue', ON_HOLD: 'yellow', DRAFT: 'gray', COMPLETED: 'green', CANCELLED: 'dark',
+    ACTIVE: 'blue',
+    ON_HOLD: 'yellow',
+    DRAFT: 'gray',
+    COMPLETED: 'green',
+    CANCELLED: 'dark',
   }
   const AP_PROJ_LABEL: Record<string, string> = {
-    ACTIVE: 'Active', ON_HOLD: 'On Hold', DRAFT: 'Draft', COMPLETED: 'Done', CANCELLED: 'Cancelled',
+    ACTIVE: 'Active',
+    ON_HOLD: 'On Hold',
+    DRAFT: 'Draft',
+    COMPLETED: 'Done',
+    CANCELLED: 'Cancelled',
   }
 
   const timelineTasks = useMemo<GanttTask[]>(() => {
@@ -445,10 +453,7 @@ export function AnalyticsPanel() {
         const start = r.startsAt ? new Date(r.startsAt) : now
         const end = r.endsAt ? new Date(r.endsAt) : weekOut
         const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
-        const suffix = [
-          AP_PROJ_LABEL[r.status] ?? r.status,
-          r.slipped ? '⚠ slipped' : '',
-        ].filter(Boolean).join(' · ')
+        const suffix = [AP_PROJ_LABEL[r.status] ?? r.status, r.slipped ? '⚠ slipped' : ''].filter(Boolean).join(' · ')
         return {
           id: r.id,
           label: `${r.name}  —  ${suffix}`,
@@ -480,7 +485,10 @@ export function AnalyticsPanel() {
     const body = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
     if (!body) return
     const daysSinceStart = Math.floor((Date.now() - tlStart.getTime()) / 86_400_000)
-    body.scrollTo({ left: Math.max(0, daysSinceStart * AP_EFFECTIVE_DAY_PX - body.clientWidth / 2), behavior: 'smooth' })
+    body.scrollTo({
+      left: Math.max(0, daysSinceStart * AP_EFFECTIVE_DAY_PX - body.clientWidth / 2),
+      behavior: 'smooth',
+    })
   }, [tlStart, AP_EFFECTIVE_DAY_PX])
 
   useEffect(() => {
@@ -489,7 +497,10 @@ export function AnalyticsPanel() {
     const tryScroll = () => {
       const content = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
       if (!content || content.offsetWidth < 200) {
-        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        if (++attempts < 40) {
+          setTimeout(tryScroll, 80)
+          return
+        }
         return
       }
       scrollToToday()
@@ -506,7 +517,11 @@ export function AnalyticsPanel() {
       .filter((r) => r.startsAt || r.endsAt)
       .sort((a, b) => (a.endsAt ?? '').localeCompare(b.endsAt ?? ''))
       .slice(0, 12)
-      .map((r) => ({ ...r, start: r.startsAt ? new Date(r.startsAt) : now, end: r.endsAt ? new Date(r.endsAt) : weekOut }))
+      .map((r) => ({
+        ...r,
+        start: r.startsAt ? new Date(r.startsAt) : now,
+        end: r.endsAt ? new Date(r.endsAt) : weekOut,
+      }))
   }, [overviewData])
 
   const refetchAll = () => {
@@ -622,9 +637,13 @@ export function AnalyticsPanel() {
         {timelineTasks.length > 0 && (
           <Group gap={6} mb="xs" wrap="wrap">
             {Object.entries(AP_PROJ_COLOR).map(([s, c]) => (
-              <Badge key={s} size="xs" color={c} variant="dot">{AP_PROJ_LABEL[s] ?? s}</Badge>
+              <Badge key={s} size="xs" color={c} variant="dot">
+                {AP_PROJ_LABEL[s] ?? s}
+              </Badge>
             ))}
-            <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
+            <Badge size="xs" color="orange" variant="dot">
+              Slipped
+            </Badge>
           </Group>
         )}
         {timelineTasks.length > 0 && (
@@ -637,25 +656,71 @@ export function AnalyticsPanel() {
           </Group>
         )}
         {timelineTasks.length === 0 ? (
-          <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
+          <Text size="sm" c="dimmed" ta="center" py="lg">
+            Belum ada project aktif dengan jadwal.
+          </Text>
         ) : (
-          <div style={{
-            display: 'flex',
-            height: Math.max(200, timelineTasks.length * 42 + 60),
-            border: '1px solid var(--mantine-color-default-border)',
-            borderRadius: 'var(--mantine-radius-md)',
-            overflow: 'hidden',
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              height: Math.max(200, timelineTasks.length * 42 + 60),
+              border: '1px solid var(--mantine-color-default-border)',
+              borderRadius: 'var(--mantine-radius-md)',
+              overflow: 'hidden',
+            }}
+          >
             {/* Custom sidebar */}
-            <div style={{ width: 180, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
-              <div style={{ height: 56, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 10px 8px' }}>
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+            <div
+              style={{
+                width: 180,
+                flexShrink: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                borderRight: '1px solid var(--mantine-color-default-border)',
+              }}
+            >
+              <div
+                style={{
+                  height: 56,
+                  flexShrink: 0,
+                  borderBottom: '1px solid var(--mantine-color-default-border)',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  padding: '0 10px 8px',
+                }}
+              >
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
+                  Proyek
+                </Text>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
                 {timelineRows.map((r) => (
-                  <div key={r.id} style={{ height: 42, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6, borderBottom: '1px solid var(--mantine-color-default-border)', overflow: 'hidden' }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: r.slipped ? '#b86d2a' : `var(--mantine-color-${AP_PROJ_COLOR[r.status] ?? 'blue'}-6)`, flexShrink: 0 }} />
-                    <Text size="xs" fw={500} truncate title={r.name}>{r.name}</Text>
+                  <div
+                    key={r.id}
+                    style={{
+                      height: 42,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 10px',
+                      gap: 6,
+                      borderBottom: '1px solid var(--mantine-color-default-border)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: r.slipped
+                          ? '#b86d2a'
+                          : `var(--mantine-color-${AP_PROJ_COLOR[r.status] ?? 'blue'}-6)`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Text size="xs" fw={500} truncate title={r.name}>
+                      {r.name}
+                    </Text>
                   </div>
                 ))}
               </div>

@@ -7,7 +7,7 @@ import type { SendHistoryEntry } from '../../lib/report-history'
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: string }
+    const err = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(err.error ?? `HTTP ${res.status}`)
   }
   return res.json()
@@ -19,8 +19,11 @@ const TRIGGER_LABEL: Record<string, string> = { cron: 'Otomatis', manual: 'Manua
 function fmtTs(iso: string) {
   return new Date(iso).toLocaleString('id-ID', {
     timeZone: 'Asia/Jakarta',
-    weekday: 'short', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
@@ -51,8 +54,12 @@ export function SendHistoryPanel() {
       <Stack gap="md">
         <Group justify="space-between">
           <Stack gap={0}>
-            <Text fw={500} size="sm">Riwayat Pengiriman Laporan</Text>
-            <Text size="xs" c="dimmed">20 pengiriman terakhir — otomatis (cron), manual, dan custom.</Text>
+            <Text fw={500} size="sm">
+              Riwayat Pengiriman Laporan
+            </Text>
+            <Text size="xs" c="dimmed">
+              20 pengiriman terakhir — otomatis (cron), manual, dan custom.
+            </Text>
           </Stack>
           <Tooltip label="Refresh" withArrow>
             <ActionIcon variant="subtle" size="sm" onClick={() => refetch()} loading={isFetching}>
@@ -88,7 +95,9 @@ export function SendHistoryPanel() {
               <Table.Tbody>
                 {history.map((entry, i) => (
                   <Table.Tr key={i}>
-                    <Table.Td><Text size="xs">{fmtTs(entry.sentAt)}</Text></Table.Td>
+                    <Table.Td>
+                      <Text size="xs">{fmtTs(entry.sentAt)}</Text>
+                    </Table.Td>
                     <Table.Td>
                       <Badge size="xs" variant="light" color={TRIGGER_COLOR[entry.trigger] ?? 'gray'}>
                         {TRIGGER_LABEL[entry.trigger] ?? entry.trigger}
@@ -100,7 +109,9 @@ export function SendHistoryPanel() {
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="xs" c="dimmed" lineClamp={1}>{entry.message}</Text>
+                      <Text size="xs" c="dimmed" lineClamp={1}>
+                        {entry.message}
+                      </Text>
                     </Table.Td>
                     <Table.Td>
                       <Tooltip label="Kirim ulang laporan sekarang" withArrow>

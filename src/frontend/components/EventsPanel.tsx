@@ -145,30 +145,50 @@ function EventCard({
           </ThemeIcon>
           <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
             <Group gap={6} wrap="wrap" align="center">
-              <Text fw={600} size="sm">{event.title}</Text>
-              <Badge size="xs" color={cd.color} variant="light">{cd.label}</Badge>
-              {event.project && <Badge size="xs" variant="outline" color="gray">{event.project.name}</Badge>}
+              <Text fw={600} size="sm">
+                {event.title}
+              </Text>
+              <Badge size="xs" color={cd.color} variant="light">
+                {cd.label}
+              </Badge>
+              {event.project && (
+                <Badge size="xs" variant="outline" color="gray">
+                  {event.project.name}
+                </Badge>
+              )}
               {event.tags.map((t) => (
-                <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">{t.tag.name}</Badge>
+                <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">
+                  {t.tag.name}
+                </Badge>
               ))}
             </Group>
             <Group gap="xs" wrap="wrap">
               <Group gap={4} wrap="nowrap">
                 <TbClock size={12} style={{ color: 'var(--mantine-color-dimmed)', flexShrink: 0 }} />
-                <Text size="xs" c="dimmed">{formatDateRange(event.startsAt, event.endsAt)}</Text>
+                <Text size="xs" c="dimmed">
+                  {formatDateRange(event.startsAt, event.endsAt)}
+                </Text>
               </Group>
               {event.location && (
                 <Group gap={4} wrap="nowrap">
                   <TbMapPin size={12} style={{ color: 'var(--mantine-color-dimmed)', flexShrink: 0 }} />
-                  <Text size="xs" c="dimmed">{event.location}</Text>
+                  <Text size="xs" c="dimmed">
+                    {event.location}
+                  </Text>
                 </Group>
               )}
             </Group>
-            {event.description && <Text size="xs" c="dimmed" lineClamp={2}>{event.description}</Text>}
+            {event.description && (
+              <Text size="xs" c="dimmed" lineClamp={2}>
+                {event.description}
+              </Text>
+            )}
             {event.createdBy && (
               <Group gap={4} wrap="nowrap" mt={2}>
                 <UserAvatar name={event.createdBy.name} image={event.createdBy.image} size={14} color="gray" />
-                <Text size="xs" c="dimmed">{event.createdBy.name}</Text>
+                <Text size="xs" c="dimmed">
+                  {event.createdBy.name}
+                </Text>
               </Group>
             )}
           </Stack>
@@ -176,14 +196,29 @@ function EventCard({
         {canEdit && (
           <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
             <Tooltip label="Edit event" withArrow>
-              <ActionIcon size="sm" variant="subtle" color="gray"
-                onClick={(e) => { e.stopPropagation(); onEdit() }}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+              >
                 <TbEdit size={14} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Hapus event" withArrow>
-              <ActionIcon size="sm" variant="subtle" color="red" loading={deleteLoading}
-                onClick={(e) => { e.stopPropagation(); onDelete() }}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="red"
+                loading={deleteLoading}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+              >
                 <TbTrash size={14} />
               </ActionIcon>
             </Tooltip>
@@ -211,9 +246,18 @@ export function EventsPanel({
 
   // BUG FIX #2: Default showAll=true agar event baru langsung terlihat tanpa filter upcoming
   const [showAll, setShowAll] = useLocalStorage<boolean>({ key: 'pm:events:showAll', defaultValue: true })
-  const [filterTagId, setFilterTagId] = useLocalStorage<string | null>({ key: 'pm:events:filterTagId', defaultValue: null })
-  const [groupByTagMode, setGroupByTagMode] = useLocalStorage<boolean>({ key: 'pm:events:groupByTag', defaultValue: true })
-  const [viewMode, setViewMode] = useLocalStorage<'list' | 'grid' | 'calendar'>({ key: 'pm:events:view', defaultValue: 'list' })
+  const [filterTagId, setFilterTagId] = useLocalStorage<string | null>({
+    key: 'pm:events:filterTagId',
+    defaultValue: null,
+  })
+  const [groupByTagMode, setGroupByTagMode] = useLocalStorage<boolean>({
+    key: 'pm:events:groupByTag',
+    defaultValue: true,
+  })
+  const [viewMode, setViewMode] = useLocalStorage<'list' | 'grid' | 'calendar'>({
+    key: 'pm:events:view',
+    defaultValue: 'list',
+  })
 
   const eventsQ = useQuery<{ count: number; events: TeamEvent[] }>({
     queryKey: ['events', showAll ? 'all' : 'upcoming', filterTagId],
@@ -264,8 +308,12 @@ export function EventsPanel({
       {/* Header */}
       <Group justify="space-between" align="center">
         <Stack gap={0}>
-          <Text fw={700} size="lg">Events Tim</Text>
-          <Text size="sm" c="dimmed">Jadwal dan pengingat bersama — semua anggota tim bisa melihat dan menambah.</Text>
+          <Text fw={700} size="lg">
+            Events Tim
+          </Text>
+          <Text size="sm" c="dimmed">
+            Jadwal dan pengingat bersama — semua anggota tim bisa melihat dan menambah.
+          </Text>
         </Stack>
         <Group gap="xs">
           {/* BUG FIX #4: Label menunjukkan AKSI berikutnya, bukan state saat ini */}
@@ -313,27 +361,43 @@ export function EventsPanel({
         </Group>
         <Group gap={4}>
           <Tooltip label="Tampilan list" withArrow>
-            <ActionIcon size="sm" variant={viewMode === 'list' ? 'filled' : 'subtle'} color={viewMode === 'list' ? 'blue' : 'gray'}
-              onClick={() => setViewMode('list')}>
+            <ActionIcon
+              size="sm"
+              variant={viewMode === 'list' ? 'filled' : 'subtle'}
+              color={viewMode === 'list' ? 'blue' : 'gray'}
+              onClick={() => setViewMode('list')}
+            >
               <TbLayoutList size={14} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Tampilan grid" withArrow>
-            <ActionIcon size="sm" variant={viewMode === 'grid' ? 'filled' : 'subtle'} color={viewMode === 'grid' ? 'blue' : 'gray'}
-              onClick={() => setViewMode('grid')}>
+            <ActionIcon
+              size="sm"
+              variant={viewMode === 'grid' ? 'filled' : 'subtle'}
+              color={viewMode === 'grid' ? 'blue' : 'gray'}
+              onClick={() => setViewMode('grid')}
+            >
               <TbLayoutGrid size={14} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Tampilan kalender" withArrow>
-            <ActionIcon size="sm" variant={viewMode === 'calendar' ? 'filled' : 'subtle'} color={viewMode === 'calendar' ? 'blue' : 'gray'}
-              onClick={() => setViewMode('calendar')}>
+            <ActionIcon
+              size="sm"
+              variant={viewMode === 'calendar' ? 'filled' : 'subtle'}
+              color={viewMode === 'calendar' ? 'blue' : 'gray'}
+              onClick={() => setViewMode('calendar')}
+            >
               <TbCalendarMonth size={14} />
             </ActionIcon>
           </Tooltip>
         </Group>
       </Group>
 
-      {eventsQ.isLoading && <Text size="sm" c="dimmed">Memuat...</Text>}
+      {eventsQ.isLoading && (
+        <Text size="sm" c="dimmed">
+          Memuat...
+        </Text>
+      )}
 
       {/* Kalender view — pisah dari list/grid */}
       {!eventsQ.isLoading && viewMode === 'calendar' && (
@@ -353,14 +417,22 @@ export function EventsPanel({
             <ThemeIcon size="xl" radius="xl" variant="light" color="blue">
               <TbCalendarEvent size={24} />
             </ThemeIcon>
-            <Text fw={600}>{filterTagId ? 'Tidak ada event dengan tag ini' : showAll ? 'Belum ada event' : 'Tidak ada event mendatang'}</Text>
+            <Text fw={600}>
+              {filterTagId
+                ? 'Tidak ada event dengan tag ini'
+                : showAll
+                  ? 'Belum ada event'
+                  : 'Tidak ada event mendatang'}
+            </Text>
             <Text size="sm" c="dimmed">
               {!filterTagId && !showAll
                 ? 'Event yang sudah lewat disembunyikan. Klik "Semua event" untuk melihat semua.'
                 : 'Buat event pertama untuk mengingatkan tim.'}
             </Text>
             {!filterTagId && !showAll && (
-              <Button size="xs" variant="subtle" onClick={() => setShowAll(true)}>Tampilkan semua event</Button>
+              <Button size="xs" variant="subtle" onClick={() => setShowAll(true)}>
+                Tampilkan semua event
+              </Button>
             )}
             <Button size="sm" leftSection={<TbPlus size={14} />} onClick={() => onCreate?.()} mt="xs">
               Buat Event
@@ -369,61 +441,80 @@ export function EventsPanel({
         </Card>
       )}
 
-      {viewMode !== 'calendar' && groups.map(({ groupKey, groupLabel, items, tagColor }) => {
-        const isToday = !groupByTagMode && groupKey === today
-        const isTomorrow = !groupByTagMode && groupKey === tomorrow
-        const isPast = !groupByTagMode && groupKey < today
-        const labelColor = groupByTagMode
-          ? (tagColor ?? 'blue')
-          : isToday ? 'red' : isTomorrow ? 'orange' : isPast ? 'dimmed' : 'blue'
+      {viewMode !== 'calendar' &&
+        groups.map(({ groupKey, groupLabel, items, tagColor }) => {
+          const isToday = !groupByTagMode && groupKey === today
+          const isTomorrow = !groupByTagMode && groupKey === tomorrow
+          const isPast = !groupByTagMode && groupKey < today
+          const labelColor = groupByTagMode
+            ? (tagColor ?? 'blue')
+            : isToday
+              ? 'red'
+              : isTomorrow
+                ? 'orange'
+                : isPast
+                  ? 'dimmed'
+                  : 'blue'
 
-        return (
-          <Stack key={groupKey} gap="xs">
-            <Group gap={6} align="center">
-              {groupByTagMode && tagColor && groupKey !== '__no_tag__' ? (
-                <Badge size="xs" color={tagColor} variant="filled">{groupLabel}</Badge>
-              ) : (
-                <Text size="xs" fw={700} c={labelColor} tt="uppercase">
-                  {isToday ? 'Hari ini' : isTomorrow ? 'Besok' : groupLabel}
+          return (
+            <Stack key={groupKey} gap="xs">
+              <Group gap={6} align="center">
+                {groupByTagMode && tagColor && groupKey !== '__no_tag__' ? (
+                  <Badge size="xs" color={tagColor} variant="filled">
+                    {groupLabel}
+                  </Badge>
+                ) : (
+                  <Text size="xs" fw={700} c={labelColor} tt="uppercase">
+                    {isToday ? 'Hari ini' : isTomorrow ? 'Besok' : groupLabel}
+                  </Text>
+                )}
+                {isToday && (
+                  <Badge size="xs" color="red" variant="filled">
+                    Today
+                  </Badge>
+                )}
+                {isTomorrow && (
+                  <Badge size="xs" color="orange" variant="light">
+                    Besok
+                  </Badge>
+                )}
+                <Text size="xs" c="dimmed">
+                  ({items.length})
                 </Text>
+                <Divider style={{ flex: 1 }} />
+              </Group>
+              {viewMode === 'grid' ? (
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
+                  {items.map((e) => (
+                    <EventCard
+                      key={`${groupKey}-${e.id}`}
+                      event={e}
+                      canEdit={isAdmin || user?.id === e.createdById}
+                      onOpen={() => onOpen?.(e.id)}
+                      onEdit={() => onEdit?.(e.id)} // BUG FIX #1
+                      onDelete={() => confirmDelete(e)}
+                      deleteLoading={deleteEvent.isPending && deleteEvent.variables === e.id}
+                    />
+                  ))}
+                </SimpleGrid>
+              ) : (
+                <Stack gap="xs">
+                  {items.map((e) => (
+                    <EventCard
+                      key={`${groupKey}-${e.id}`}
+                      event={e}
+                      canEdit={isAdmin || user?.id === e.createdById}
+                      onOpen={() => onOpen?.(e.id)}
+                      onEdit={() => onEdit?.(e.id)} // BUG FIX #1
+                      onDelete={() => confirmDelete(e)}
+                      deleteLoading={deleteEvent.isPending && deleteEvent.variables === e.id}
+                    />
+                  ))}
+                </Stack>
               )}
-              {isToday && <Badge size="xs" color="red" variant="filled">Today</Badge>}
-              {isTomorrow && <Badge size="xs" color="orange" variant="light">Besok</Badge>}
-              <Text size="xs" c="dimmed">({items.length})</Text>
-              <Divider style={{ flex: 1 }} />
-            </Group>
-            {viewMode === 'grid' ? (
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-                {items.map((e) => (
-                  <EventCard
-                    key={`${groupKey}-${e.id}`}
-                    event={e}
-                    canEdit={isAdmin || user?.id === e.createdById}
-                    onOpen={() => onOpen?.(e.id)}
-                    onEdit={() => onEdit?.(e.id)}   // BUG FIX #1
-                    onDelete={() => confirmDelete(e)}
-                    deleteLoading={deleteEvent.isPending && deleteEvent.variables === e.id}
-                  />
-                ))}
-              </SimpleGrid>
-            ) : (
-              <Stack gap="xs">
-                {items.map((e) => (
-                  <EventCard
-                    key={`${groupKey}-${e.id}`}
-                    event={e}
-                    canEdit={isAdmin || user?.id === e.createdById}
-                    onOpen={() => onOpen?.(e.id)}
-                    onEdit={() => onEdit?.(e.id)}   // BUG FIX #1
-                    onDelete={() => confirmDelete(e)}
-                    deleteLoading={deleteEvent.isPending && deleteEvent.variables === e.id}
-                  />
-                ))}
-              </Stack>
-            )}
-          </Stack>
-        )
-      })}
+            </Stack>
+          )
+        })}
     </Stack>
   )
 }

@@ -1,6 +1,6 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
-import { appLog } from './applog'
 import { getSetting, setSetting } from './app-settings'
+import { appLog } from './applog'
 import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
 import { recordSendHistory, type SendTrigger } from './report-history'
 import { formatZonedDateLong, getReportTimezone } from './timezone'
@@ -42,10 +42,14 @@ _pm-dashboard AI report_`
 
 // ─── Claude API ──────────────────────────────────────────────────────────────
 
-async function callClaudeAPI(apiKey: string, model: string, prompt: string, baseUrl?: string, timeoutMs?: number): Promise<string> {
-  const endpoint = baseUrl
-    ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
-    : 'https://api.anthropic.com/v1/messages'
+async function callClaudeAPI(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  baseUrl?: string,
+  timeoutMs?: number,
+): Promise<string> {
+  const endpoint = baseUrl ? `${baseUrl.replace(/\/$/, '')}/v1/messages` : 'https://api.anthropic.com/v1/messages'
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -61,10 +65,10 @@ async function callClaudeAPI(apiKey: string, model: string, prompt: string, base
     signal: AbortSignal.timeout(timeoutMs ?? 120_000),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: { message?: string } }
+    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
     throw new Error(`Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}`)
   }
-  const data = await res.json() as { content: Array<{ type: string; text: string }> }
+  const data = (await res.json()) as { content: Array<{ type: string; text: string }> }
   const text = data.content.find((c) => c.type === 'text')?.text
   if (!text) throw new Error('Claude API returned no text content')
   return text
@@ -85,7 +89,7 @@ async function sendToTelegram(botToken: string, chatId: string, text: string, ti
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { description?: string }
+      const err = (await res.json().catch(() => ({}))) as { description?: string }
       throw new Error(`Telegram error ${res.status}: ${err.description ?? 'unknown'}`)
     }
   }
@@ -107,23 +111,32 @@ async function buildReportPrompt(): Promise<string> {
   const tanggal = formatZonedDateLong(tz)
 
   const activeProjects = health.projects.filter((p) => p.status === 'ACTIVE')
-  const projectLines = activeProjects.map((p) =>
-    `- *${p.name}* (${p.grade}, skor ${p.score}/100): ${p.openTasks} task open, ${p.overdueTasks} overdue` +
-    (p.daysUntilDue != null ? `, ${p.daysUntilDue} hari tersisa` : ', tanpa deadline') +
-    (p.pastDue ? ' ⚠️ LEWAT DEADLINE' : '') +
-    (p.blockedTasks > 0 ? `, ${p.blockedTasks} diblokir` : '')
-  ).join('\n')
+  const projectLines = activeProjects
+    .map(
+      (p) =>
+        `- *${p.name}* (${p.grade}, skor ${p.score}/100): ${p.openTasks} task open, ${p.overdueTasks} overdue` +
+        (p.daysUntilDue != null ? `, ${p.daysUntilDue} hari tersisa` : ', tanpa deadline') +
+        (p.pastDue ? ' ⚠️ LEWAT DEADLINE' : '') +
+        (p.blockedTasks > 0 ? `, ${p.blockedTasks} diblokir` : ''),
+    )
+    .join('\n')
 
-  const userLines = load.rows.map((u) =>
-    `- *${u.name}*: ${u.open} open, ${u.overdue} overdue, ${u.closed7d} selesai 7h` +
-    (u.overloaded ? ' 🔴 OVERLOADED' : '')
-  ).join('\n')
+  const userLines = load.rows
+    .map(
+      (u) =>
+        `- *${u.name}*: ${u.open} open, ${u.overdue} overdue, ${u.closed7d} selesai 7h` +
+        (u.overloaded ? ' 🔴 OVERLOADED' : ''),
+    )
+    .join('\n')
 
-  const riskLines = [
-    risk.summary.pastDueProjects > 0 ? `- ${risk.summary.pastDueProjects} project melewati deadline` : '',
-    risk.summary.overdueTasks > 0 ? `- ${risk.summary.overdueTasks} task overdue` : '',
-    risk.summary.staleTasks > 0 ? `- ${risk.summary.staleTasks} task stale (tidak bergerak >3 hari)` : '',
-  ].filter(Boolean).join('\n') || '- Tidak ada risiko kritis'
+  const riskLines =
+    [
+      risk.summary.pastDueProjects > 0 ? `- ${risk.summary.pastDueProjects} project melewati deadline` : '',
+      risk.summary.overdueTasks > 0 ? `- ${risk.summary.overdueTasks} task overdue` : '',
+      risk.summary.staleTasks > 0 ? `- ${risk.summary.staleTasks} task stale (tidak bergerak >3 hari)` : '',
+    ]
+      .filter(Boolean)
+      .join('\n') || '- Tidak ada risiko kritis'
 
   return `Kamu adalah manajer proyek senior yang berpengalaman dan cerdas. Tugasmu membuat laporan harian untuk tim.
 
@@ -186,7 +199,12 @@ export async function sendCustomReport(text: string): Promise<{ ok: boolean; mes
     try {
       await sendToTelegram(botToken, chatId, text, tgTimeoutMs)
       appLog('info', 'Custom report: sent successfully')
-      await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger: 'custom' })
+      await recordSendHistory({
+        sentAt: new Date().toISOString(),
+        ok: true,
+        message: 'Laporan berhasil dikirim ke Telegram',
+        trigger: 'custom',
+      })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {
       if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
@@ -196,7 +214,11 @@ export async function sendCustomReport(text: string): Promise<{ ok: boolean; mes
       return { ok: false, message: msg }
     }
   })()
-  try { return await sendInFlight } finally { sendInFlight = null }
+  try {
+    return await sendInFlight
+  } finally {
+    sendInFlight = null
+  }
 }
 
 export async function generateReportPreview(): Promise<string> {
@@ -212,7 +234,9 @@ export async function generateReportPreview(): Promise<string> {
   return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined, timeoutMs)
 }
 
-export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger } = {}): Promise<{ ok: boolean; message: string }> {
+export async function generateAndSendDailyReport(
+  opts: { trigger?: SendTrigger } = {},
+): Promise<{ ok: boolean; message: string }> {
   if (sendInFlight) return { ok: false, message: 'Pengiriman lain sedang berlangsung, coba lagi sebentar.' }
   const trigger: SendTrigger = opts.trigger ?? 'manual'
   sendInFlight = (async () => {
@@ -240,7 +264,12 @@ export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger }
       await sendToTelegram(botToken, chatId, report, tgTimeoutMs)
       await setSetting('report.lastSentAt', new Date().toISOString())
       appLog('info', 'Daily report: sent successfully')
-      await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Laporan berhasil dikirim ke Telegram', trigger })
+      await recordSendHistory({
+        sentAt: new Date().toISOString(),
+        ok: true,
+        message: 'Laporan berhasil dikirim ke Telegram',
+        trigger,
+      })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {
       if (prevLastSent) await setSetting('report.lastSentAt', prevLastSent)
@@ -251,5 +280,9 @@ export async function generateAndSendDailyReport(opts: { trigger?: SendTrigger }
       return { ok: false, message: msg }
     }
   })()
-  try { return await sendInFlight } finally { sendInFlight = null }
+  try {
+    return await sendInFlight
+  } finally {
+    sendInFlight = null
+  }
 }

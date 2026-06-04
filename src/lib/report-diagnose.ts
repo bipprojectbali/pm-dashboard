@@ -31,8 +31,12 @@ export async function getReportDiagnostic(): Promise<ReportDiagnostic> {
   const schedHour = parseInt(schedHourRaw ?? '18', 10)
   const schedMinute = parseInt(schedMinuteRaw ?? '0', 10)
   const schedValid =
-    Number.isFinite(schedHour) && Number.isFinite(schedMinute) &&
-    schedHour >= 0 && schedHour < 24 && schedMinute >= 0 && schedMinute < 60
+    Number.isFinite(schedHour) &&
+    Number.isFinite(schedMinute) &&
+    schedHour >= 0 &&
+    schedHour < 24 &&
+    schedMinute >= 0 &&
+    schedMinute < 60
   const wouldFireNow = schedValid && zoned.hour === schedHour && zoned.minute === schedMinute
   const enabled = settings['telegram.enabled'] === 'true'
   const inFlight = isSendInFlight()

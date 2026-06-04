@@ -140,13 +140,7 @@ export function SidebarAppSwitcher({
             className="sidebar-app-item"
           >
             <Group gap="sm" wrap="nowrap">
-              <ThemeIcon
-                variant="light"
-                color={app.color}
-                size={30}
-                radius="md"
-                style={{ flexShrink: 0 }}
-              >
+              <ThemeIcon variant="light" color={app.color} size={30} radius="md" style={{ flexShrink: 0 }}>
                 <Icon size={15} />
               </ThemeIcon>
               <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>

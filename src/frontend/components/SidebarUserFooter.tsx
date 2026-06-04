@@ -1,19 +1,19 @@
 import { ActionIcon, Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
-import { UserAvatar } from './shared/UserAvatar'
 import { useNavigate } from '@tanstack/react-router'
 import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand, TbLogout, TbSparkles } from 'react-icons/tb'
-import { ThemeToggle } from './ThemeToggle'
 import { WHATS_NEW_EVENT } from '../hooks/useWhatsNew'
+import { UserAvatar } from './shared/UserAvatar'
+import { ThemeToggle } from './ThemeToggle'
 
 const openWhatsNew = () => window.dispatchEvent(new CustomEvent(WHATS_NEW_EVENT))
 
 type User = { name?: string; email?: string; role?: string; image?: string | null } | null | undefined
 
 const roleConfig: Record<string, { color: string; bg: string; label: string }> = {
-  USER:        { color: '#4f7cff', bg: 'rgba(79,124,255,0.12)',   label: 'User' },
-  QC:          { color: '#20c997', bg: 'rgba(32,201,151,0.12)',   label: 'QC' },
-  ADMIN:       { color: '#9b59f5', bg: 'rgba(155,89,245,0.12)',   label: 'Admin' },
-  SUPER_ADMIN: { color: '#f03e3e', bg: 'rgba(240,62,62,0.12)',    label: 'Super Admin' },
+  USER: { color: '#4f7cff', bg: 'rgba(79,124,255,0.12)', label: 'User' },
+  QC: { color: '#20c997', bg: 'rgba(32,201,151,0.12)', label: 'QC' },
+  ADMIN: { color: '#9b59f5', bg: 'rgba(155,89,245,0.12)', label: 'Admin' },
+  SUPER_ADMIN: { color: '#f03e3e', bg: 'rgba(240,62,62,0.12)', label: 'Super Admin' },
 }
 
 export function SidebarUserFooter({
@@ -38,17 +38,16 @@ export function SidebarUserFooter({
 
   if (collapsed) {
     return (
-      <Stack
-        align="center"
-        gap={6}
-        py="sm"
-        style={{ borderTop: '1px solid var(--app-border)' }}
-      >
+      <Stack align="center" gap={6} py="sm" style={{ borderTop: '1px solid var(--app-border)' }}>
         <Tooltip
           label={
             <Stack gap={2}>
-              <Text size="xs" fw={700}>{user?.name}</Text>
-              <Text size="xs" c="dimmed">{user?.email}</Text>
+              <Text size="xs" fw={700}>
+                {user?.name}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {user?.email}
+              </Text>
               <Box
                 px={6}
                 py={2}
@@ -60,7 +59,9 @@ export function SidebarUserFooter({
                   width: 'fit-content',
                 }}
               >
-                <Text size="xs" fw={700} style={{ color: config.color }}>{config.label}</Text>
+                <Text size="xs" fw={700} style={{ color: config.color }}>
+                  {config.label}
+                </Text>
               </Box>
             </Stack>
           }
@@ -170,27 +171,13 @@ export function SidebarUserFooter({
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Ciutkan sidebar" withArrow>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size={32}
-              radius="md"
-              onClick={onToggleCollapse}
-              visibleFrom="sm"
-            >
+            <ActionIcon variant="subtle" color="gray" size={32} radius="md" onClick={onToggleCollapse} visibleFrom="sm">
               <TbLayoutSidebarLeftCollapse size={15} />
             </ActionIcon>
           </Tooltip>
         </Group>
         <Tooltip label="Keluar" withArrow>
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            size={32}
-            radius="md"
-            onClick={onLogout}
-            loading={isLoggingOut}
-          >
+          <ActionIcon variant="subtle" color="red" size={32} radius="md" onClick={onLogout} loading={isLoggingOut}>
             <TbLogout size={15} />
           </ActionIcon>
         </Tooltip>

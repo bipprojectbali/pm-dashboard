@@ -1,9 +1,9 @@
 import { Elysia } from 'elysia'
-import { prisma } from '../lib/db'
 import { appLog } from '../lib/applog'
+import { prisma } from '../lib/db'
 import { emitInvalidate } from '../lib/presence'
-import { AI_QUEUE_TAG, ensureAiQueueTag, getSelfProject } from '../lib/self-project'
 import { getIp, requireAuth } from '../lib/route-helpers'
+import { AI_QUEUE_TAG, ensureAiQueueTag, getSelfProject } from '../lib/self-project'
 
 function audit(userId: string | null, action: string, detail: string | null, ip: string) {
   prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})

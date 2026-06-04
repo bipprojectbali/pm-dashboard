@@ -79,7 +79,6 @@ const STATUS_COLOR: Record<string, string> = {
   CLOSED: 'teal',
 }
 
-
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const abs = Math.abs(diff)

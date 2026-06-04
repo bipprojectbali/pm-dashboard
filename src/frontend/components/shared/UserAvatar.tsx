@@ -24,22 +24,23 @@ export function UserAvatar({ name, image, color = 'blue', size = 'sm', style, ..
   const sizePx =
     typeof size === 'number'
       ? size
-      : size === 'xs' ? 16
-      : size === 'sm' ? 26
-      : size === 'md' ? 38
-      : size === 'lg' ? 52
-      : size === 'xl' ? 80
-      : typeof size === 'string' && /^\d+$/.test(size) ? Number(size)
-      : 26
+      : size === 'xs'
+        ? 16
+        : size === 'sm'
+          ? 26
+          : size === 'md'
+            ? 38
+            : size === 'lg'
+              ? 52
+              : size === 'xl'
+                ? 80
+                : typeof size === 'string' && /^\d+$/.test(size)
+                  ? Number(size)
+                  : 26
 
   if (image && !failed) {
     return (
-      <Avatar
-        radius="xl"
-        size={size}
-        style={style}
-        {...props}
-      >
+      <Avatar radius="xl" size={size} style={style} {...props}>
         {/* img inside Avatar slot — bypasses Mantine's src handling, allows referrerPolicy */}
         <img
           src={image}

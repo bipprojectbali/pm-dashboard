@@ -1,30 +1,12 @@
-import {
-  Button,
-  Card,
-  Group,
-  Select,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core'
+import { Button, Card, Group, Select, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { modals } from '@mantine/modals'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import {
-  TbCalendarEvent,
-  TbClock,
-  TbTrash,
-} from 'react-icons/tb'
+import { TbCalendarEvent, TbClock, TbTrash } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
-import {
-  type ProjectDetail,
-  type ProjectPriority,
-  type ProjectStatus,
-  type ProjectVisibility,
-} from './ProjectsPanel'
 import { GithubIntegrationCard } from './GithubIntegrationCard'
+import type { ProjectDetail, ProjectPriority, ProjectStatus, ProjectVisibility } from './ProjectsPanel'
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
@@ -193,7 +175,8 @@ export function ProjectSettingsTab({
             disabled={!canManage}
           />
           <Group grow>
-            <DateInput highlightToday
+            <DateInput
+              highlightToday
               label="Start date"
               placeholder="Optional"
               value={startsAt}
@@ -202,7 +185,8 @@ export function ProjectSettingsTab({
               leftSection={<TbClock size={14} />}
               disabled={!canManage}
             />
-            <DateInput highlightToday
+            <DateInput
+              highlightToday
               label="End date"
               placeholder="Optional"
               value={endsAt}

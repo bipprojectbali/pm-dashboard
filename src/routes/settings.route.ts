@@ -1,12 +1,17 @@
 import { Elysia } from 'elysia'
-import { buildPromptOnly, generateAndSendDailyReport, generateReportPreview, sendCustomReport } from '../lib/daily-report'
-import { runCronNow } from '../lib/report-cron'
-import { getSendHistory } from '../lib/report-history'
-import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
-import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
+import {
+  buildPromptOnly,
+  generateAndSendDailyReport,
+  generateReportPreview,
+  sendCustomReport,
+} from '../lib/daily-report'
+import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { prisma } from '../lib/db'
+import { runCronNow } from '../lib/report-cron'
 import { getReportDiagnostic } from '../lib/report-diagnose'
+import { getSendHistory } from '../lib/report-history'
+import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 
 const SENSITIVE_KEYS = ['ai.anthropicApiKey', 'telegram.botToken']
 
@@ -43,315 +48,380 @@ function hasMcpSecretAuth(request: Request): boolean {
 }
 
 export function settingsRoutes() {
-  return new Elysia()
+  return (
+    new Elysia()
 
-    .get('/api/admin/app-settings', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const settings = await getAllSettings()
-      return { settings: maskSensitive(settings) }
-    })
-
-    .put('/api/admin/app-settings', async ({ request, set, body }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const { key, value } = body as { key: string; value: string }
-      if (!key || typeof key !== 'string') { set.status = 400; return { error: 'key required' } }
-      if (typeof value !== 'string') { set.status = 400; return { error: 'value must be string' } }
-      if (SENSITIVE_KEYS.includes(key) && value === '***') return { ok: true, skipped: true }
-      await setSetting(key, value, user.id)
-      return { ok: true }
-    })
-
-    .post('/api/admin/report/test-ai', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const [apiKey, model, baseUrl] = await Promise.all([
-        getSetting('ai.anthropicApiKey'),
-        getSetting('ai.model'),
-        getSetting('ai.baseUrl'),
-      ])
-      if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
-      const endpoint = baseUrl
-        ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
-        : 'https://api.anthropic.com/v1/messages'
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model ?? 'claude-haiku-4-5-20251001',
-            max_tokens: 16,
-            messages: [{ role: 'user', content: 'Reply with: OK' }],
-          }),
-          signal: AbortSignal.timeout(15_000),
-        })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({})) as { error?: { message?: string; type?: string } }
-          const kind = err.error?.type ?? ''
-          const detail = err.error?.message ?? 'unknown'
-          if (res.status === 429 || kind === 'rate_limit_error') {
-            set.status = 429
-            const resetAt = res.headers.get('x-ratelimit-reset-tokens') ?? res.headers.get('x-ratelimit-reset-requests')
-            const resetHint = resetAt
-              ? ` Reset: ${new Date(resetAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' })} WITA.`
-              : ''
-            return { ok: false, message: `Rate limit proxy — quota request token ini habis.${resetHint} Coba rotate token atau tunggu reset.` }
-          }
-          if (res.status === 401 || res.status === 403) {
-            set.status = 401
-            return { ok: false, message: `API key tidak valid atau tidak punya akses (${res.status}).` }
-          }
-          set.status = 502
-          return { ok: false, message: `Claude API error ${res.status}: ${detail}` }
+      .get('/api/admin/app-settings', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
         }
-        return { ok: true, message: `Koneksi Claude API berhasil (model: ${model ?? 'claude-haiku-4-5-20251001'})` }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        set.status = 502
-        return { ok: false, message: `Tidak bisa menghubungi Claude API: ${msg}` }
-      }
-    })
+        const settings = await getAllSettings()
+        return { settings: maskSensitive(settings) }
+      })
 
-    .post('/api/admin/report/test-telegram', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const [botToken, chatId] = await Promise.all([
-        getSetting('telegram.botToken'),
-        getSetting('telegram.chatId'),
-      ])
-      if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
-      if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
-      try {
-        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: '✅ Test berhasil! Koneksi Telegram pm-dashboard berjalan normal.' }),
-          signal: AbortSignal.timeout(15_000),
-        })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({})) as { description?: string }
-          set.status = 502
-          return { ok: false, message: `Telegram error ${res.status}: ${err.description ?? 'unknown'}` }
+      .put('/api/admin/app-settings', async ({ request, set, body }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
         }
-        return { ok: true, message: 'Pesan test berhasil dikirim ke Telegram' }
-      } catch (e) {
-        set.status = 502
-        return { ok: false, message: e instanceof Error ? e.message : String(e) }
-      }
-    })
+        const { key, value } = body as { key: string; value: string }
+        if (!key || typeof key !== 'string') {
+          set.status = 400
+          return { error: 'key required' }
+        }
+        if (typeof value !== 'string') {
+          set.status = 400
+          return { error: 'value must be string' }
+        }
+        if (SENSITIVE_KEYS.includes(key) && value === '***') return { ok: true, skipped: true }
+        await setSetting(key, value, user.id)
+        return { ok: true }
+      })
 
-    .post('/api/admin/report/send-now', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const result = await generateAndSendDailyReport({ trigger: 'manual' })
-      if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
-      return result
-    })
-
-    .get('/api/admin/report/snapshots', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const url = new URL(request.url)
-      const days = Math.min(parseInt(url.searchParams.get('days') ?? '30', 10), 90)
-      const snapshots = await getRecentSnapshots(days)
-      return { snapshots }
-    })
-
-    .post('/api/admin/report/snapshots/capture', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      try {
-        const snapshot = await captureSnapshot()
-        return { ok: true, snapshot }
-      } catch (e) {
-        set.status = 502
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    })
-
-    .get('/api/admin/report/prompt', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      try {
-        const prompt = await buildPromptOnly()
-        return { ok: true, prompt }
-      } catch (e) {
-        set.status = 502
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    })
-
-    .post('/api/admin/report/send-custom', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const { text } = await request.json() as { text?: string }
-      if (!text?.trim()) { set.status = 400; return { error: 'text wajib diisi' } }
-      const result = await sendCustomReport(text)
-      if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
-      return result
-    })
-
-    .get('/api/admin/report/preview', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      try {
-        const text = await generateReportPreview()
-        return { ok: true, text }
-      } catch (e) {
-        set.status = 502
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    })
-
-    .get('/api/admin/report/preview/stream', async ({ request }) => {
-      const user = await getAdminUser(request)
-      if (!user) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), {
-          status: 403, headers: { 'Content-Type': 'application/json' },
-        })
-      }
-
-      const enc = new TextEncoder()
-      const sse = (event: string, data: object) =>
-        enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-
-      const stream = new ReadableStream({
-        async start(ctrl) {
-          const send = (event: string, data: object) => {
-            try { ctrl.enqueue(sse(event, data)) } catch { /* client disconnected */ }
-          }
-          try {
-            send('phase', { label: 'Mengambil data dashboard...' })
-
-            const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
-              getSetting('ai.anthropicApiKey'),
-              getSetting('ai.model'),
-              getSetting('ai.baseUrl'),
-              getSetting('ai.timeoutSeconds'),
-            ])
-
-            if (!apiKey) {
-              send('error', { message: 'Anthropic API key belum dikonfigurasi' })
-              ctrl.close(); return
-            }
-
-            const prompt = await buildPromptOnly()
-            const timeoutMs = (Number(timeoutRaw) || 120) * 1000
-            const endpoint = (baseUrl as string)
-              ? `${(baseUrl as string).replace(/\/$/, '')}/v1/messages`
-              : 'https://api.anthropic.com/v1/messages'
-
-            send('phase', { label: 'Mengirim ke Claude AI...' })
-
-            const res = await fetch(endpoint, {
-              method: 'POST',
-              headers: {
-                'x-api-key': apiKey as string,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: (model as string) ?? 'claude-opus-4-7',
-                max_tokens: 2048,
-                stream: true,
-                messages: [{ role: 'user', content: prompt }],
-              }),
-              signal: AbortSignal.timeout(timeoutMs),
-            })
-
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({})) as { error?: { message?: string } }
-              send('error', { message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` })
-              ctrl.close(); return
-            }
-
-            send('phase', { label: 'Menerima respons Claude...' })
-
-            const reader = res.body!.getReader()
-            const dec = new TextDecoder()
-            let buf = ''
-            let full = ''
-
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-              buf += dec.decode(value, { stream: true })
-
-              const parts = buf.split('\n\n')
-              buf = parts.pop() ?? ''
-
-              for (const part of parts) {
-                let data = ''
-                for (const line of part.split('\n')) {
-                  if (line.startsWith('data: ')) data = line.slice(6)
-                }
-                if (!data || data === '[DONE]') continue
-                try {
-                  const parsed = JSON.parse(data) as {
-                    type: string
-                    delta?: { type: string; text: string }
-                  }
-                  if (
-                    parsed.type === 'content_block_delta' &&
-                    parsed.delta?.type === 'text_delta' &&
-                    parsed.delta.text
-                  ) {
-                    full += parsed.delta.text
-                    send('token', { text: parsed.delta.text })
-                  }
-                } catch { /* ignore malformed SSE chunk */ }
+      .post('/api/admin/report/test-ai', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const [apiKey, model, baseUrl] = await Promise.all([
+          getSetting('ai.anthropicApiKey'),
+          getSetting('ai.model'),
+          getSetting('ai.baseUrl'),
+        ])
+        if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
+        const endpoint = baseUrl ? `${baseUrl.replace(/\/$/, '')}/v1/messages` : 'https://api.anthropic.com/v1/messages'
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: model ?? 'claude-haiku-4-5-20251001',
+              max_tokens: 16,
+              messages: [{ role: 'user', content: 'Reply with: OK' }],
+            }),
+            signal: AbortSignal.timeout(15_000),
+          })
+          if (!res.ok) {
+            const err = (await res.json().catch(() => ({}))) as { error?: { message?: string; type?: string } }
+            const kind = err.error?.type ?? ''
+            const detail = err.error?.message ?? 'unknown'
+            if (res.status === 429 || kind === 'rate_limit_error') {
+              set.status = 429
+              const resetAt =
+                res.headers.get('x-ratelimit-reset-tokens') ?? res.headers.get('x-ratelimit-reset-requests')
+              const resetHint = resetAt
+                ? ` Reset: ${new Date(resetAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' })} WITA.`
+                : ''
+              return {
+                ok: false,
+                message: `Rate limit proxy — quota request token ini habis.${resetHint} Coba rotate token atau tunggu reset.`,
               }
             }
-
-            send('done', { full })
-          } catch (e) {
-            try {
-              ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) }))
-            } catch { /* ignore */ }
-          } finally {
-            try { ctrl.close() } catch { /* ignore */ }
+            if (res.status === 401 || res.status === 403) {
+              set.status = 401
+              return { ok: false, message: `API key tidak valid atau tidak punya akses (${res.status}).` }
+            }
+            set.status = 502
+            return { ok: false, message: `Claude API error ${res.status}: ${detail}` }
           }
-        },
+          return { ok: true, message: `Koneksi Claude API berhasil (model: ${model ?? 'claude-haiku-4-5-20251001'})` }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          set.status = 502
+          return { ok: false, message: `Tidak bisa menghubungi Claude API: ${msg}` }
+        }
       })
 
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          'Connection': 'keep-alive',
-          'X-Accel-Buffering': 'no',
-        },
+      .post('/api/admin/report/test-telegram', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const [botToken, chatId] = await Promise.all([getSetting('telegram.botToken'), getSetting('telegram.chatId')])
+        if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
+        if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: '✅ Test berhasil! Koneksi Telegram pm-dashboard berjalan normal.',
+            }),
+            signal: AbortSignal.timeout(15_000),
+          })
+          if (!res.ok) {
+            const err = (await res.json().catch(() => ({}))) as { description?: string }
+            set.status = 502
+            return { ok: false, message: `Telegram error ${res.status}: ${err.description ?? 'unknown'}` }
+          }
+          return { ok: true, message: 'Pesan test berhasil dikirim ke Telegram' }
+        } catch (e) {
+          set.status = 502
+          return { ok: false, message: e instanceof Error ? e.message : String(e) }
+        }
       })
-    })
 
-    // Diagnostic: accepts admin session OR Bearer MCP_SECRET (so ops can curl from anywhere).
-    // Never returns secret values — only set/unset flags. Safe to expose to any holder of MCP_SECRET.
-    .get('/api/admin/report/diagnose', async ({ request, set }) => {
-      const authed = hasMcpSecretAuth(request) || (await getAdminUser(request)) !== null
-      if (!authed) { set.status = 403; return { error: 'Forbidden' } }
-      return getReportDiagnostic()
-    })
+      .post('/api/admin/report/send-now', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const result = await generateAndSendDailyReport({ trigger: 'manual' })
+        if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
+        return result
+      })
 
-    .get('/api/admin/report/send-history', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const history = await getSendHistory()
-      return { history }
-    })
+      .get('/api/admin/report/snapshots', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const url = new URL(request.url)
+        const days = Math.min(parseInt(url.searchParams.get('days') ?? '30', 10), 90)
+        const snapshots = await getRecentSnapshots(days)
+        return { snapshots }
+      })
 
-    // Jalankan cron sekarang tanpa menunggu waktu jadwal — untuk testing & debugging.
-    // Guard cronLastSentDate tetap aktif; gunakan cron-reset untuk bypass.
-    .post('/api/admin/report/cron-trigger', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) { set.status = 403; return { error: 'Forbidden' } }
-      const result = await runCronNow()
-      if (!result.ok && !result.skippedReason) set.status = 502
-      return result
-    })
+      .post('/api/admin/report/snapshots/capture', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        try {
+          const snapshot = await captureSnapshot()
+          return { ok: true, snapshot }
+        } catch (e) {
+          set.status = 502
+          return { ok: false, error: e instanceof Error ? e.message : String(e) }
+        }
+      })
 
+      .get('/api/admin/report/prompt', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        try {
+          const prompt = await buildPromptOnly()
+          return { ok: true, prompt }
+        } catch (e) {
+          set.status = 502
+          return { ok: false, error: e instanceof Error ? e.message : String(e) }
+        }
+      })
+
+      .post('/api/admin/report/send-custom', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const { text } = (await request.json()) as { text?: string }
+        if (!text?.trim()) {
+          set.status = 400
+          return { error: 'text wajib diisi' }
+        }
+        const result = await sendCustomReport(text)
+        if (!result.ok && !/berlangsung/i.test(result.message)) set.status = 502
+        return result
+      })
+
+      .get('/api/admin/report/preview', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        try {
+          const text = await generateReportPreview()
+          return { ok: true, text }
+        } catch (e) {
+          set.status = 502
+          return { ok: false, error: e instanceof Error ? e.message : String(e) }
+        }
+      })
+
+      .get('/api/admin/report/preview/stream', async ({ request }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+
+        const enc = new TextEncoder()
+        const sse = (event: string, data: object) => enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+
+        const stream = new ReadableStream({
+          async start(ctrl) {
+            const send = (event: string, data: object) => {
+              try {
+                ctrl.enqueue(sse(event, data))
+              } catch {
+                /* client disconnected */
+              }
+            }
+            try {
+              send('phase', { label: 'Mengambil data dashboard...' })
+
+              const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
+                getSetting('ai.anthropicApiKey'),
+                getSetting('ai.model'),
+                getSetting('ai.baseUrl'),
+                getSetting('ai.timeoutSeconds'),
+              ])
+
+              if (!apiKey) {
+                send('error', { message: 'Anthropic API key belum dikonfigurasi' })
+                ctrl.close()
+                return
+              }
+
+              const prompt = await buildPromptOnly()
+              const timeoutMs = (Number(timeoutRaw) || 120) * 1000
+              const endpoint = (baseUrl as string)
+                ? `${(baseUrl as string).replace(/\/$/, '')}/v1/messages`
+                : 'https://api.anthropic.com/v1/messages'
+
+              send('phase', { label: 'Mengirim ke Claude AI...' })
+
+              const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                  'x-api-key': apiKey as string,
+                  'anthropic-version': '2023-06-01',
+                  'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: (model as string) ?? 'claude-opus-4-7',
+                  max_tokens: 2048,
+                  stream: true,
+                  messages: [{ role: 'user', content: prompt }],
+                }),
+                signal: AbortSignal.timeout(timeoutMs),
+              })
+
+              if (!res.ok) {
+                const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
+                send('error', { message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` })
+                ctrl.close()
+                return
+              }
+
+              send('phase', { label: 'Menerima respons Claude...' })
+
+              const reader = res.body!.getReader()
+              const dec = new TextDecoder()
+              let buf = ''
+              let full = ''
+
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                buf += dec.decode(value, { stream: true })
+
+                const parts = buf.split('\n\n')
+                buf = parts.pop() ?? ''
+
+                for (const part of parts) {
+                  let data = ''
+                  for (const line of part.split('\n')) {
+                    if (line.startsWith('data: ')) data = line.slice(6)
+                  }
+                  if (!data || data === '[DONE]') continue
+                  try {
+                    const parsed = JSON.parse(data) as {
+                      type: string
+                      delta?: { type: string; text: string }
+                    }
+                    if (
+                      parsed.type === 'content_block_delta' &&
+                      parsed.delta?.type === 'text_delta' &&
+                      parsed.delta.text
+                    ) {
+                      full += parsed.delta.text
+                      send('token', { text: parsed.delta.text })
+                    }
+                  } catch {
+                    /* ignore malformed SSE chunk */
+                  }
+                }
+              }
+
+              send('done', { full })
+            } catch (e) {
+              try {
+                ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) }))
+              } catch {
+                /* ignore */
+              }
+            } finally {
+              try {
+                ctrl.close()
+              } catch {
+                /* ignore */
+              }
+            }
+          },
+        })
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          },
+        })
+      })
+
+      // Diagnostic: accepts admin session OR Bearer MCP_SECRET (so ops can curl from anywhere).
+      // Never returns secret values — only set/unset flags. Safe to expose to any holder of MCP_SECRET.
+      .get('/api/admin/report/diagnose', async ({ request, set }) => {
+        const authed = hasMcpSecretAuth(request) || (await getAdminUser(request)) !== null
+        if (!authed) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        return getReportDiagnostic()
+      })
+
+      .get('/api/admin/report/send-history', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const history = await getSendHistory()
+        return { history }
+      })
+
+      // Jalankan cron sekarang tanpa menunggu waktu jadwal — untuk testing & debugging.
+      // Guard cronLastSentDate tetap aktif; gunakan cron-reset untuk bypass.
+      .post('/api/admin/report/cron-trigger', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const result = await runCronNow()
+        if (!result.ok && !result.skippedReason) set.status = 502
+        return result
+      })
+  )
 }

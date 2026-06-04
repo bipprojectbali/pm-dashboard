@@ -42,10 +42,10 @@ import {
   TbX,
 } from 'react-icons/tb'
 import { MyDevicesPanel } from '@/frontend/components/MyDevicesPanel'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 
 const validSections = ['profile', 'security', 'devices', 'preferences'] as const
@@ -272,7 +272,11 @@ const projectStatusColor: Record<string, string> = {
   CANCELLED: 'red',
 }
 
-function ProfileSection({ user }: { user: { name?: string; email?: string; role?: string; image?: string | null } | null | undefined }) {
+function ProfileSection({
+  user,
+}: {
+  user: { name?: string; email?: string; role?: string; image?: string | null } | null | undefined
+}) {
   const navigate = useNavigate()
   const { data: tasksData } = useQuery({
     queryKey: ['me', 'tasks'],

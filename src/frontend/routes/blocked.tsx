@@ -45,18 +45,16 @@ function BlockedPage() {
             >
               <TbLayoutDashboard size={14} color="#fff" />
             </Box>
-            <Text fw={800} size="sm" style={{ letterSpacing: '-0.02em' }}>PM Dashboard</Text>
+            <Text fw={800} size="sm" style={{ letterSpacing: '-0.02em' }}>
+              PM Dashboard
+            </Text>
           </Group>
           <ThemeToggle />
         </Group>
       </Box>
 
       {/* Content */}
-      <Stack
-        align="center"
-        gap="xl"
-        style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}
-      >
+      <Stack align="center" gap="xl" style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}>
         {/* Icon */}
         <Box
           style={{
@@ -87,7 +85,8 @@ function BlockedPage() {
             Akun Diblokir
           </Title>
           <Text c="dimmed" size="md" lh={1.7} maw={360}>
-            Akun kamu telah dinonaktifkan oleh administrator. Hubungi admin untuk informasi lebih lanjut atau untuk mengajukan pemulihan akses.
+            Akun kamu telah dinonaktifkan oleh administrator. Hubungi admin untuk informasi lebih lanjut atau untuk
+            mengajukan pemulihan akses.
           </Text>
         </Stack>
 
@@ -124,7 +123,9 @@ function BlockedPage() {
                     marginTop: 1,
                   }}
                 >
-                  <Text size="xs" fw={800} style={{ color: '#fff', fontSize: '0.6rem' }}>{i + 1}</Text>
+                  <Text size="xs" fw={800} style={{ color: '#fff', fontSize: '0.6rem' }}>
+                    {i + 1}
+                  </Text>
                 </Box>
                 <Text size="sm" c="dimmed" lh={1.6} style={{ flex: 1, textAlign: 'left' }}>
                   {item}

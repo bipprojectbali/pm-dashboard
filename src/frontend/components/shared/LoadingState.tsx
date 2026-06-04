@@ -26,12 +26,7 @@ export function TableSkeleton({ rows = 5, height = 36 }: { rows?: number; height
     <Stack gap="xs">
       <Skeleton height={height} radius="md" style={{ opacity: 0.6 }} />
       {Array.from({ length: rows }, (_, i) => `row-${i}`).map((key, i) => (
-        <Skeleton
-          key={key}
-          height={height}
-          radius="md"
-          style={{ opacity: Math.max(0.15, 0.5 - i * 0.07) }}
-        />
+        <Skeleton key={key} height={height} radius="md" style={{ opacity: Math.max(0.15, 0.5 - i * 0.07) }} />
       ))}
     </Stack>
   )

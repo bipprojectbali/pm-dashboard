@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Alert,
   Anchor,
+  Badge,
   Card,
   Group,
   Loader,
@@ -11,7 +12,6 @@ import {
   ThemeIcon,
   Tooltip,
 } from '@mantine/core'
-import { Badge } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { TbBrandGithub, TbRefresh } from 'react-icons/tb'
 import type { ProjectDetail } from './ProjectsPanel'

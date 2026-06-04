@@ -1,19 +1,10 @@
-import {
-  ActionIcon,
-  Badge,
-  Card,
-  Group,
-  Pagination,
-  Stack,
-  Text,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Badge, Card, Group, Pagination, Stack, Text, Tooltip } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { TbArrowBackUp, TbFlame } from 'react-icons/tb'
-import { notifyError, notifySuccess } from '../lib/notify'
-import { useSession } from '../hooks/useAuth'
 import { useState } from 'react'
+import { TbArrowBackUp, TbFlame } from 'react-icons/tb'
+import { useSession } from '../hooks/useAuth'
+import { notifyError, notifySuccess } from '../lib/notify'
 
 interface TrashTask {
   id: string
@@ -55,8 +46,7 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
   })
 
   const restore = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/tasks/${id}/restore`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/api/tasks/${id}/restore`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
@@ -66,8 +56,7 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
   })
 
   const purge = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/tasks/${id}/purge`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/api/tasks/${id}/purge`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       notifySuccess({ message: 'Task dihapus permanen.' })
@@ -94,14 +83,21 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
   const safePage = Math.min(page, totalPages)
   const paged = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  if (trashQ.isLoading) return <Text size="sm" c="dimmed">Memuat trash...</Text>
+  if (trashQ.isLoading)
+    return (
+      <Text size="sm" c="dimmed">
+        Memuat trash...
+      </Text>
+    )
 
   if (tasks.length === 0) {
     return (
       <Card withBorder p="xl" radius="md">
         <Stack align="center" gap="xs">
           <Text fw={500}>Trash kosong</Text>
-          <Text size="sm" c="dimmed">Tidak ada task yang dihapus{projectId ? ' di project ini' : ''}.</Text>
+          <Text size="sm" c="dimmed">
+            Tidak ada task yang dihapus{projectId ? ' di project ini' : ''}.
+          </Text>
         </Stack>
       </Card>
     )
@@ -109,7 +105,9 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
 
   return (
     <Stack gap="sm">
-      <Text size="xs" c="dimmed">{tasks.length} task di trash · Otomatis hapus permanen setelah 30 hari</Text>
+      <Text size="xs" c="dimmed">
+        {tasks.length} task di trash · Otomatis hapus permanen setelah 30 hari
+      </Text>
       <Card withBorder padding={0} radius="md">
         <Stack gap={0}>
           {paged.map((t, i) => (
@@ -125,11 +123,17 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
             >
               <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
                 <Group gap={6} wrap="nowrap">
-                  <Text size="sm" fw={500} lineClamp={1}>{t.title}</Text>
-                  <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>{t.kind}</Badge>
+                  <Text size="sm" fw={500} lineClamp={1}>
+                    {t.title}
+                  </Text>
+                  <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>
+                    {t.kind}
+                  </Badge>
                 </Group>
                 <Group gap={8} wrap="wrap">
-                  <Text size="xs" c="dimmed">{t.project.name}</Text>
+                  <Text size="xs" c="dimmed">
+                    {t.project.name}
+                  </Text>
                   {t.deletedBy && (
                     <Text size="xs" c="dimmed">
                       Dihapus oleh <b>{t.deletedBy.name}</b>
@@ -137,7 +141,9 @@ export function TasksTrashView({ projectId }: { projectId?: string | null }) {
                     </Text>
                   )}
                   {t.deleteReason && (
-                    <Text size="xs" c="orange">Alasan: {t.deleteReason}</Text>
+                    <Text size="xs" c="orange">
+                      Alasan: {t.deleteReason}
+                    </Text>
                   )}
                 </Group>
               </Stack>

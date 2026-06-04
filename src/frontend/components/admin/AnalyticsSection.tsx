@@ -1,10 +1,10 @@
 import { ActionIcon, Badge, Card, Group, SimpleGrid, Stack, Text, ThemeIcon, Title, Tooltip } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
+import { Gantt, type GanttTask } from 'mantine-gantt'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { TbCalendarEvent, TbChartDonut, TbChartLine, TbInfoCircle, TbTimeline } from 'react-icons/tb'
-import { EChart } from '../charts/EChart'
 import { toLocalDateStr } from '../../lib/dates'
-import { Gantt, type GanttTask } from 'mantine-gantt'
+import { EChart } from '../charts/EChart'
 
 type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
@@ -97,11 +97,19 @@ export function AnalyticsSection({ data }: { data: AnalyticsData }) {
 }
 
 const PROJ_STATUS_COLOR: Record<string, string> = {
-  ACTIVE: 'blue', ON_HOLD: 'yellow', DRAFT: 'gray', COMPLETED: 'green', CANCELLED: 'dark',
+  ACTIVE: 'blue',
+  ON_HOLD: 'yellow',
+  DRAFT: 'gray',
+  COMPLETED: 'green',
+  CANCELLED: 'dark',
 }
 
 const PROJ_STATUS_LABEL: Record<string, string> = {
-  ACTIVE: 'Active', ON_HOLD: 'On Hold', DRAFT: 'Draft', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+  ACTIVE: 'Active',
+  ON_HOLD: 'On Hold',
+  DRAFT: 'Draft',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
 }
 
 const TIMELINE_COL_WIDTH = 22
@@ -122,11 +130,9 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
         const start = p.startsAt ? new Date(p.startsAt) : now
         const end = p.endsAt ? new Date(p.endsAt) : weekOut
         const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
-        const suffix = [
-          PROJ_STATUS_LABEL[p.status] ?? p.status,
-          p.owner,
-          p.slipped ? '⚠ slipped' : '',
-        ].filter(Boolean).join(' · ')
+        const suffix = [PROJ_STATUS_LABEL[p.status] ?? p.status, p.owner, p.slipped ? '⚠ slipped' : '']
+          .filter(Boolean)
+          .join(' · ')
         return {
           id: p.id,
           label: `${p.name}  —  ${suffix}`,
@@ -170,7 +176,10 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
     const tryScroll = () => {
       const content = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
       if (!content || content.offsetWidth < 200) {
-        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        if (++attempts < 40) {
+          setTimeout(tryScroll, 80)
+          return
+        }
         return
       }
       scrollToToday()
@@ -189,9 +198,13 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
           <div>
             <Group gap={6} align="baseline">
               <Title order={5}>Project timeline</Title>
-              <Text size="xs" c="dimmed">{ganttTasks.length} projects</Text>
+              <Text size="xs" c="dimmed">
+                {ganttTasks.length} projects
+              </Text>
             </Group>
-            <Text size="xs" c="dimmed">startsAt → endsAt · read-only</Text>
+            <Text size="xs" c="dimmed">
+              startsAt → endsAt · read-only
+            </Text>
           </div>
         </Group>
         <Group gap={6} wrap="wrap" align="center">
@@ -200,7 +213,9 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
               {PROJ_STATUS_LABEL[s] ?? s}
             </Badge>
           ))}
-          <Badge size="xs" color="orange" variant="dot">Slipped</Badge>
+          <Badge size="xs" color="orange" variant="dot">
+            Slipped
+          </Badge>
           {ganttTasks.length > 0 && (
             <Tooltip label="Scroll ke hari ini" withArrow>
               <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
@@ -212,27 +227,73 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
       </Group>
 
       {ganttTasks.length === 0 ? (
-        <Text size="sm" c="dimmed" ta="center" py="lg">Belum ada project aktif dengan jadwal.</Text>
+        <Text size="sm" c="dimmed" ta="center" py="lg">
+          Belum ada project aktif dengan jadwal.
+        </Text>
       ) : (
-        <div style={{
-          display: 'flex',
-          height: Math.max(200, ganttTasks.length * TIMELINE_ROW_H + 60),
-          border: '1px solid var(--mantine-color-default-border)',
-          borderRadius: 'var(--mantine-radius-md)',
-          overflow: 'hidden',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            height: Math.max(200, ganttTasks.length * TIMELINE_ROW_H + 60),
+            border: '1px solid var(--mantine-color-default-border)',
+            borderRadius: 'var(--mantine-radius-md)',
+            overflow: 'hidden',
+          }}
+        >
           {/* Sidebar nama project */}
-          <div style={{ width: 180, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
-            <div style={{ height: 56, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 10px 8px' }}>
-              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+          <div
+            style={{
+              width: 180,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid var(--mantine-color-default-border)',
+            }}
+          >
+            <div
+              style={{
+                height: 56,
+                flexShrink: 0,
+                borderBottom: '1px solid var(--mantine-color-default-border)',
+                display: 'flex',
+                alignItems: 'flex-end',
+                padding: '0 10px 8px',
+              }}
+            >
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
+                Proyek
+              </Text>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
-              {timeline.filter((p) => p.startsAt || p.endsAt).map((p) => (
-                <div key={p.id} style={{ height: TIMELINE_ROW_H, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6, borderBottom: '1px solid var(--mantine-color-default-border)', overflow: 'hidden' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'), flexShrink: 0 }} />
-                  <Text size="xs" fw={500} truncate title={p.name}>{p.name}</Text>
-                </div>
-              ))}
+              {timeline
+                .filter((p) => p.startsAt || p.endsAt)
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      height: TIMELINE_ROW_H,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 10px',
+                      gap: 6,
+                      borderBottom: '1px solid var(--mantine-color-default-border)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: p.slipped ? '#b86d2a' : (PROJ_STATUS_COLOR[p.status] ?? '#4a7abf'),
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Text size="xs" fw={500} truncate title={p.name}>
+                      {p.name}
+                    </Text>
+                  </div>
+                ))}
             </div>
           </div>
 

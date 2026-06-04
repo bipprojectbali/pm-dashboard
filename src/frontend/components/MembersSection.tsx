@@ -1,13 +1,4 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Group,
-  Select,
-  Stack,
-  Text,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Badge, Button, Group, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { TbPlus, TbTrash } from 'react-icons/tb'
@@ -140,7 +131,13 @@ export function MembersSection({
             return (
               <Group key={m.id} justify="space-between" wrap="nowrap">
                 <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <UserAvatar name={m.user.name} image={m.user.image} size={28} color="blue" style={{ flexShrink: 0 }} />
+                  <UserAvatar
+                    name={m.user.name}
+                    image={m.user.image}
+                    size={28}
+                    color="blue"
+                    style={{ flexShrink: 0 }}
+                  />
                   <Stack gap={0} style={{ minWidth: 0 }}>
                     <Text size="sm" fw={500} truncate>
                       {m.user.name}

@@ -1,17 +1,17 @@
 import { Elysia } from 'elysia'
+import { appLog } from '../lib/applog'
 import { auth } from '../lib/auth'
 import { prisma } from '../lib/db'
 import { env } from '../lib/env'
+import { redis } from '../lib/redis'
 import {
   extractSessionToken,
   getIp,
   requireAuth,
-  SESSION_TTL_SEC,
   SESSION_REFRESH_THRESHOLD_SEC,
+  SESSION_TTL_SEC,
   sessionCookie,
 } from '../lib/route-helpers'
-import { appLog } from '../lib/applog'
-import { redis } from '../lib/redis'
 
 const LOGIN_RATE_WINDOW_SEC = 15 * 60
 const LOGIN_RATE_MAX = 10
@@ -149,9 +149,7 @@ export function authRoutes() {
       const secondsUntilExpiry = (session.expiresAt.getTime() - Date.now()) / 1000
       if (secondsUntilExpiry < SESSION_TTL_SEC - SESSION_REFRESH_THRESHOLD_SEC) {
         const newExpiry = new Date(Date.now() + SESSION_TTL_SEC * 1000)
-        await prisma.session
-          .update({ where: { id: session.id }, data: { expiresAt: newExpiry } })
-          .catch(() => {})
+        await prisma.session.update({ where: { id: session.id }, data: { expiresAt: newExpiry } }).catch(() => {})
         set.headers['set-cookie'] = sessionCookie(rawToken, SESSION_TTL_SEC)
       }
       return { user: session.user }

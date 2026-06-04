@@ -1,18 +1,18 @@
 import { Elysia } from 'elysia'
+import { appLog } from '../lib/applog'
 import { prisma } from '../lib/db'
 import { env } from '../lib/env'
-import { appLog } from '../lib/applog'
-import { emitInvalidate } from '../lib/presence'
 import { notifyTaskAssigned, notifyTaskCommented, notifyTaskStatusChanged } from '../lib/notifications'
+import { emitInvalidate } from '../lib/presence'
 import {
-  requireAuth,
-  requireProjectMember,
   canReadProject,
-  getIp,
-  isSystemAdmin,
-  getAllowedTaskTransitions,
   computeActualHours,
   computeProgressPercent,
+  getAllowedTaskTransitions,
+  getIp,
+  isSystemAdmin,
+  requireAuth,
+  requireProjectMember,
 } from '../lib/route-helpers'
 
 function audit(userId: string | null, action: string, detail: string | null, ip: string) {
@@ -102,9 +102,7 @@ async function computeTaskAwFocus(task: {
     .map(([app, seconds]) => ({ app, seconds }))
     .sort((a, b) => b.seconds - a.seconds)
     .slice(0, 8)
-  const topTitles = [...titleTotals.values()]
-    .sort((a, b) => b.seconds - a.seconds)
-    .slice(0, 10)
+  const topTitles = [...titleTotals.values()].sort((a, b) => b.seconds - a.seconds).slice(0, 10)
   return {
     focusHours: Math.round((totalSeconds / 3600) * 100) / 100,
     eventCount: events.length,
@@ -121,7 +119,10 @@ export function tasksRoutes() {
   return new Elysia()
     .get('/api/tasks', async ({ request, query, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const isAdmin = isSystemAdmin(auth.role)
       const myProjectIds = (
         await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })
@@ -194,48 +195,78 @@ export function tasksRoutes() {
 
     .post('/api/tasks/reorder', async ({ request, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       let body: { updates?: unknown }
-      try { body = (await request.json()) as typeof body } catch { set.status = 400; return { error: 'Invalid JSON' } }
+      try {
+        body = (await request.json()) as typeof body
+      } catch {
+        set.status = 400
+        return { error: 'Invalid JSON' }
+      }
       if (!Array.isArray(body.updates) || body.updates.length === 0) {
-        set.status = 400; return { error: 'updates array required' }
+        set.status = 400
+        return { error: 'updates array required' }
       }
       const updates = body.updates as Array<{ id: string; kanbanOrder: number; status?: string }>
-      await Promise.all(updates.map((u) =>
-        prisma.task.update({
-          where: { id: u.id },
-          data: {
-            kanbanOrder: u.kanbanOrder,
-            ...(u.status ? { status: u.status as 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED' } : {}),
-          },
-        })
-      ))
+      await Promise.all(
+        updates.map((u) =>
+          prisma.task.update({
+            where: { id: u.id },
+            data: {
+              kanbanOrder: u.kanbanOrder,
+              ...(u.status
+                ? { status: u.status as 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED' }
+                : {}),
+            },
+          }),
+        ),
+      )
       return { ok: true }
     })
 
     .post('/api/tasks/bulk', async ({ request, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const body = (await request.json()) as {
         projectId?: string
         tasks?: Array<{
-          title?: string; description?: string; kind?: string; priority?: string
-          route?: string | null; assigneeEmail?: string | null
-          startsAt?: string | null; dueAt?: string | null
-          estimateHours?: number | null; tagNames?: string[]
+          title?: string
+          description?: string
+          kind?: string
+          priority?: string
+          route?: string | null
+          assigneeEmail?: string | null
+          startsAt?: string | null
+          dueAt?: string | null
+          estimateHours?: number | null
+          tagNames?: string[]
         }>
       }
       if (!body.projectId || !Array.isArray(body.tasks) || body.tasks.length === 0) {
-        set.status = 400; return { error: 'projectId dan tasks (array, ≥1) wajib' }
+        set.status = 400
+        return { error: 'projectId dan tasks (array, ≥1) wajib' }
       }
-      if (body.tasks.length > 500) { set.status = 400; return { error: 'Maksimum 500 task per import' } }
+      if (body.tasks.length > 500) {
+        set.status = 400
+        return { error: 'Maksimum 500 task per import' }
+      }
       const membership = await requireProjectMember(body.projectId, auth.userId)
       if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
-        set.status = 403; return { error: 'Not a writable project member' }
+        set.status = 403
+        return { error: 'Not a writable project member' }
       }
       if (!membership) {
         const exists = await prisma.project.findUnique({ where: { id: body.projectId }, select: { id: true } })
-        if (!exists) { set.status = 404; return { error: 'Project not found' } }
+        if (!exists) {
+          set.status = 404
+          return { error: 'Project not found' }
+        }
       }
       const KINDS = new Set(['TASK', 'BUG', 'QC'])
       const PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
@@ -243,11 +274,16 @@ export function tasksRoutes() {
       const emailSet = new Set<string>()
       const tagNameSet = new Set<string>()
       const normalizedRows: Array<{
-        title: string; description: string
-        kind: 'TASK' | 'BUG' | 'QC'; priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-        route: string | null; assigneeEmail: string | null
-        startsAt: Date | null; dueAt: Date | null
-        estimateHours: number | null; tagNames: string[]
+        title: string
+        description: string
+        kind: 'TASK' | 'BUG' | 'QC'
+        priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+        route: string | null
+        assigneeEmail: string | null
+        startsAt: Date | null
+        dueAt: Date | null
+        estimateHours: number | null
+        tagNames: string[]
       }> = []
       for (let i = 0; i < body.tasks.length; i++) {
         const r = body.tasks[i]
@@ -259,7 +295,8 @@ export function tasksRoutes() {
         const kind = (r.kind ?? 'TASK').toUpperCase()
         if (!KINDS.has(kind)) errors.push({ index: i, field: 'kind', message: 'kind harus TASK|BUG|QC' })
         const priority = (r.priority ?? 'MEDIUM').toUpperCase()
-        if (!PRIORITIES.has(priority)) errors.push({ index: i, field: 'priority', message: 'priority harus LOW|MEDIUM|HIGH|CRITICAL' })
+        if (!PRIORITIES.has(priority))
+          errors.push({ index: i, field: 'priority', message: 'priority harus LOW|MEDIUM|HIGH|CRITICAL' })
         let startsAt: Date | null = null
         if (r.startsAt) {
           const d = new Date(r.startsAt)
@@ -272,45 +309,75 @@ export function tasksRoutes() {
           if (Number.isNaN(d.getTime())) errors.push({ index: i, field: 'dueAt', message: 'dueAt invalid date' })
           else dueAt = d
         }
-        if (startsAt && dueAt && dueAt < startsAt) errors.push({ index: i, field: 'dueAt', message: 'dueAt < startsAt' })
+        if (startsAt && dueAt && dueAt < startsAt)
+          errors.push({ index: i, field: 'dueAt', message: 'dueAt < startsAt' })
         let estimateHours: number | null = null
         if (r.estimateHours !== null && r.estimateHours !== undefined && r.estimateHours !== ('' as unknown)) {
           const n = typeof r.estimateHours === 'number' ? r.estimateHours : Number(r.estimateHours)
-          if (!Number.isFinite(n) || n < 0) errors.push({ index: i, field: 'estimateHours', message: 'estimateHours harus angka ≥ 0' })
+          if (!Number.isFinite(n) || n < 0)
+            errors.push({ index: i, field: 'estimateHours', message: 'estimateHours harus angka ≥ 0' })
           else estimateHours = n
         }
         const assigneeEmail = r.assigneeEmail?.trim() || null
         if (assigneeEmail) {
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(assigneeEmail)) errors.push({ index: i, field: 'assigneeEmail', message: 'assigneeEmail format invalid' })
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(assigneeEmail))
+            errors.push({ index: i, field: 'assigneeEmail', message: 'assigneeEmail format invalid' })
           else emailSet.add(assigneeEmail)
         }
         const tagNames = Array.isArray(r.tagNames) ? r.tagNames.map((t) => String(t).trim()).filter(Boolean) : []
         for (const t of tagNames) tagNameSet.add(t)
-        normalizedRows.push({ title, description, kind: kind as 'TASK' | 'BUG' | 'QC', priority: priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL', route: r.route?.trim() || null, assigneeEmail, startsAt, dueAt, estimateHours, tagNames })
+        normalizedRows.push({
+          title,
+          description,
+          kind: kind as 'TASK' | 'BUG' | 'QC',
+          priority: priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+          route: r.route?.trim() || null,
+          assigneeEmail,
+          startsAt,
+          dueAt,
+          estimateHours,
+          tagNames,
+        })
       }
-      const users = emailSet.size ? await prisma.user.findMany({ where: { email: { in: [...emailSet] } }, select: { id: true, email: true } }) : []
+      const users = emailSet.size
+        ? await prisma.user.findMany({ where: { email: { in: [...emailSet] } }, select: { id: true, email: true } })
+        : []
       const userByEmail = new Map(users.map((u) => [u.email, u.id]))
       for (let i = 0; i < normalizedRows.length; i++) {
         const e = normalizedRows[i].assigneeEmail
         if (e && !userByEmail.has(e)) errors.push({ index: i, field: 'assigneeEmail', message: `user not found: ${e}` })
       }
-      const tagsByName = tagNameSet.size ? await prisma.tag.findMany({ where: { projectId: body.projectId, name: { in: [...tagNameSet] } }, select: { id: true, name: true } }) : []
+      const tagsByName = tagNameSet.size
+        ? await prisma.tag.findMany({
+            where: { projectId: body.projectId, name: { in: [...tagNameSet] } },
+            select: { id: true, name: true },
+          })
+        : []
       const tagIdByName = new Map(tagsByName.map((t) => [t.name, t.id]))
       for (let i = 0; i < normalizedRows.length; i++) {
         for (const tn of normalizedRows[i].tagNames) {
           if (!tagIdByName.has(tn)) errors.push({ index: i, field: 'tagNames', message: `tag not in project: ${tn}` })
         }
       }
-      if (errors.length) { set.status = 400; return { error: 'Validation failed', errors } }
+      if (errors.length) {
+        set.status = 400
+        return { error: 'Validation failed', errors }
+      }
       const created = await prisma.$transaction(
         normalizedRows.map((r) =>
           prisma.task.create({
             data: {
               projectId: body.projectId!,
-              kind: r.kind, title: r.title, description: r.description, priority: r.priority,
-              route: r.route, reporterId: auth.userId,
+              kind: r.kind,
+              title: r.title,
+              description: r.description,
+              priority: r.priority,
+              route: r.route,
+              reporterId: auth.userId,
               assigneeId: r.assigneeEmail ? (userByEmail.get(r.assigneeEmail) ?? null) : null,
-              startsAt: r.startsAt, dueAt: r.dueAt, estimateHours: r.estimateHours,
+              startsAt: r.startsAt,
+              dueAt: r.dueAt,
+              estimateHours: r.estimateHours,
               tags: r.tagNames.length ? { create: r.tagNames.map((n) => ({ tagId: tagIdByName.get(n)! })) } : undefined,
             },
           }),
@@ -324,35 +391,63 @@ export function tasksRoutes() {
 
     .post('/api/tasks', async ({ request, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const body = (await request.json()) as {
-        projectId?: string; kind?: string; title?: string; description?: string
-        priority?: string; route?: string; assigneeId?: string
-        startsAt?: string; dueAt?: string; estimateHours?: number; tagIds?: string[]
+        projectId?: string
+        kind?: string
+        title?: string
+        description?: string
+        priority?: string
+        route?: string
+        assigneeId?: string
+        startsAt?: string
+        dueAt?: string
+        estimateHours?: number
+        tagIds?: string[]
       }
       if (!body.projectId || !body.title || !body.description) {
-        set.status = 400; return { error: 'projectId, title, description wajib diisi' }
+        set.status = 400
+        return { error: 'projectId, title, description wajib diisi' }
       }
-      if (body.title.length > 500) { set.status = 400; return { error: 'Title must be 500 characters or fewer' } }
+      if (body.title.length > 500) {
+        set.status = 400
+        return { error: 'Title must be 500 characters or fewer' }
+      }
       const membership = await requireProjectMember(body.projectId, auth.userId)
       if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
-        set.status = 403; return { error: 'Not a writable project member' }
+        set.status = 403
+        return { error: 'Not a writable project member' }
       }
       if (!membership) {
         const exists = await prisma.project.findUnique({ where: { id: body.projectId }, select: { id: true } })
-        if (!exists) { set.status = 404; return { error: 'Project not found' } }
+        if (!exists) {
+          set.status = 404
+          return { error: 'Project not found' }
+        }
       }
       if (body.tagIds?.length) {
-        const validTags = await prisma.tag.findMany({ where: { id: { in: body.tagIds }, projectId: body.projectId }, select: { id: true } })
-        if (validTags.length !== body.tagIds.length) { set.status = 400; return { error: 'One or more tagIds do not exist in this project' } }
+        const validTags = await prisma.tag.findMany({
+          where: { id: { in: body.tagIds }, projectId: body.projectId },
+          select: { id: true },
+        })
+        if (validTags.length !== body.tagIds.length) {
+          set.status = 400
+          return { error: 'One or more tagIds do not exist in this project' }
+        }
       }
       const task = await prisma.task.create({
         data: {
           projectId: body.projectId,
           kind: (body.kind as 'TASK' | 'BUG' | 'QC') ?? 'TASK',
-          title: body.title, description: body.description,
+          title: body.title,
+          description: body.description,
           priority: (body.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') ?? 'MEDIUM',
-          route: body.route ?? null, reporterId: auth.userId, assigneeId: body.assigneeId ?? null,
+          route: body.route ?? null,
+          reporterId: auth.userId,
+          assigneeId: body.assigneeId ?? null,
           startsAt: body.startsAt ? new Date(body.startsAt) : null,
           dueAt: body.dueAt ? new Date(body.dueAt) : null,
           estimateHours: typeof body.estimateHours === 'number' ? body.estimateHours : null,
@@ -363,7 +458,14 @@ export function tasksRoutes() {
       appLog('info', `Task created: ${task.title} by ${auth.email}`)
       if (task.assigneeId && task.assigneeId !== auth.userId) {
         const actor = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
-        notifyTaskAssigned({ taskId: task.id, projectId: task.projectId, taskTitle: task.title, assigneeId: task.assigneeId, actorId: auth.userId, actorName: actor?.name ?? 'Someone' }).catch(() => {})
+        notifyTaskAssigned({
+          taskId: task.id,
+          projectId: task.projectId,
+          taskTitle: task.title,
+          assigneeId: task.assigneeId,
+          actorId: auth.userId,
+          actorName: actor?.name ?? 'Someone',
+        }).catch(() => {})
       }
       emitInvalidate('tasks', { projectId: task.projectId })
       return { task }
@@ -371,25 +473,40 @@ export function tasksRoutes() {
 
     .get('/api/tasks/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const task = await prisma.task.findUnique({
         where: { id: params.id },
         include: {
           project: { select: { id: true, name: true } },
           reporter: { select: { id: true, name: true, email: true, role: true, image: true } },
           assignee: { select: { id: true, name: true, email: true, role: true, image: true } },
-          comments: { include: { author: { select: { id: true, name: true, email: true, role: true, image: true } } }, orderBy: { createdAt: 'asc' } },
+          comments: {
+            include: { author: { select: { id: true, name: true, email: true, role: true, image: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
           evidence: { orderBy: { createdAt: 'asc' } },
           tags: { include: { tag: true } },
           blockedBy: { include: { blockedBy: { select: { id: true, title: true, status: true, kind: true } } } },
           blocks: { include: { task: { select: { id: true, title: true, status: true, kind: true } } } },
           checklist: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
-          statusChanges: { include: { author: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'asc' } },
+          statusChanges: {
+            include: { author: { select: { id: true, name: true, email: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership && auth.role !== 'SUPER_ADMIN') { set.status = 403; return { error: 'Not a project member' } }
+      if (!membership && auth.role !== 'SUPER_ADMIN') {
+        set.status = 403
+        return { error: 'Not a project member' }
+      }
       const actualHours = computeActualHours(task)
       const progressPercent = computeProgressPercent(task)
       const awFocus = await computeTaskAwFocus(task)
@@ -398,18 +515,38 @@ export function tasksRoutes() {
 
     .patch('/api/tasks/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current) { set.status = 404; return { error: 'Task not found' } }
-      const membership = await requireProjectMember(current.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
-      const body = (await request.json()) as {
-        title?: string; description?: string; priority?: string; kind?: string
-        route?: string | null; status?: string; assigneeId?: string | null
-        startsAt?: string | null; dueAt?: string | null
-        estimateHours?: number | null; progressPercent?: number | null; tagIds?: string[]
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
       }
-      if (body.title !== undefined && body.title.length > 500) { set.status = 400; return { error: 'Title must be 500 characters or fewer' } }
+      const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
+      if (!current) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
+      const membership = await requireProjectMember(current.projectId, auth.userId)
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
+      const body = (await request.json()) as {
+        title?: string
+        description?: string
+        priority?: string
+        kind?: string
+        route?: string | null
+        status?: string
+        assigneeId?: string | null
+        startsAt?: string | null
+        dueAt?: string | null
+        estimateHours?: number | null
+        progressPercent?: number | null
+        tagIds?: string[]
+      }
+      if (body.title !== undefined && body.title.length > 500) {
+        set.status = 400
+        return { error: 'Title must be 500 characters or fewer' }
+      }
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title
       if (body.description !== undefined) data.description = body.description
@@ -419,7 +556,8 @@ export function tasksRoutes() {
       if (body.assigneeId !== undefined) data.assigneeId = body.assigneeId
       if (body.startsAt !== undefined) data.startsAt = body.startsAt ? new Date(body.startsAt) : null
       if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null
-      if (body.estimateHours !== undefined) data.estimateHours = body.estimateHours === null ? null : Number(body.estimateHours)
+      if (body.estimateHours !== undefined)
+        data.estimateHours = body.estimateHours === null ? null : Number(body.estimateHours)
       if (body.progressPercent !== undefined) {
         const p = body.progressPercent
         data.progressPercent = p === null ? null : Math.max(0, Math.min(100, Math.round(p)))
@@ -427,7 +565,10 @@ export function tasksRoutes() {
       let statusTransition: { from: string; to: string } | null = null
       if (body.status !== undefined) {
         const allowed = getAllowedTaskTransitions(current.status, current.kind)
-        if (!allowed.includes(body.status)) { set.status = 400; return { error: `Invalid transition: ${current.status} → ${body.status} for ${current.kind}` } }
+        if (!allowed.includes(body.status)) {
+          set.status = 400
+          return { error: `Invalid transition: ${current.status} → ${body.status} for ${current.kind}` }
+        }
         if (body.status !== current.status) statusTransition = { from: current.status, to: body.status }
         data.status = body.status
         if (body.status === 'CLOSED') data.closedAt = new Date()
@@ -437,7 +578,8 @@ export function tasksRoutes() {
       if (statusTransition) {
         await prisma.taskStatusChange.create({
           data: {
-            taskId: task.id, authorId: auth.userId,
+            taskId: task.id,
+            authorId: auth.userId,
             fromStatus: statusTransition.from as 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED',
             toStatus: statusTransition.to as 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED',
           },
@@ -445,16 +587,42 @@ export function tasksRoutes() {
       }
       if (body.tagIds !== undefined) {
         await prisma.taskTag.deleteMany({ where: { taskId: task.id } })
-        if (body.tagIds.length) await prisma.taskTag.createMany({ data: body.tagIds.map((tagId) => ({ taskId: task.id, tagId })), skipDuplicates: true })
+        if (body.tagIds.length)
+          await prisma.taskTag.createMany({
+            data: body.tagIds.map((tagId) => ({ taskId: task.id, tagId })),
+            skipDuplicates: true,
+          })
       }
       audit(auth.userId, 'TASK_UPDATED', `#${task.id} ${Object.keys(data).join(',')}`, getIp(request))
       const actor = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
       const actorName = actor?.name ?? 'Someone'
-      if (body.assigneeId !== undefined && body.assigneeId && body.assigneeId !== current.assigneeId && body.assigneeId !== auth.userId) {
-        notifyTaskAssigned({ taskId: task.id, projectId: task.projectId, taskTitle: task.title, assigneeId: body.assigneeId, actorId: auth.userId, actorName }).catch(() => {})
+      if (
+        body.assigneeId !== undefined &&
+        body.assigneeId &&
+        body.assigneeId !== current.assigneeId &&
+        body.assigneeId !== auth.userId
+      ) {
+        notifyTaskAssigned({
+          taskId: task.id,
+          projectId: task.projectId,
+          taskTitle: task.title,
+          assigneeId: body.assigneeId,
+          actorId: auth.userId,
+          actorName,
+        }).catch(() => {})
       }
       if (statusTransition) {
-        notifyTaskStatusChanged({ taskId: task.id, projectId: task.projectId, taskTitle: task.title, reporterId: current.reporterId, assigneeId: task.assigneeId, actorId: auth.userId, actorName, fromStatus: statusTransition.from, toStatus: statusTransition.to }).catch(() => {})
+        notifyTaskStatusChanged({
+          taskId: task.id,
+          projectId: task.projectId,
+          taskTitle: task.title,
+          reporterId: current.reporterId,
+          assigneeId: task.assigneeId,
+          actorId: auth.userId,
+          actorName,
+          fromStatus: statusTransition.from,
+          toStatus: statusTransition.to,
+        }).catch(() => {})
       }
       emitInvalidate('tasks', { projectId: task.projectId })
       return { task }
@@ -462,19 +630,27 @@ export function tasksRoutes() {
 
     .delete('/api/tasks/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current) { set.status = 404; return { error: 'Task not found' } }
+      if (!current) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const isReporter = current.reporterId === auth.userId
       if (auth.role !== 'SUPER_ADMIN' && !isReporter) {
         const membership = await requireProjectMember(current.projectId, auth.userId)
         if (!membership || (membership.role !== 'OWNER' && membership.role !== 'PM')) {
-          set.status = 403; return { error: 'Only the reporter or project OWNER/PM can delete tasks' }
+          set.status = 403
+          return { error: 'Only the reporter or project OWNER/PM can delete tasks' }
         }
       }
-      const body = await request.json().catch(() => ({})) as { reason?: string }
+      const body = (await request.json().catch(() => ({}))) as { reason?: string }
       if (!body.reason || body.reason.trim().length < 3) {
-        set.status = 400; return { error: 'Alasan penghapusan wajib diisi (min 3 karakter)' }
+        set.status = 400
+        return { error: 'Alasan penghapusan wajib diisi (min 3 karakter)' }
       }
       await prisma.task.update({
         where: { id: params.id },
@@ -488,18 +664,40 @@ export function tasksRoutes() {
 
     .post('/api/tasks/bulk-delete', async ({ request, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const body = (await request.json().catch(() => null)) as { ids?: unknown; reason?: string } | null
-      if (!body || !Array.isArray(body.ids) || body.ids.length === 0) { set.status = 400; return { error: 'ids[] required' } }
-      if (!body.reason || body.reason.trim().length < 3) { set.status = 400; return { error: 'Alasan penghapusan wajib diisi (min 3 karakter)' } }
+      if (!body || !Array.isArray(body.ids) || body.ids.length === 0) {
+        set.status = 400
+        return { error: 'ids[] required' }
+      }
+      if (!body.reason || body.reason.trim().length < 3) {
+        set.status = 400
+        return { error: 'Alasan penghapusan wajib diisi (min 3 karakter)' }
+      }
       const ids = body.ids.filter((v): v is string => typeof v === 'string').slice(0, 500)
-      if (ids.length === 0) { set.status = 400; return { error: 'ids[] must contain non-empty strings' } }
-      const candidates = await prisma.task.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, projectId: true, reporterId: true, title: true } })
+      if (ids.length === 0) {
+        set.status = 400
+        return { error: 'ids[] must contain non-empty strings' }
+      }
+      const candidates = await prisma.task.findMany({
+        where: { id: { in: ids }, deletedAt: null },
+        select: { id: true, projectId: true, reporterId: true, title: true },
+      })
       if (candidates.length === 0) return { deleted: 0, denied: 0, deniedIds: [] }
       const isSuper = auth.role === 'SUPER_ADMIN'
       let leadProjectIds: Set<string> | null = null
       if (!isSuper) {
-        const lead = await prisma.projectMember.findMany({ where: { userId: auth.userId, projectId: { in: Array.from(new Set(candidates.map((c) => c.projectId))) }, role: { in: ['OWNER', 'PM'] } }, select: { projectId: true } })
+        const lead = await prisma.projectMember.findMany({
+          where: {
+            userId: auth.userId,
+            projectId: { in: Array.from(new Set(candidates.map((c) => c.projectId))) },
+            role: { in: ['OWNER', 'PM'] },
+          },
+          select: { projectId: true },
+        })
         leadProjectIds = new Set(lead.map((m) => m.projectId))
       }
       const allowedIds: string[] = []
@@ -523,12 +721,17 @@ export function tasksRoutes() {
 
     .get('/api/tasks/trash', async ({ request, query, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const isAdmin = isSystemAdmin(auth.role)
       const where: Record<string, unknown> = { deletedAt: { not: null } }
       if (query.projectId) where.projectId = String(query.projectId)
       if (!isAdmin) {
-        const myProjectIds = (await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })).map((m) => m.projectId)
+        const myProjectIds = (
+          await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })
+        ).map((m) => m.projectId)
         where.project = { OR: [{ id: { in: myProjectIds } }, { visibility: 'INTERNAL' }, { visibility: 'PUBLIC' }] }
       }
       const tasks = await prisma.task.findMany({
@@ -548,14 +751,21 @@ export function tasksRoutes() {
 
     .post('/api/tasks/:id/restore', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current || !current.deletedAt) { set.status = 404; return { error: 'Task not found in trash' } }
+      if (!current || !current.deletedAt) {
+        set.status = 404
+        return { error: 'Task not found in trash' }
+      }
       const isReporter = current.reporterId === auth.userId
       if (auth.role !== 'SUPER_ADMIN' && !isReporter) {
         const membership = await requireProjectMember(current.projectId, auth.userId)
         if (!membership || (membership.role !== 'OWNER' && membership.role !== 'PM')) {
-          set.status = 403; return { error: 'Hanya reporter atau OWNER/PM yang bisa restore' }
+          set.status = 403
+          return { error: 'Hanya reporter atau OWNER/PM yang bisa restore' }
         }
       }
       await prisma.task.update({
@@ -570,10 +780,19 @@ export function tasksRoutes() {
 
     .delete('/api/tasks/:id/purge', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      if (!isSystemAdmin(auth.role)) { set.status = 403; return { error: 'ADMIN atau SUPER_ADMIN only' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      if (!isSystemAdmin(auth.role)) {
+        set.status = 403
+        return { error: 'ADMIN atau SUPER_ADMIN only' }
+      }
       const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current || !current.deletedAt) { set.status = 404; return { error: 'Task not found in trash' } }
+      if (!current || !current.deletedAt) {
+        set.status = 404
+        return { error: 'Task not found in trash' }
+      }
       await prisma.task.delete({ where: { id: params.id } })
       audit(auth.userId, 'TASK_PURGED', `#${current.id} "${current.title}"`, getIp(request))
       appLog('info', `Task permanently purged: #${current.id} by ${auth.userId}`)
@@ -582,61 +801,144 @@ export function tasksRoutes() {
 
     .post('/api/tasks/:id/comments', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true, title: true, reporterId: true, assigneeId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true, title: true, reporterId: true, assigneeId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const { body: text } = (await request.json()) as { body?: string }
-      if (!text?.trim()) { set.status = 400; return { error: 'body wajib diisi' } }
+      if (!text?.trim()) {
+        set.status = 400
+        return { error: 'body wajib diisi' }
+      }
       const comment = await prisma.taskComment.create({
         data: { taskId: params.id, authorId: auth.userId, authorTag: membership.role, body: text },
         include: { author: { select: { id: true, name: true, email: true, role: true, image: true } } },
       })
       const snippet = text.trim().length > 120 ? `${text.trim().slice(0, 120)}…` : text.trim()
-      notifyTaskCommented({ taskId: params.id, projectId: task.projectId, taskTitle: task.title, reporterId: task.reporterId, assigneeId: task.assigneeId, actorId: auth.userId, actorName: comment.author?.name ?? 'Someone', commentSnippet: snippet }).catch(() => {})
+      notifyTaskCommented({
+        taskId: params.id,
+        projectId: task.projectId,
+        taskTitle: task.title,
+        reporterId: task.reporterId,
+        assigneeId: task.assigneeId,
+        actorId: auth.userId,
+        actorName: comment.author?.name ?? 'Someone',
+        commentSnippet: snippet,
+      }).catch(() => {})
       emitInvalidate('tasks', { projectId: task.projectId })
       return { comment }
     })
 
     .post('/api/tasks/:id/evidence', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { kind?: string; url?: string; note?: string }
-      if (!body.kind || !body.url) { set.status = 400; return { error: 'kind dan url wajib diisi' } }
-      const evidence = await prisma.taskEvidence.create({ data: { taskId: params.id, kind: body.kind, url: body.url, note: body.note ?? null } })
+      if (!body.kind || !body.url) {
+        set.status = 400
+        return { error: 'kind dan url wajib diisi' }
+      }
+      const evidence = await prisma.taskEvidence.create({
+        data: { taskId: params.id, kind: body.kind, url: body.url, note: body.note ?? null },
+      })
       emitInvalidate('tasks', { projectId: task.projectId })
       return { evidence }
     })
 
     .post('/api/tasks/:id/evidence/upload', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const form = await request.formData()
       const file = form.get('file')
       const note = form.get('note')
-      if (!(file instanceof File)) { set.status = 400; return { error: 'file wajib diupload (field name: file)' } }
-      if (file.size === 0) { set.status = 400; return { error: 'File kosong' } }
-      if (file.size > env.UPLOAD_MAX_BYTES) { set.status = 413; return { error: `File terlalu besar (max ${env.UPLOAD_MAX_BYTES} bytes)` } }
+      if (!(file instanceof File)) {
+        set.status = 400
+        return { error: 'file wajib diupload (field name: file)' }
+      }
+      if (file.size === 0) {
+        set.status = 400
+        return { error: 'File kosong' }
+      }
+      if (file.size > env.UPLOAD_MAX_BYTES) {
+        set.status = 413
+        return { error: `File terlalu besar (max ${env.UPLOAD_MAX_BYTES} bytes)` }
+      }
       const fs = await import('node:fs/promises')
       const path = await import('node:path')
       const safeDir = path.resolve(env.UPLOADS_DIR, 'evidence', params.id)
       await fs.mkdir(safeDir, { recursive: true })
-      const ext = path.extname(file.name).slice(0, 12).replace(/[^a-zA-Z0-9.]/g, '')
+      const ext = path
+        .extname(file.name)
+        .slice(0, 12)
+        .replace(/[^a-zA-Z0-9.]/g, '')
       const storedName = `${crypto.randomUUID()}${ext}`
       const fullPath = path.join(safeDir, storedName)
       await Bun.write(fullPath, file)
-      const mimeKind = file.type.startsWith('image/') ? 'SCREENSHOT' : file.type.startsWith('text/') || file.type === 'application/json' ? 'LOG' : 'FILE'
-      const displayNote = [file.name, `${(file.size / 1024).toFixed(1)} KB`, file.type || 'unknown', note && typeof note === 'string' ? note : null].filter(Boolean).join(' · ')
-      const evidence = await prisma.taskEvidence.create({ data: { taskId: params.id, kind: mimeKind, url: `/api/evidence/${storedName}?task=${params.id}`, note: displayNote } })
+      const mimeKind = file.type.startsWith('image/')
+        ? 'SCREENSHOT'
+        : file.type.startsWith('text/') || file.type === 'application/json'
+          ? 'LOG'
+          : 'FILE'
+      const displayNote = [
+        file.name,
+        `${(file.size / 1024).toFixed(1)} KB`,
+        file.type || 'unknown',
+        note && typeof note === 'string' ? note : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      const evidence = await prisma.taskEvidence.create({
+        data: {
+          taskId: params.id,
+          kind: mimeKind,
+          url: `/api/evidence/${storedName}?task=${params.id}`,
+          note: displayNote,
+        },
+      })
       audit(auth.userId, 'EVIDENCE_UPLOADED', `task=${params.id} file=${file.name} size=${file.size}`, getIp(request))
       emitInvalidate('tasks', { projectId: task.projectId })
       return { evidence }
@@ -644,41 +946,82 @@ export function tasksRoutes() {
 
     .get('/api/evidence/:file', async ({ request, params, query, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const taskId = typeof query?.task === 'string' ? query.task : null
-      if (!taskId) { set.status = 400; return { error: 'task param wajib' } }
+      if (!taskId) {
+        set.status = 400
+        return { error: 'task param wajib' }
+      }
       const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership && auth.role !== 'SUPER_ADMIN') { set.status = 403; return { error: 'Not a project member' } }
+      if (!membership && auth.role !== 'SUPER_ADMIN') {
+        set.status = 403
+        return { error: 'Not a project member' }
+      }
       const path = await import('node:path')
       const safeName = params.file.replace(/[^a-zA-Z0-9._-]/g, '')
       const fullPath = path.resolve(env.UPLOADS_DIR, 'evidence', taskId, safeName)
       const rootDir = path.resolve(env.UPLOADS_DIR, 'evidence', taskId)
-      if (!fullPath.startsWith(rootDir)) { set.status = 400; return { error: 'Invalid path' } }
+      if (!fullPath.startsWith(rootDir)) {
+        set.status = 400
+        return { error: 'Invalid path' }
+      }
       const file = Bun.file(fullPath)
-      if (!(await file.exists())) { set.status = 404; return { error: 'File not found' } }
+      if (!(await file.exists())) {
+        set.status = 404
+        return { error: 'File not found' }
+      }
       return new Response(file)
     })
 
     .get('/api/projects/:id/tags', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const access = await canReadProject(params.id, auth)
-      if (!access.ok) { set.status = access.status!; return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' } }
+      if (!access.ok) {
+        set.status = access.status!
+        return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
+      }
       const tags = await prisma.tag.findMany({ where: { projectId: params.id }, orderBy: { name: 'asc' } })
       return { tags }
     })
 
     .post('/api/projects/:id/tags', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const membership = await requireProjectMember(params.id, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { name?: string; color?: string }
-      if (!body.name?.trim()) { set.status = 400; return { error: 'name wajib diisi' } }
-      const tag = await prisma.tag.create({ data: { projectId: params.id, name: body.name.trim(), color: body.color ?? 'blue' } }).catch((e: unknown) => { if ((e as { code?: string }).code === 'P2002') return null; throw e })
-      if (!tag) { set.status = 409; return { error: 'Tag with that name already exists' } }
+      if (!body.name?.trim()) {
+        set.status = 400
+        return { error: 'name wajib diisi' }
+      }
+      const tag = await prisma.tag
+        .create({ data: { projectId: params.id, name: body.name.trim(), color: body.color ?? 'blue' } })
+        .catch((e: unknown) => {
+          if ((e as { code?: string }).code === 'P2002') return null
+          throw e
+        })
+      if (!tag) {
+        set.status = 409
+        return { error: 'Tag with that name already exists' }
+      }
       audit(auth.userId, 'TAG_CREATED', `${params.id} ← ${tag.name}`, getIp(request))
       emitInvalidate('tags', { projectId: params.id })
       return { tag }
@@ -686,11 +1029,20 @@ export function tasksRoutes() {
 
     .patch('/api/tags/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const tag = await prisma.tag.findUnique({ where: { id: params.id } })
-      if (!tag) { set.status = 404; return { error: 'Tag not found' } }
+      if (!tag) {
+        set.status = 404
+        return { error: 'Tag not found' }
+      }
       const membership = await requireProjectMember(tag.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { name?: string; color?: string }
       const data: Record<string, unknown> = {}
       if (body.name !== undefined) data.name = body.name.trim()
@@ -702,11 +1054,20 @@ export function tasksRoutes() {
 
     .delete('/api/tags/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
       const tag = await prisma.tag.findUnique({ where: { id: params.id } })
-      if (!tag) { set.status = 404; return { error: 'Tag not found' } }
+      if (!tag) {
+        set.status = 404
+        return { error: 'Tag not found' }
+      }
       const membership = await requireProjectMember(tag.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       await prisma.tag.delete({ where: { id: params.id } })
       audit(auth.userId, 'TAG_DELETED', `${tag.projectId} ← ${tag.name}`, getIp(request))
       emitInvalidate('tags', { projectId: tag.projectId })
@@ -716,66 +1077,145 @@ export function tasksRoutes() {
 
     .post('/api/tasks/:id/dependencies', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { blockedById?: string }
-      if (!body.blockedById) { set.status = 400; return { error: 'blockedById wajib diisi' } }
-      if (body.blockedById === params.id) { set.status = 400; return { error: 'Task cannot block itself' } }
+      if (!body.blockedById) {
+        set.status = 400
+        return { error: 'blockedById wajib diisi' }
+      }
+      if (body.blockedById === params.id) {
+        set.status = 400
+        return { error: 'Task cannot block itself' }
+      }
       const blocker = await prisma.task.findUnique({ where: { id: body.blockedById }, select: { projectId: true } })
-      if (!blocker || blocker.projectId !== task.projectId) { set.status = 400; return { error: 'Blocker task must be in the same project' } }
+      if (!blocker || blocker.projectId !== task.projectId) {
+        set.status = 400
+        return { error: 'Blocker task must be in the same project' }
+      }
       const visited = new Set<string>()
       const queue: string[] = [body.blockedById]
       while (queue.length) {
         const cur = queue.shift() as string
         if (visited.has(cur)) continue
         visited.add(cur)
-        if (cur === params.id) { set.status = 400; return { error: 'Dependency would create a cycle' } }
+        if (cur === params.id) {
+          set.status = 400
+          return { error: 'Dependency would create a cycle' }
+        }
         const parents = await prisma.taskDependency.findMany({ where: { taskId: cur }, select: { blockedById: true } })
         for (const p of parents) queue.push(p.blockedById)
       }
-      const dep = await prisma.taskDependency.create({ data: { taskId: params.id, blockedById: body.blockedById } }).catch((e: unknown) => { if ((e as { code?: string }).code === 'P2002') return null; throw e })
-      if (!dep) { set.status = 409; return { error: 'Dependency already exists' } }
+      const dep = await prisma.taskDependency
+        .create({ data: { taskId: params.id, blockedById: body.blockedById } })
+        .catch((e: unknown) => {
+          if ((e as { code?: string }).code === 'P2002') return null
+          throw e
+        })
+      if (!dep) {
+        set.status = 409
+        return { error: 'Dependency already exists' }
+      }
       emitInvalidate('tasks', { projectId: task.projectId })
       return { dependency: dep }
     })
 
     .delete('/api/tasks/:id/dependencies/:blockedById', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
-      await prisma.taskDependency.delete({ where: { taskId_blockedById: { taskId: params.id, blockedById: params.blockedById } } })
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
+      await prisma.taskDependency.delete({
+        where: { taskId_blockedById: { taskId: params.id, blockedById: params.blockedById } },
+      })
       emitInvalidate('tasks', { projectId: task.projectId })
       return { ok: true }
     })
 
     .post('/api/tasks/:id/checklist', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const task = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null }, select: { projectId: true } })
-      if (!task) { set.status = 404; return { error: 'Task not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const task = await prisma.task.findUnique({
+        where: { id: params.id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!task) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { title?: string }
-      if (!body.title?.trim()) { set.status = 400; return { error: 'title wajib diisi' } }
-      const last = await prisma.taskChecklistItem.findFirst({ where: { taskId: params.id }, orderBy: { order: 'desc' }, select: { order: true } })
-      const item = await prisma.taskChecklistItem.create({ data: { taskId: params.id, title: body.title.trim(), order: (last?.order ?? -1) + 1 } })
+      if (!body.title?.trim()) {
+        set.status = 400
+        return { error: 'title wajib diisi' }
+      }
+      const last = await prisma.taskChecklistItem.findFirst({
+        where: { taskId: params.id },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      })
+      const item = await prisma.taskChecklistItem.create({
+        data: { taskId: params.id, title: body.title.trim(), order: (last?.order ?? -1) + 1 },
+      })
       emitInvalidate('tasks', { projectId: task.projectId })
       return { item }
     })
 
     .patch('/api/checklist/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const existing = await prisma.taskChecklistItem.findUnique({ where: { id: params.id }, include: { task: { select: { projectId: true } } } })
-      if (!existing) { set.status = 404; return { error: 'Checklist item not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const existing = await prisma.taskChecklistItem.findUnique({
+        where: { id: params.id },
+        include: { task: { select: { projectId: true } } },
+      })
+      if (!existing) {
+        set.status = 404
+        return { error: 'Checklist item not found' }
+      }
       const membership = await requireProjectMember(existing.task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       const body = (await request.json()) as { title?: string; done?: boolean; order?: number }
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title.trim()
@@ -788,11 +1228,23 @@ export function tasksRoutes() {
 
     .delete('/api/checklist/:id', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
-      if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const existing = await prisma.taskChecklistItem.findUnique({ where: { id: params.id }, include: { task: { select: { projectId: true } } } })
-      if (!existing) { set.status = 404; return { error: 'Checklist item not found' } }
+      if (!auth) {
+        set.status = 401
+        return { error: 'Unauthorized' }
+      }
+      const existing = await prisma.taskChecklistItem.findUnique({
+        where: { id: params.id },
+        include: { task: { select: { projectId: true } } },
+      })
+      if (!existing) {
+        set.status = 404
+        return { error: 'Checklist item not found' }
+      }
       const membership = await requireProjectMember(existing.task.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') { set.status = 403; return { error: 'Not a writable project member' } }
+      if (!membership || membership.role === 'VIEWER') {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       await prisma.taskChecklistItem.delete({ where: { id: params.id } })
       emitInvalidate('tasks', { projectId: existing.task.projectId })
       return { ok: true }

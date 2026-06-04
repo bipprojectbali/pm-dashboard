@@ -18,13 +18,13 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
+import { TimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { TimePicker } from '@mantine/dates'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
-import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 import { SendHistoryPanel } from './SendHistoryPanel'
+import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 
 const DEFAULT_INSTRUCTION = `Tulis laporan manajemen harian dalam *bahasa Indonesia*. Format: Telegram Markdown (*bold*, _italic_). Padat, berbasis data, tanpa narasi berlebihan.
 
@@ -66,7 +66,7 @@ type Settings = Record<string, string>
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: string; message?: string }
+    const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
     throw new Error(err.message ?? err.error ?? `HTTP ${res.status}`)
   }
   return res.json()
@@ -98,7 +98,11 @@ const tzShortLabel = (tz: string) => TIMEZONE_OPTIONS.find((t) => t.value === tz
 function getSecondsUntil(h: number, m: number, tz: string): number {
   const now = new Date()
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false,
+    timeZone: tz,
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
   }).formatToParts(now)
   const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10)
   const nowSecs = (get('hour') % 24) * 3600 + get('minute') * 60 + get('second')
@@ -117,7 +121,11 @@ function fmtCountdown(secs: number): string {
 
 function fmtLocalTime(tz: string): string {
   return new Intl.DateTimeFormat('id-ID', {
-    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   }).format(new Date())
 }
 
@@ -206,7 +214,7 @@ export function AiSettingsPanel() {
     try {
       const res = await fetch('/api/admin/report/preview/stream', { credentials: 'include' })
       if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({})) as { error?: string }
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(err.error ?? `HTTP ${res.status}`)
       }
 
@@ -246,7 +254,9 @@ export function AiSettingsPanel() {
             } else if (eventName === 'error') {
               setStreamError(data.message)
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
     } catch (e) {
@@ -254,7 +264,10 @@ export function AiSettingsPanel() {
     } finally {
       setIsStreaming(false)
       setStreamPhase(null)
-      if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null }
+      if (elapsedRef.current) {
+        clearInterval(elapsedRef.current)
+        elapsedRef.current = null
+      }
     }
   }, [])
 
@@ -273,7 +286,10 @@ export function AiSettingsPanel() {
       setTestAiCooldown(15)
       testAiCooldownRef.current = setInterval(() => {
         setTestAiCooldown((v) => {
-          if (v <= 1) { clearInterval(testAiCooldownRef.current!); return 0 }
+          if (v <= 1) {
+            clearInterval(testAiCooldownRef.current!)
+            return 0
+          }
           return v - 1
         })
       }, 1000)
@@ -283,7 +299,10 @@ export function AiSettingsPanel() {
       setTestAiCooldown(15)
       testAiCooldownRef.current = setInterval(() => {
         setTestAiCooldown((v) => {
-          if (v <= 1) { clearInterval(testAiCooldownRef.current!); return 0 }
+          if (v <= 1) {
+            clearInterval(testAiCooldownRef.current!)
+            return 0
+          }
           return v - 1
         })
       }, 1000)
@@ -291,8 +310,7 @@ export function AiSettingsPanel() {
   })
 
   const sendNow = useMutation({
-    mutationFn: () =>
-      apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
+    mutationFn: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/report/send-now', { method: 'POST' }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] })
       if (res.ok) {
@@ -330,7 +348,9 @@ export function AiSettingsPanel() {
     tick()
     if (countdownRef.current) clearInterval(countdownRef.current)
     countdownRef.current = setInterval(tick, 1000)
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current) }
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
   }, [scheduleTime, timezone])
 
   const fetchPrompt = useMutation({
@@ -363,7 +383,9 @@ export function AiSettingsPanel() {
     <Stack gap="lg">
       <div>
         <Title order={3}>AI & Laporan Harian</Title>
-        <Text c="dimmed" size="sm">Konfigurasi Claude AI untuk laporan naratif harian yang cerdas.</Text>
+        <Text c="dimmed" size="sm">
+          Konfigurasi Claude AI untuk laporan naratif harian yang cerdas.
+        </Text>
       </div>
 
       <Card withBorder padding="lg" radius="md">
@@ -373,8 +395,12 @@ export function AiSettingsPanel() {
               <TbRobot size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={500} size="sm">Anthropic Claude API</Text>
-              <Text size="xs" c="dimmed">API key dari console.anthropic.com</Text>
+              <Text fw={500} size="sm">
+                Anthropic Claude API
+              </Text>
+              <Text size="xs" c="dimmed">
+                API key dari console.anthropic.com
+              </Text>
             </Stack>
           </Group>
           <Divider />
@@ -384,7 +410,10 @@ export function AiSettingsPanel() {
             placeholder={apiKeySet ? '(sudah tersimpan — kosongkan untuk tidak mengubah)' : 'sk-ant-api03-...'}
             description="Dapatkan di console.anthropic.com → API Keys. Disimpan terenkripsi di database."
             value={apiKey}
-            onChange={(e) => { setApiKey(e.currentTarget.value); setDirty(true) }}
+            onChange={(e) => {
+              setApiKey(e.currentTarget.value)
+              setDirty(true)
+            }}
           />
 
           <TextInput
@@ -392,7 +421,10 @@ export function AiSettingsPanel() {
             placeholder="https://your-proxy.example.com"
             description="Kosongkan untuk pakai endpoint Anthropic langsung. Isi jika menggunakan proxy/gateway custom. Harus kompatibel dengan Anthropic API (/v1/messages)."
             value={baseUrl}
-            onChange={(e) => { setBaseUrl(e.currentTarget.value); setDirty(true) }}
+            onChange={(e) => {
+              setBaseUrl(e.currentTarget.value)
+              setDirty(true)
+            }}
           />
 
           <Select
@@ -400,14 +432,22 @@ export function AiSettingsPanel() {
             description="Opus paling cerdas, Haiku paling hemat biaya."
             data={MODEL_OPTIONS}
             value={model}
-            onChange={(v) => { if (v) { setModel(v); setDirty(true) } }}
+            onChange={(v) => {
+              if (v) {
+                setModel(v)
+                setDirty(true)
+              }
+            }}
           />
 
           <NumberInput
             label="Timeout Claude API (detik)"
             description="Batas waktu tunggu response dari Claude. Naikkan jika sering timeout saat generate laporan panjang."
             value={timeoutSeconds}
-            onChange={(v) => { setTimeoutSeconds(Number(v) || 120); setDirty(true) }}
+            onChange={(v) => {
+              setTimeoutSeconds(Number(v) || 120)
+              setDirty(true)
+            }}
             min={30}
             max={600}
             step={30}
@@ -441,8 +481,12 @@ export function AiSettingsPanel() {
       <Card withBorder padding="lg" radius="md">
         <Stack gap="md">
           <Stack gap={0}>
-            <Text fw={500} size="sm">Jadwal Laporan</Text>
-            <Text size="xs" c="dimmed">Laporan harian dikirim otomatis ke Telegram sesuai jam yang dikonfigurasi.</Text>
+            <Text fw={500} size="sm">
+              Jadwal Laporan
+            </Text>
+            <Text size="xs" c="dimmed">
+              Laporan harian dikirim otomatis ke Telegram sesuai jam yang dikonfigurasi.
+            </Text>
           </Stack>
           <Divider />
           <Select
@@ -450,14 +494,22 @@ export function AiSettingsPanel() {
             description="Jam kirim, label tanggal, dan rollover snapshot harian mengikuti zona ini."
             data={TIMEZONE_OPTIONS.map((t) => ({ value: t.value, label: t.label }))}
             value={timezone}
-            onChange={(v) => { if (v) { setTimezone(v); setDirty(true) } }}
+            onChange={(v) => {
+              if (v) {
+                setTimezone(v)
+                setDirty(true)
+              }
+            }}
             allowDeselect={false}
           />
           <TimePicker
             label={`Jam kirim laporan (${tzShortLabel(timezone)})`}
             description={`Laporan dikirim setiap hari pada waktu ini menurut ${timezone}.`}
             value={scheduleTime}
-            onChange={(v) => { setScheduleTime(v); setDirty(true) }}
+            onChange={(v) => {
+              setScheduleTime(v)
+              setDirty(true)
+            }}
           />
           {countdown && (
             <Group
@@ -469,12 +521,20 @@ export function AiSettingsPanel() {
               }}
             >
               <Stack gap={2} style={{ flex: 1 }}>
-                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>Waktu sekarang ({tzShortLabel(timezone)})</Text>
-                <Text size="sm" fw={600} ff="monospace">{localTime}</Text>
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                  Waktu sekarang ({tzShortLabel(timezone)})
+                </Text>
+                <Text size="sm" fw={600} ff="monospace">
+                  {localTime}
+                </Text>
               </Stack>
               <Stack gap={2} style={{ flex: 1 }}>
-                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>Kirim berikutnya dalam</Text>
-                <Text size="sm" fw={700} ff="monospace" c="blue">{countdown}</Text>
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                  Kirim berikutnya dalam
+                </Text>
+                <Text size="sm" fw={700} ff="monospace" c="blue">
+                  {countdown}
+                </Text>
               </Stack>
             </Group>
           )}
@@ -505,15 +565,22 @@ export function AiSettingsPanel() {
       <Card withBorder padding="lg" radius="md">
         <Stack gap="md">
           <Stack gap={0}>
-            <Text fw={500} size="sm">Instruksi Prompt</Text>
+            <Text fw={500} size="sm">
+              Instruksi Prompt
+            </Text>
             <Text size="xs" c="dimmed">
-              Instruksi yang dikirim ke AI untuk membentuk laporan. Gunakan <code style={{ fontFamily: 'monospace' }}>{'{TANGGAL}'}</code> sebagai placeholder tanggal. Kosongkan untuk pakai default.
+              Instruksi yang dikirim ke AI untuk membentuk laporan. Gunakan{' '}
+              <code style={{ fontFamily: 'monospace' }}>{'{TANGGAL}'}</code> sebagai placeholder tanggal. Kosongkan
+              untuk pakai default.
             </Text>
           </Stack>
           <Divider />
           <Textarea
             value={promptInstruction}
-            onChange={(e) => { setPromptInstruction(e.currentTarget.value); setPromptDirty(true) }}
+            onChange={(e) => {
+              setPromptInstruction(e.currentTarget.value)
+              setPromptDirty(true)
+            }}
             autosize
             minRows={8}
             maxRows={20}
@@ -525,7 +592,10 @@ export function AiSettingsPanel() {
               color="gray"
               size="xs"
               leftSection={<TbRefresh size={13} />}
-              onClick={() => { setPromptInstruction(DEFAULT_INSTRUCTION); setPromptDirty(true) }}
+              onClick={() => {
+                setPromptInstruction(DEFAULT_INSTRUCTION)
+                setPromptDirty(true)
+              }}
             >
               Reset ke default
             </Button>
@@ -545,12 +615,18 @@ export function AiSettingsPanel() {
         <Stack gap="md">
           <Group justify="space-between" align="flex-start">
             <Stack gap={0}>
-              <Text fw={500} size="sm">Preview & Kirim</Text>
-              <Text size="xs" c="dimmed">Lihat data mentah, generate laporan AI, edit hasilnya, lalu kirim ke Telegram.</Text>
+              <Text fw={500} size="sm">
+                Preview & Kirim
+              </Text>
+              <Text size="xs" c="dimmed">
+                Lihat data mentah, generate laporan AI, edit hasilnya, lalu kirim ke Telegram.
+              </Text>
             </Stack>
             <Group gap="xs">
               <Button
-                variant="light" color="gray" size="xs"
+                variant="light"
+                color="gray"
+                size="xs"
                 leftSection={<TbEye size={13} />}
                 onClick={() => fetchPrompt.mutate()}
                 loading={fetchPrompt.isPending}
@@ -558,7 +634,9 @@ export function AiSettingsPanel() {
                 Lihat Prompt
               </Button>
               <Button
-                variant="light" color="violet" size="xs"
+                variant="light"
+                color="violet"
+                size="xs"
                 leftSection={isStreaming ? <Loader size={13} color="violet" /> : <TbRobot size={13} />}
                 onClick={startStream}
                 disabled={isStreaming || (!apiKeySet && !apiKey)}
@@ -566,7 +644,9 @@ export function AiSettingsPanel() {
                 {isStreaming ? `Generate AI (${elapsed}s)` : 'Generate AI'}
               </Button>
               <Button
-                variant="light" color="blue" size="xs"
+                variant="light"
+                color="blue"
+                size="xs"
                 leftSection={<TbSend size={13} />}
                 onClick={() => sendNow.mutate()}
                 loading={sendNow.isPending}
@@ -583,9 +663,7 @@ export function AiSettingsPanel() {
               gap="sm"
               p="sm"
               style={{
-                background: streamError
-                  ? 'var(--mantine-color-red-light)'
-                  : 'var(--mantine-color-violet-light)',
+                background: streamError ? 'var(--mantine-color-red-light)' : 'var(--mantine-color-violet-light)',
                 borderRadius: 'var(--mantine-radius-sm)',
               }}
             >
@@ -594,7 +672,9 @@ export function AiSettingsPanel() {
                 {streamError ?? streamPhase ?? '...'}
               </Text>
               {isStreaming && (
-                <Text size="xs" c="dimmed" ff="monospace">{elapsed}s</Text>
+                <Text size="xs" c="dimmed" ff="monospace">
+                  {elapsed}s
+                </Text>
               )}
             </Group>
           )}
@@ -604,7 +684,9 @@ export function AiSettingsPanel() {
               {rawPrompt && (
                 <Stack gap={4}>
                   <Group gap="xs" justify="space-between">
-                    <Text size="xs" fw={600} c="dimmed" tt="uppercase">Data Mentah (Prompt)</Text>
+                    <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                      Data Mentah (Prompt)
+                    </Text>
                     <CopyButton value={rawPrompt} timeout={2000}>
                       {({ copied, copy }) => (
                         <Tooltip label={copied ? 'Disalin!' : 'Salin'} withArrow>
@@ -630,10 +712,16 @@ export function AiSettingsPanel() {
                 <Stack gap={4}>
                   <Group gap="xs" justify="space-between">
                     <Group gap={6}>
-                      <Text size="xs" fw={600} c="dimmed" tt="uppercase">Hasil AI</Text>
-                      <Badge size="xs" variant="light" color="violet">{model}</Badge>
+                      <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                        Hasil AI
+                      </Text>
+                      <Badge size="xs" variant="light" color="violet">
+                        {model}
+                      </Badge>
                       {editedReport !== null && editedReport !== preview && (
-                        <Badge size="xs" variant="light" color="orange">diedit</Badge>
+                        <Badge size="xs" variant="light" color="orange">
+                          diedit
+                        </Badge>
                       )}
                     </Group>
                     <Group gap={4}>
@@ -664,7 +752,9 @@ export function AiSettingsPanel() {
                     maxRows={30}
                     styles={{
                       input: {
-                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5,
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        lineHeight: 1.5,
                         opacity: isStreaming ? 0.85 : 1,
                       },
                     }}
@@ -672,7 +762,8 @@ export function AiSettingsPanel() {
                   <Group justify="flex-end">
                     <Button.Group>
                       <Button
-                        color="teal" size="xs"
+                        color="teal"
+                        size="xs"
                         leftSection={<TbSend size={13} />}
                         onClick={() => sendCustom.mutate({ text: editedReport ?? preview ?? '' })}
                         loading={sendCustom.isPending}

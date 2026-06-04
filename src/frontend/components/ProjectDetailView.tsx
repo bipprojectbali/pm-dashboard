@@ -38,18 +38,12 @@ import {
   TbUsers,
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
-import { GithubActivityCard } from './GithubActivityCard'
-import { ProjectSettingsTab } from './ProjectSettingsTab'
 import { ExtensionsSection } from './ExtensionsSection'
+import { GithubActivityCard } from './GithubActivityCard'
 import { MembersSection } from './MembersSection'
 import { MilestonesSection } from './MilestonesSection'
-import {
-  type ProjectDetail,
-  type ProjectListItem,
-  type ProjectPriority,
-  type ProjectStatus,
-  type ProjectVisibility,
-} from './ProjectsPanel'
+import { ProjectSettingsTab } from './ProjectSettingsTab'
+import type { ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus, ProjectVisibility } from './ProjectsPanel'
 import { RetroTab } from './RetroTab'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 import { UserAvatar } from './shared/UserAvatar'
@@ -255,20 +249,37 @@ export function ProjectDetailView({
         <>
           <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} />
 
-          <Tabs value={tab} onChange={(v) => v && onTabChange(v as ProjectDetailTab)} keepMounted={false} variant="pills">
+          <Tabs
+            value={tab}
+            onChange={(v) => v && onTabChange(v as ProjectDetailTab)}
+            keepMounted={false}
+            variant="pills"
+          >
             {/* Primary tabs + secondary overflow menu */}
             <Group gap={4} mb="md" wrap="nowrap" align="center">
               <Tabs.List style={{ gap: 4, flexWrap: 'nowrap' }}>
                 <Tabs.Tab value="overview" leftSection={<TbTarget size={14} />}>
                   Overview
                 </Tabs.Tab>
-                <Tabs.Tab value="tasks" leftSection={<TbListCheck size={14} />} rightSection={<TabCount value={tabCounts?.tasks} />}>
+                <Tabs.Tab
+                  value="tasks"
+                  leftSection={<TbListCheck size={14} />}
+                  rightSection={<TabCount value={tabCounts?.tasks} />}
+                >
                   Tasks
                 </Tabs.Tab>
-                <Tabs.Tab value="team" leftSection={<TbUsers size={14} />} rightSection={<TabCount value={tabCounts?.members} />}>
+                <Tabs.Tab
+                  value="team"
+                  leftSection={<TbUsers size={14} />}
+                  rightSection={<TabCount value={tabCounts?.members} />}
+                >
                   Team
                 </Tabs.Tab>
-                <Tabs.Tab value="milestones" leftSection={<TbFlag size={14} />} rightSection={<TabCount value={tabCounts?.milestones} />}>
+                <Tabs.Tab
+                  value="milestones"
+                  leftSection={<TbFlag size={14} />}
+                  rightSection={<TabCount value={tabCounts?.milestones} />}
+                >
                   Milestones
                 </Tabs.Tab>
               </Tabs.List>
@@ -603,10 +614,20 @@ function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; onOpenT
               {project.members.map((m) => (
                 <Group key={m.id} justify="space-between" wrap="nowrap">
                   <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                    <UserAvatar name={m.user.name} image={m.user.image} size={26} color="blue" style={{ flexShrink: 0 }} />
+                    <UserAvatar
+                      name={m.user.name}
+                      image={m.user.image}
+                      size={26}
+                      color="blue"
+                      style={{ flexShrink: 0 }}
+                    />
                     <Stack gap={0} style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500} truncate>{m.user.name}</Text>
-                      <Text size="xs" c="dimmed" truncate>{m.user.email}</Text>
+                      <Text size="sm" fw={500} truncate>
+                        {m.user.name}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {m.user.email}
+                      </Text>
                     </Stack>
                   </Group>
                   <Badge color={ROLE_COLOR[m.role] ?? 'gray'} variant="light" size="sm">

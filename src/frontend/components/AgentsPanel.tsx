@@ -40,8 +40,8 @@ import {
   TbUserCheck,
 } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { LoadingBlock } from '@/frontend/components/shared/LoadingState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
@@ -440,12 +440,7 @@ export function AgentsPanel() {
             <Card key={g.key} withBorder padding={0} radius="md">
               <Group justify="space-between" p="sm" wrap="nowrap">
                 <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                  <UserAvatar
-                    name={g.user?.name}
-                    image={g.user?.image}
-                    size="sm"
-                    color={g.user ? 'blue' : 'gray'}
-                  />
+                  <UserAvatar name={g.user?.name} image={g.user?.image} size="sm" color={g.user ? 'blue' : 'gray'} />
                   <Stack gap={0} style={{ minWidth: 0 }}>
                     <Text size="sm" fw={600} truncate>
                       {g.user ? g.user.name : 'Unassigned'}
@@ -499,31 +494,31 @@ export function AgentsPanel() {
       ) : (
         <Card withBorder padding={0} radius="md">
           <Table.ScrollContainer minWidth={1100}>
-          <Table striped highlightOnHover verticalSpacing="sm" layout="fixed">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={stickyFirstHeader(160)}>Status</Table.Th>
-                <Table.Th style={{ width: 200 }}>Host</Table.Th>
-                <Table.Th style={{ width: 240 }}>Agent ID</Table.Th>
-                <Table.Th style={{ width: 220 }}>Assigned to</Table.Th>
-                <Table.Th style={{ width: 90 }}>Events</Table.Th>
-                <Table.Th style={{ width: 160 }}>Last seen</Table.Th>
-                <Table.Th style={{ width: 200 }}></Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {pagedAgents.map((a) => (
-                <AgentRowTr
-                  key={a.id}
-                  agent={a}
-                  showAssignee
-                  onApprove={openApprove}
-                  onRevoke={openRevoke}
-                  firstColStyle={stickyFirstCell(160)}
-                />
-              ))}
-            </Table.Tbody>
-          </Table>
+            <Table striped highlightOnHover verticalSpacing="sm" layout="fixed">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={stickyFirstHeader(160)}>Status</Table.Th>
+                  <Table.Th style={{ width: 200 }}>Host</Table.Th>
+                  <Table.Th style={{ width: 240 }}>Agent ID</Table.Th>
+                  <Table.Th style={{ width: 220 }}>Assigned to</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Events</Table.Th>
+                  <Table.Th style={{ width: 160 }}>Last seen</Table.Th>
+                  <Table.Th style={{ width: 200 }}></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {pagedAgents.map((a) => (
+                  <AgentRowTr
+                    key={a.id}
+                    agent={a}
+                    showAssignee
+                    onApprove={openApprove}
+                    onRevoke={openRevoke}
+                    firstColStyle={stickyFirstCell(160)}
+                  />
+                ))}
+              </Table.Tbody>
+            </Table>
           </Table.ScrollContainer>
           {agents.length > PAGE_SIZE && (
             <Group justify="space-between" p="md">
@@ -593,14 +588,26 @@ function AgentRowTr({
         <Table.Td>
           {a.claimedBy ? (
             <Group gap="xs" wrap="nowrap">
-              <UserAvatar name={a.claimedBy.name} image={a.claimedBy.image} size={24} color="blue" style={{ flexShrink: 0 }} />
+              <UserAvatar
+                name={a.claimedBy.name}
+                image={a.claimedBy.image}
+                size={24}
+                color="blue"
+                style={{ flexShrink: 0 }}
+              />
               <Stack gap={0} style={{ minWidth: 0 }}>
-                <Text size="xs" fw={500} truncate>{a.claimedBy.name}</Text>
-                <Text size="xs" c="dimmed" truncate>{a.claimedBy.email}</Text>
+                <Text size="xs" fw={500} truncate>
+                  {a.claimedBy.name}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  {a.claimedBy.email}
+                </Text>
               </Stack>
             </Group>
           ) : (
-            <Text size="xs" c="dimmed" fs="italic">unassigned</Text>
+            <Text size="xs" c="dimmed" fs="italic">
+              unassigned
+            </Text>
           )}
         </Table.Td>
       ) : null}

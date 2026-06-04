@@ -7,13 +7,13 @@ import { broadcastToAdmins } from './lib/presence'
 import { activityRoutes } from './routes/activity.route'
 import { adminRoutes } from './routes/admin.route'
 import { authRoutes } from './routes/auth.route'
+import { eventsRoutes } from './routes/events.route'
 import { meRoutes } from './routes/me.route'
 import { projectsRoutes } from './routes/projects.route'
 import { qcRoutes } from './routes/qc.route'
+import { settingsRoutes } from './routes/settings.route'
 import { tasksRoutes } from './routes/tasks.route'
 import { webhooksRoutes } from './routes/webhooks.route'
-import { settingsRoutes } from './routes/settings.route'
-import { eventsRoutes } from './routes/events.route'
 
 export function createApp() {
   appLog('info', 'Server starting')

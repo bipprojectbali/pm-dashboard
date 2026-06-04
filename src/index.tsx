@@ -193,9 +193,9 @@ setInterval(() => cleanupAuditLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
+import { appLog } from './lib/applog'
 // ─── Daily AI Report Cron ─────────────────────────────
 import { runCronAtStartup, runCronIfScheduled } from './lib/report-cron'
-import { appLog } from './lib/applog'
 
 // Startup: kirim jika server restart dalam 5 menit setelah jadwal (one-shot)
 runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Error ? e.message : String(e)}`))
@@ -204,9 +204,8 @@ runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Er
 // No-overlap guarantee built-in — handler tidak akan dipanggil lagi
 // selama Promise sebelumnya belum settle, sehingga tidak ada double-send
 // meski send butuh waktu > 60 detik.
-// @ts-ignore — in-process overload ditambahkan di Bun v1.3.12, bun-types belum update
 ;(Bun as any).cron('* * * * *', () =>
-  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`))
+  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`)),
 )
 
 // ─── Auto-purge Trash ─────────────────────────────────

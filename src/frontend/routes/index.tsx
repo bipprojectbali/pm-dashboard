@@ -14,7 +14,6 @@ import {
   useMantineColorScheme,
 } from '@mantine/core'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { authClient } from '@/frontend/lib/authClient'
 import type { IconType } from 'react-icons'
 import { FcGoogle } from 'react-icons/fc'
 import { SiBun, SiPostgresql, SiPrisma, SiRedis, SiTypescript, SiVite } from 'react-icons/si'
@@ -40,6 +39,7 @@ import {
 } from 'react-icons/tb'
 import { ThemeToggle } from '@/frontend/components/ThemeToggle'
 import { getDefaultRoute, useSession } from '@/frontend/hooks/useAuth'
+import { authClient } from '@/frontend/lib/authClient'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -190,7 +190,9 @@ function HomePage() {
               >
                 <Group gap={6} wrap="nowrap">
                   <TbBrandGithub size={17} />
-                  <Text size="sm" fw={500}>GitHub</Text>
+                  <Text size="sm" fw={500}>
+                    GitHub
+                  </Text>
                 </Group>
               </Anchor>
               <ThemeToggle />
@@ -289,7 +291,8 @@ function HomePage() {
               lh={1.7}
               style={{ fontSize: 'clamp(1rem, 2vw, 1.125rem)' }}
             >
-              Rencanakan project, lacak task real-time, ingest aktivitas dari setiap mesin, dan audit setiap webhook — dalam satu stack Bun + React.
+              Rencanakan project, lacak task real-time, ingest aktivitas dari setiap mesin, dan audit setiap webhook —
+              dalam satu stack Bun + React.
             </Text>
 
             {/* CTA buttons */}
@@ -424,7 +427,11 @@ function HomePage() {
                 display: 'inline-flex',
               }}
             >
-              <Text size="xs" fw={700} style={{ color: 'var(--app-brand-to)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              <Text
+                size="xs"
+                fw={700}
+                style={{ color: 'var(--app-brand-to)', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+              >
                 Fitur Unggulan
               </Text>
             </Box>
@@ -441,7 +448,8 @@ function HomePage() {
               Semua yang dibutuhkan tim kecil
             </Title>
             <Text c="dimmed" ta="center" maw={480} lh={1.7}>
-              Auth, RBAC, realtime presence, audit log, dan visual dev tooling — sudah built-in, tanpa konfigurasi tambahan.
+              Auth, RBAC, realtime presence, audit log, dan visual dev tooling — sudah built-in, tanpa konfigurasi
+              tambahan.
             </Text>
           </Stack>
 
@@ -496,7 +504,9 @@ function HomePage() {
                       </Text>
                     </Box>
                     <Group gap={4} mt="auto">
-                      <Text size="xs" c="dimmed" fw={500}>Pelajari lebih</Text>
+                      <Text size="xs" c="dimmed" fw={500}>
+                        Pelajari lebih
+                      </Text>
                       <TbChevronRight size={12} color="var(--mantine-color-dimmed)" />
                     </Group>
                   </Stack>
@@ -581,7 +591,12 @@ function HomePage() {
             <Stack gap="md" maw={520}>
               <Group gap={8}>
                 <TbPlugConnected size={18} color="var(--app-brand-from)" />
-                <Text fw={700} size="xs" tt="uppercase" style={{ color: 'var(--app-brand-from)', letterSpacing: '0.08em' }}>
+                <Text
+                  fw={700}
+                  size="xs"
+                  tt="uppercase"
+                  style={{ color: 'var(--app-brand-from)', letterSpacing: '0.08em' }}
+                >
                   Siap digunakan
                 </Text>
               </Group>

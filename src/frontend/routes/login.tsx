@@ -257,10 +257,7 @@ function LoginPage() {
           <Stack gap="xl" style={{ width: '100%', maxWidth: 400, margin: '0 auto' }}>
             {/* Header */}
             <Stack gap={6}>
-              <Title
-                order={2}
-                style={{ fontSize: '1.625rem', fontWeight: 800, letterSpacing: '-0.03em' }}
-              >
+              <Title order={2} style={{ fontSize: '1.625rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
                 Masuk ke akun
               </Title>
               <Text c="dimmed" size="sm">

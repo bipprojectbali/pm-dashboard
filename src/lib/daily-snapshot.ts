@@ -73,7 +73,11 @@ export async function captureSnapshot(): Promise<DailySnapshotData> {
 
   const kpi: SnapshotKpi = {
     totalTasks: overview.tasks.total,
-    openTasks: (overview.tasks.byStatus['OPEN'] ?? 0) + (overview.tasks.byStatus['IN_PROGRESS'] ?? 0) + (overview.tasks.byStatus['READY_FOR_QC'] ?? 0) + (overview.tasks.byStatus['REOPENED'] ?? 0),
+    openTasks:
+      (overview.tasks.byStatus['OPEN'] ?? 0) +
+      (overview.tasks.byStatus['IN_PROGRESS'] ?? 0) +
+      (overview.tasks.byStatus['READY_FOR_QC'] ?? 0) +
+      (overview.tasks.byStatus['REOPENED'] ?? 0),
     closedToday: overview.tasks.closed7d,
     overdueCount: overview.tasks.overdueOpen,
     staleCount: overview.tasks.staleInProgress,
@@ -118,7 +122,13 @@ export async function captureSnapshot(): Promise<DailySnapshotData> {
 
   const snapshot = await prisma.dailySnapshot.upsert({
     where: { date: dateKey },
-    create: { date: dateKey, kpi: kpi as object, projects: projects as object[], team: team as object[], risks: risks as object },
+    create: {
+      date: dateKey,
+      kpi: kpi as object,
+      projects: projects as object[],
+      team: team as object[],
+      risks: risks as object,
+    },
     update: { kpi: kpi as object, projects: projects as object[], team: team as object[], risks: risks as object },
   })
 
@@ -175,41 +185,47 @@ export async function buildSnapshotContext(): Promise<string> {
   ].join('\n')
 
   // Project delta
-  const projectDeltas = today.projects.map((tp) => {
-    const yp = yesterday.projects.find((p) => p.id === tp.id)
-    const wp = weekAgo.projects.find((p) => p.id === tp.id)
-    if (!yp) return `- *${tp.name}*: baru muncul (skor ${tp.grade}/${tp.score})`
-    const scoreDelta = delta(tp.score, yp.score)
-    const weekDelta = wp ? ` | vs 7h: skor ${delta(tp.score, wp.score)}` : ''
-    const flags = [
-      tp.overdueTasks > yp.overdueTasks ? `⚠ overdue +${tp.overdueTasks - yp.overdueTasks}` : '',
-      tp.overdueTasks < yp.overdueTasks ? `✓ overdue ${tp.overdueTasks - yp.overdueTasks}` : '',
-      tp.blockedTasks > 0 ? `🔒 ${tp.blockedTasks} blocked` : '',
-      tp.pastDue ? '❌ PAST DUE' : '',
-    ].filter(Boolean).join(', ')
-    return `- *${tp.name}*: ${tp.grade} (${tp.score}/100, ${scoreDelta} vs kemarin${weekDelta})${flags ? ' — ' + flags : ''}`
-  }).join('\n')
+  const projectDeltas = today.projects
+    .map((tp) => {
+      const yp = yesterday.projects.find((p) => p.id === tp.id)
+      const wp = weekAgo.projects.find((p) => p.id === tp.id)
+      if (!yp) return `- *${tp.name}*: baru muncul (skor ${tp.grade}/${tp.score})`
+      const scoreDelta = delta(tp.score, yp.score)
+      const weekDelta = wp ? ` | vs 7h: skor ${delta(tp.score, wp.score)}` : ''
+      const flags = [
+        tp.overdueTasks > yp.overdueTasks ? `⚠ overdue +${tp.overdueTasks - yp.overdueTasks}` : '',
+        tp.overdueTasks < yp.overdueTasks ? `✓ overdue ${tp.overdueTasks - yp.overdueTasks}` : '',
+        tp.blockedTasks > 0 ? `🔒 ${tp.blockedTasks} blocked` : '',
+        tp.pastDue ? '❌ PAST DUE' : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      return `- *${tp.name}*: ${tp.grade} (${tp.score}/100, ${scoreDelta} vs kemarin${weekDelta})${flags ? ' — ' + flags : ''}`
+    })
+    .join('\n')
 
   // Team delta
-  const teamDeltas = today.team.map((tu) => {
-    const yu = yesterday.team.find((u) => u.userId === tu.userId)
-    const wu = weekAgo.team.find((u) => u.userId === tu.userId)
-    if (!yu) return `- *${tu.name}*: baru aktif (${tu.open} open)`
-    const flags = [
-      tu.overdue > yu.overdue ? `overdue naik ${delta(tu.overdue, yu.overdue)}` : '',
-      tu.overdue < yu.overdue ? `overdue turun ${delta(tu.overdue, yu.overdue)}` : '',
-      tu.closed7d > yu.closed7d ? `✓ selesaikan +${tu.closed7d - yu.closed7d} task` : '',
-      tu.overloaded && !yu.overloaded ? '🔴 baru overloaded' : '',
-      !tu.overloaded && yu.overloaded ? '✅ tidak lagi overloaded' : '',
-    ].filter(Boolean).join(', ')
-    const weekNote = wu ? ` | 7h: open ${delta(tu.open, wu.open)}, closed ${delta(tu.closed7d, wu.closed7d)}` : ''
-    return `- *${tu.name}*: ${tu.open} open, ${tu.overdue} overdue, ${tu.closed7d} closed/7h${weekNote}${flags ? ' — ' + flags : ''}`
-  }).join('\n')
+  const teamDeltas = today.team
+    .map((tu) => {
+      const yu = yesterday.team.find((u) => u.userId === tu.userId)
+      const wu = weekAgo.team.find((u) => u.userId === tu.userId)
+      if (!yu) return `- *${tu.name}*: baru aktif (${tu.open} open)`
+      const flags = [
+        tu.overdue > yu.overdue ? `overdue naik ${delta(tu.overdue, yu.overdue)}` : '',
+        tu.overdue < yu.overdue ? `overdue turun ${delta(tu.overdue, yu.overdue)}` : '',
+        tu.closed7d > yu.closed7d ? `✓ selesaikan +${tu.closed7d - yu.closed7d} task` : '',
+        tu.overloaded && !yu.overloaded ? '🔴 baru overloaded' : '',
+        !tu.overloaded && yu.overloaded ? '✅ tidak lagi overloaded' : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      const weekNote = wu ? ` | 7h: open ${delta(tu.open, wu.open)}, closed ${delta(tu.closed7d, wu.closed7d)}` : ''
+      return `- *${tu.name}*: ${tu.open} open, ${tu.overdue} overdue, ${tu.closed7d} closed/7h${weekNote}${flags ? ' — ' + flags : ''}`
+    })
+    .join('\n')
 
   // Velocity trend
-  const velocityTrend = snapshots
-    .map((s) => `${fmt(s.date)}: ${s.kpi.velocity7d} task/7h`)
-    .join(' → ')
+  const velocityTrend = snapshots.map((s) => `${fmt(s.date)}: ${s.kpi.velocity7d} task/7h`).join(' → ')
 
   return `
 ═══ KONTEKS HISTORIS ═══

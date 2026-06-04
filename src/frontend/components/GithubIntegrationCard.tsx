@@ -1,16 +1,4 @@
-import {
-  Anchor,
-  Badge,
-  Button,
-  Card,
-  Code,
-  CopyButton,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-  ThemeIcon,
-} from '@mantine/core'
+import { Anchor, Badge, Button, Card, Code, CopyButton, Group, Stack, Text, TextInput, ThemeIcon } from '@mantine/core'
 import { TbBrandGithub } from 'react-icons/tb'
 import type { ProjectDetail } from './ProjectsPanel'
 

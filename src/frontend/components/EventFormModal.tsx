@@ -40,7 +40,7 @@ export const EMPTY_FORM: FormValues = {
   tagIds: [],
 }
 
-export type { FormValues, EventProject, EventTag }
+export type { EventProject, EventTag, FormValues }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
@@ -128,7 +128,9 @@ function TagSelector({
           if (!tag) return <Text size="sm">{option.label}</Text>
           return (
             <Group gap={6}>
-              <Badge size="xs" color={tag.color} variant="filled" circle>{' '}</Badge>
+              <Badge size="xs" color={tag.color} variant="filled" circle>
+                {' '}
+              </Badge>
               <Text size="sm">{tag.name}</Text>
             </Group>
           )
@@ -137,26 +139,48 @@ function TagSelector({
 
       {/* Color picker for new tag — shown after user selects "create" option */}
       {pendingName && (
-        <Stack gap={6} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-sm)' }}>
-          <Text size="xs" fw={600}>Pilih warna untuk "{pendingName}"</Text>
+        <Stack
+          gap={6}
+          p="xs"
+          style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-sm)' }}
+        >
+          <Text size="xs" fw={600}>
+            Pilih warna untuk "{pendingName}"
+          </Text>
           <Group gap={4} wrap="wrap">
             {TAG_COLORS.map((c) => (
               <Tooltip key={c} label={c} withArrow>
                 <ColorSwatch
                   color={`var(--mantine-color-${c}-5)`}
                   size={20}
-                  style={{ cursor: 'pointer', outline: c === newColor ? '2px solid var(--mantine-color-blue-5)' : undefined, outlineOffset: 2 }}
+                  style={{
+                    cursor: 'pointer',
+                    outline: c === newColor ? '2px solid var(--mantine-color-blue-5)' : undefined,
+                    outlineOffset: 2,
+                  }}
                   onClick={() => setNewColor(c)}
                 />
               </Tooltip>
             ))}
           </Group>
-          {createError && <Text size="xs" c="red">{createError}</Text>}
+          {createError && (
+            <Text size="xs" c="red">
+              {createError}
+            </Text>
+          )}
           <Group gap={6}>
             <Button size="compact-xs" loading={createTag.isPending} onClick={() => createTag.mutate(pendingName)}>
               Buat Tag
             </Button>
-            <Button size="compact-xs" variant="subtle" color="gray" onClick={() => { setPendingName(null); setCreateError(null) }}>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              color="gray"
+              onClick={() => {
+                setPendingName(null)
+                setCreateError(null)
+              }}
+            >
               Batal
             </Button>
           </Group>
@@ -183,7 +207,10 @@ export function EventFormModal({
   const [form, setForm] = useState<FormValues>({ ...EMPTY_FORM, ...initial })
   const [error, setError] = useState<string | null>(null)
 
-  const reset = () => { setForm({ ...EMPTY_FORM, ...initial }); setError(null) }
+  const reset = () => {
+    setForm({ ...EMPTY_FORM, ...initial })
+    setError(null)
+  }
 
   const tagsQ = useQuery<{ tags: EventTag[] }>({
     queryKey: ['event-tags'],
@@ -191,7 +218,10 @@ export function EventFormModal({
     staleTime: 5 * 60_000,
   })
   const [extraTags, setExtraTags] = useState<EventTag[]>([])
-  const allTags = [...(tagsQ.data?.tags ?? []), ...extraTags.filter((t) => !tagsQ.data?.tags.find((x) => x.id === t.id))]
+  const allTags = [
+    ...(tagsQ.data?.tags ?? []),
+    ...extraTags.filter((t) => !tagsQ.data?.tags.find((x) => x.id === t.id)),
+  ]
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -207,9 +237,17 @@ export function EventFormModal({
         tagIds: values.tagIds,
       }
       if (editId) {
-        return api(`/api/events/${editId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return api(`/api/events/${editId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
       }
-      return api('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      return api('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['events'] })
@@ -220,7 +258,15 @@ export function EventFormModal({
   })
 
   return (
-    <Modal opened={opened} onClose={() => { onClose(); reset() }} title={editId ? 'Edit Event' : 'Buat Event Baru'} size="md">
+    <Modal
+      opened={opened}
+      onClose={() => {
+        onClose()
+        reset()
+      }}
+      title={editId ? 'Edit Event' : 'Buat Event Baru'}
+      size="md"
+    >
       <Stack gap="sm">
         <TextInput
           label="Judul"
@@ -278,9 +324,22 @@ export function EventFormModal({
           value={form.description}
           onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
         />
-        {error && <Text size="sm" c="red">{error}</Text>}
+        {error && (
+          <Text size="sm" c="red">
+            {error}
+          </Text>
+        )}
         <Group justify="flex-end" mt={4}>
-          <Button variant="subtle" color="gray" onClick={() => { onClose(); reset() }}>Batal</Button>
+          <Button
+            variant="subtle"
+            color="gray"
+            onClick={() => {
+              onClose()
+              reset()
+            }}
+          >
+            Batal
+          </Button>
           <Button loading={mutation.isPending} onClick={() => mutation.mutate(form)}>
             {editId ? 'Simpan' : 'Buat Event'}
           </Button>

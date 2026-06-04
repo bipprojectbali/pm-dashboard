@@ -46,6 +46,9 @@ import {
 } from 'react-icons/tb'
 import { ActivityPanel } from '@/frontend/components/ActivityPanel'
 import { EChart } from '@/frontend/components/charts/EChart'
+import { EventDetailView } from '@/frontend/components/EventDetailView'
+import { EventFormView } from '@/frontend/components/EventFormView'
+import { EventsPanel } from '@/frontend/components/EventsPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { PROJECT_DETAIL_TABS, type ProjectDetailTab, ProjectDetailView } from '@/frontend/components/ProjectDetailView'
 import { ProjectsPanel } from '@/frontend/components/ProjectsPanel'
@@ -55,16 +58,20 @@ import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import { TaskDetailView } from '@/frontend/components/TaskDetailView'
 import { TasksPanel } from '@/frontend/components/TasksPanel'
 import { TeamPanel } from '@/frontend/components/TeamPanel'
-import { EventsPanel } from '@/frontend/components/EventsPanel'
-import { EventDetailView } from '@/frontend/components/EventDetailView'
-import { EventFormView } from '@/frontend/components/EventFormView'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 import { toLocalDateStr } from '@/frontend/lib/dates'
 
 const validTabs = ['overview', 'projects', 'tasks', 'activity', 'team', 'events'] as const
 type TabKey = (typeof validTabs)[number]
 
-type PmSearch = { tab: TabKey; projectId?: string; detailTab?: ProjectDetailTab; taskId?: string; eventId?: string; eventMode?: 'create' | 'edit' }
+type PmSearch = {
+  tab: TabKey
+  projectId?: string
+  detailTab?: ProjectDetailTab
+  taskId?: string
+  eventId?: string
+  eventMode?: 'create' | 'edit'
+}
 
 export const Route = createFileRoute('/pm')({
   validateSearch: (search: Record<string, unknown>): PmSearch => {
@@ -109,12 +116,7 @@ type NavItem = {
   badgeColor?: string
 }
 
-function buildNavItems(counts: {
-  events: number
-  tasks: number
-  projects: number
-  overdue: number
-}): NavItem[] {
+function buildNavItems(counts: { events: number; tasks: number; projects: number; overdue: number }): NavItem[] {
   return [
     {
       label: 'Ringkasan',
@@ -218,7 +220,14 @@ function PmPage() {
   const { data } = useSession()
   const logout = useLogout()
   const user = data?.user
-  const { tab: active, projectId: activeProjectId, detailTab, taskId: activeTaskId, eventId: activeEventId, eventMode } = Route.useSearch()
+  const {
+    tab: active,
+    projectId: activeProjectId,
+    detailTab,
+    taskId: activeTaskId,
+    eventId: activeEventId,
+    eventMode,
+  } = Route.useSearch()
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
@@ -255,7 +264,8 @@ function PmPage() {
   const openEvent = (id: string) => navigate({ to: '/pm', search: { tab: 'events', eventId: id } })
   const closeEventDetail = () => navigate({ to: '/pm', search: { tab: 'events' } })
   const openEventCreate = () => navigate({ to: '/pm', search: { tab: 'events', eventMode: 'create' } })
-  const openEventEdit = (id: string) => navigate({ to: '/pm', search: { tab: 'events', eventId: id, eventMode: 'edit' } })
+  const openEventEdit = (id: string) =>
+    navigate({ to: '/pm', search: { tab: 'events', eventId: id, eventMode: 'edit' } })
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('pm:sidebar') === 'collapsed')
   const toggleSidebar = () => {
     setCollapsed((prev) => {
@@ -346,7 +356,12 @@ function PmPage() {
                 Manajer Proyek
               </Text>
             )}
-            {buildNavItems({ events: eventBadgeCount, tasks: tasksBadge, projects: activeProjectsBadge, overdue: overdueBadge }).map((item) => {
+            {buildNavItems({
+              events: eventBadgeCount,
+              tasks: tasksBadge,
+              projects: activeProjectsBadge,
+              overdue: overdueBadge,
+            }).map((item) => {
               const Icon = item.icon
               if (collapsed && !isMobile) {
                 return (
@@ -427,7 +442,11 @@ function PmPage() {
                 (activeProjectId ? (
                   <ProjectDetailView
                     projectId={activeProjectId}
-                    tab={detailTab ?? (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ?? 'overview'}
+                    tab={
+                      detailTab ??
+                      (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ??
+                      'overview'
+                    }
                     onTabChange={setProjectDetailTab}
                     onBack={closeProjectDetail}
                     onDeleted={closeProjectDetail}
@@ -447,15 +466,24 @@ function PmPage() {
                 ))}
               {active === 'activity' && <ActivityPanel />}
               {active === 'team' && <TeamPanel />}
-              {active === 'events' && (
-                eventMode === 'create'
-                  ? <EventFormView onBack={closeEventDetail} onSaved={(id) => openEvent(id)} />
-                  : eventMode === 'edit' && activeEventId
-                    ? <EventFormView editId={activeEventId} onBack={() => openEvent(activeEventId)} onSaved={(id) => openEvent(id)} />
-                    : activeEventId
-                      ? <EventDetailView eventId={activeEventId} onBack={closeEventDetail} onEdit={() => openEventEdit(activeEventId)} />
-                      : <EventsPanel onOpen={openEvent} onEdit={openEventEdit} onCreate={openEventCreate} />
-              )}
+              {active === 'events' &&
+                (eventMode === 'create' ? (
+                  <EventFormView onBack={closeEventDetail} onSaved={(id) => openEvent(id)} />
+                ) : eventMode === 'edit' && activeEventId ? (
+                  <EventFormView
+                    editId={activeEventId}
+                    onBack={() => openEvent(activeEventId)}
+                    onSaved={(id) => openEvent(id)}
+                  />
+                ) : activeEventId ? (
+                  <EventDetailView
+                    eventId={activeEventId}
+                    onBack={closeEventDetail}
+                    onEdit={() => openEventEdit(activeEventId)}
+                  />
+                ) : (
+                  <EventsPanel onOpen={openEvent} onEdit={openEventEdit} onCreate={openEventCreate} />
+                ))}
             </Box>
           </Stack>
         </Container>
@@ -578,7 +606,17 @@ function OverviewPanel({
     refetchInterval: 60_000,
   })
   // Reuse key ['events','badge'] — shared cache dengan badge query di PmPage, gratis tanpa request baru
-  const upcomingEventsQ = useQuery<{ events: Array<{ id: string; title: string; startsAt: string; endsAt: string | null; location: string | null; tags: Array<{ tagId: string; tag: { name: string; color: string } }>; project: { id: string; name: string } | null }> }>({
+  const upcomingEventsQ = useQuery<{
+    events: Array<{
+      id: string
+      title: string
+      startsAt: string
+      endsAt: string | null
+      location: string | null
+      tags: Array<{ tagId: string; tag: { name: string; color: string } }>
+      project: { id: string; name: string } | null
+    }>
+  }>({
     queryKey: ['events', 'badge'],
     queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 5 * 60_000,
@@ -945,7 +983,9 @@ function OverviewPanel({
           >
             {eventsToday.length > 0 && (
               <>
-                <Text size="xs" fw={600} c="red" tt="uppercase" mb={4}>Hari ini</Text>
+                <Text size="xs" fw={600} c="red" tt="uppercase" mb={4}>
+                  Hari ini
+                </Text>
                 {eventsToday.slice(0, 3).map((e) => (
                   <UnstyledButton
                     key={e.id}
@@ -954,7 +994,9 @@ function OverviewPanel({
                   >
                     <Group gap="xs" wrap="nowrap">
                       <TbCalendarEvent size={13} color="var(--mantine-color-red-6)" style={{ flexShrink: 0 }} />
-                      <Text size="sm" truncate style={{ flex: 1 }}>{e.title}</Text>
+                      <Text size="sm" truncate style={{ flex: 1 }}>
+                        {e.title}
+                      </Text>
                       <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                         {new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </Text>
@@ -971,9 +1013,15 @@ function OverviewPanel({
               >
                 <Group gap="xs" wrap="nowrap">
                   <TbCalendarEvent size={13} color="var(--mantine-color-blue-5)" style={{ flexShrink: 0 }} />
-                  <Text size="sm" truncate style={{ flex: 1 }}>{e.title}</Text>
+                  <Text size="sm" truncate style={{ flex: 1 }}>
+                    {e.title}
+                  </Text>
                   <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                    {new Date(e.startsAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {new Date(e.startsAt).toLocaleDateString('id-ID', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })}
                   </Text>
                 </Group>
               </UnstyledButton>

@@ -1,9 +1,9 @@
 import { ActionIcon, Badge, Card, Divider, Group, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { TbAlertTriangle, TbCalendarOff, TbCalendarEvent, TbListCheck } from 'react-icons/tb'
 import { Gantt, type GanttTask } from 'mantine-gantt'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { TbAlertTriangle, TbCalendarEvent, TbCalendarOff, TbListCheck } from 'react-icons/tb'
 import { notifyError } from '../lib/notify'
 import { GanttTaskList, type GanttTaskMeta } from './GanttTaskList'
 
@@ -12,19 +12,38 @@ type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type TaskKind = 'TASK' | 'BUG' | 'QC'
 
 interface TaskUser {
-  id: string; name: string; email: string; role: string
+  id: string
+  name: string
+  email: string
+  role: string
   image?: string | null
 }
-interface TaskTag { tagId: string; tag: { id: string; name: string; color: string; projectId: string } }
+interface TaskTag {
+  tagId: string
+  tag: { id: string; name: string; color: string; projectId: string }
+}
 
 interface TaskListItem {
-  id: string; projectId: string; kind: TaskKind; title: string; description: string
-  status: TaskStatus; priority: TaskPriority; route: string | null
-  reporter: TaskUser; assignee: TaskUser | null
-  startsAt: string | null; dueAt: string | null
-  estimateHours: number | null; actualHours: number | null; progressPercent: number | null
-  createdAt: string; updatedAt: string; closedAt: string | null
-  project: { id: string; name: string }; tags: TaskTag[]
+  id: string
+  projectId: string
+  kind: TaskKind
+  title: string
+  description: string
+  status: TaskStatus
+  priority: TaskPriority
+  route: string | null
+  reporter: TaskUser
+  assignee: TaskUser | null
+  startsAt: string | null
+  dueAt: string | null
+  estimateHours: number | null
+  actualHours: number | null
+  progressPercent: number | null
+  createdAt: string
+  updatedAt: string
+  closedAt: string | null
+  project: { id: string; name: string }
+  tags: TaskTag[]
   blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }
@@ -42,21 +61,28 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 // Distinct muted colors per status — identifiable at a glance in dark mode
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  OPEN:         '#4a7abf',  // steel blue
-  IN_PROGRESS:  '#7b5ea7',  // soft purple
-  READY_FOR_QC: '#c49a28',  // amber
-  REOPENED:     '#b86d2a',  // burnt orange
-  CLOSED:       '#3a8f6a',  // muted green
+  OPEN: '#4a7abf', // steel blue
+  IN_PROGRESS: '#7b5ea7', // soft purple
+  READY_FOR_QC: '#c49a28', // amber
+  REOPENED: '#b86d2a', // burnt orange
+  CLOSED: '#3a8f6a', // muted green
 }
-const OVERDUE_COLOR = '#a84444'  // muted red
+const OVERDUE_COLOR = '#a84444' // muted red
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  OPEN: 'Open', IN_PROGRESS: 'In Progress', READY_FOR_QC: 'Ready for QC',
-  REOPENED: 'Reopened', CLOSED: 'Closed',
+  OPEN: 'Open',
+  IN_PROGRESS: 'In Progress',
+  READY_FOR_QC: 'Ready for QC',
+  REOPENED: 'Reopened',
+  CLOSED: 'Closed',
 }
 
 const STATUS_PROGRESS: Record<TaskStatus, number> = {
-  OPEN: 0, IN_PROGRESS: 30, READY_FOR_QC: 80, REOPENED: 20, CLOSED: 100,
+  OPEN: 0,
+  IN_PROGRESS: 30,
+  READY_FOR_QC: 80,
+  REOPENED: 20,
+  CLOSED: 100,
 }
 
 // Column width per view mode — passed to mantine-gantt as base unit
@@ -85,13 +111,7 @@ const VIEW_OPTIONS: Array<{ value: ViewMode; label: string }> = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TasksGanttView({
-  tasks,
-  onSelect,
-}: {
-  tasks: TaskListItem[]
-  onSelect: (id: string) => void
-}) {
+export function TasksGanttView({ tasks, onSelect }: { tasks: TaskListItem[]; onSelect: (id: string) => void }) {
   const qc = useQueryClient()
   const [viewMode, setViewMode] = useLocalStorage<ViewMode>({
     key: 'pm:tasks:gantt-view',
@@ -114,9 +134,7 @@ export function TasksGanttView({
 
   const syncScrollFromGantt = useCallback(() => {
     if (isSyncingRef.current) return
-    const ganttBody = ganttWrapperRef.current?.querySelector<HTMLDivElement>(
-      '[class*="taskListBody"]',
-    )
+    const ganttBody = ganttWrapperRef.current?.querySelector<HTMLDivElement>('[class*="taskListBody"]')
     if (!ganttBody || !taskListBodyRef.current) return
     isSyncingRef.current = true
     taskListBodyRef.current.scrollTop = ganttBody.scrollTop
@@ -125,9 +143,7 @@ export function TasksGanttView({
 
   const syncScrollFromList = useCallback(() => {
     if (isSyncingRef.current) return
-    const ganttBody = ganttWrapperRef.current?.querySelector<HTMLDivElement>(
-      '[class*="taskListBody"]',
-    )
+    const ganttBody = ganttWrapperRef.current?.querySelector<HTMLDivElement>('[class*="taskListBody"]')
     if (!ganttBody || !taskListBodyRef.current) return
     isSyncingRef.current = true
     ganttBody.scrollTop = taskListBodyRef.current.scrollTop
@@ -135,24 +151,22 @@ export function TasksGanttView({
   }, [])
 
   // ─── Filtered tasks ─────────────────────────────────────────────────────────
-  const withDates = useMemo(
-    () => tasks.filter((t) => (t.startsAt || t.createdAt) && t.dueAt),
-    [tasks],
-  )
+  const withDates = useMemo(() => tasks.filter((t) => (t.startsAt || t.createdAt) && t.dueAt), [tasks])
   const withoutDates = tasks.length - withDates.length
   const now = useMemo(() => new Date(), [])
 
   // ─── Stats ─────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => ({
-    open: withDates.filter((t) => t.status === 'OPEN').length,
-    inProgress: withDates.filter((t) => t.status === 'IN_PROGRESS').length,
-    qc: withDates.filter((t) => t.status === 'READY_FOR_QC').length,
-    reopened: withDates.filter((t) => t.status === 'REOPENED').length,
-    closed: withDates.filter((t) => t.status === 'CLOSED').length,
-    overdue: withDates.filter(
-      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt) < now,
-    ).length,
-  }), [withDates, now])
+  const stats = useMemo(
+    () => ({
+      open: withDates.filter((t) => t.status === 'OPEN').length,
+      inProgress: withDates.filter((t) => t.status === 'IN_PROGRESS').length,
+      qc: withDates.filter((t) => t.status === 'READY_FOR_QC').length,
+      reopened: withDates.filter((t) => t.status === 'REOPENED').length,
+      closed: withDates.filter((t) => t.status === 'CLOSED').length,
+      overdue: withDates.filter((t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt) < now).length,
+    }),
+    [withDates, now],
+  )
 
   // ─── Mutations ──────────────────────────────────────────────────────────────
   const updateTask = useMutation({
@@ -162,8 +176,14 @@ export function TasksGanttView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ startsAt, dueAt }),
       }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); setSaving(false) },
-    onError: (err) => { notifyError(err); setSaving(false) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      setSaving(false)
+    },
+    onError: (err) => {
+      notifyError(err)
+      setSaving(false)
+    },
   })
 
   const addDependency = useMutation({
@@ -189,8 +209,7 @@ export function TasksGanttView({
       // Simpan scroll position sebelum remount akibat key change
       const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
       if (body) savedScrollRef.current = body.scrollLeft
-      const already = withDates.find((t) => t.id === toTaskId)
-        ?.blockedBy.some((b) => b.blockedById === fromTaskId)
+      const already = withDates.find((t) => t.id === toTaskId)?.blockedBy.some((b) => b.blockedById === fromTaskId)
       if (already) {
         removeDependency.mutate({ taskId: toTaskId, blockedById: fromTaskId })
       } else {
@@ -228,39 +247,45 @@ export function TasksGanttView({
   )
 
   // ─── Task data ──────────────────────────────────────────────────────────────
-  const ganttTasks = useMemo<GanttTask[]>(() =>
-    withDates.map((t) => {
-      const startDate = new Date(t.startsAt ?? t.createdAt)
-      const endDate = new Date(t.dueAt as string)
-      const startMidnight = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
-      const endMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
-      const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
-      const isOverdue = t.status !== 'CLOSED' && endDate < now
-      return {
-        id: t.id,
-        label: t.title,
-        startDate: `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}T00:00:00`,
-        duration,
-        progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
-        color: isOverdue ? OVERDUE_COLOR : STATUS_COLOR[t.status],
-        dependencies: t.blockedBy.map((b) => b.blockedById),
-      }
-    }), [withDates, now])
+  const ganttTasks = useMemo<GanttTask[]>(
+    () =>
+      withDates.map((t) => {
+        const startDate = new Date(t.startsAt ?? t.createdAt)
+        const endDate = new Date(t.dueAt as string)
+        const startMidnight = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+        const endMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+        const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
+        const isOverdue = t.status !== 'CLOSED' && endDate < now
+        return {
+          id: t.id,
+          label: t.title,
+          startDate: `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}T00:00:00`,
+          duration,
+          progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
+          color: isOverdue ? OVERDUE_COLOR : STATUS_COLOR[t.status],
+          dependencies: t.blockedBy.map((b) => b.blockedById),
+        }
+      }),
+    [withDates, now],
+  )
 
-  const taskMetas = useMemo<GanttTaskMeta[]>(() =>
-    withDates.map((t) => ({
-      id: t.id,
-      title: t.title,
-      kind: t.kind,
-      status: t.status,
-      priority: t.priority,
-      assigneeName: t.assignee?.name ?? null,
-      assigneeImage: t.assignee?.image ?? null,
-      isOverdue: t.status !== 'CLOSED' && !!t.dueAt && new Date(t.dueAt) < now,
-      progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
-      startsAt: t.startsAt,
-      dueAt: t.dueAt,
-    })), [withDates, now])
+  const taskMetas = useMemo<GanttTaskMeta[]>(
+    () =>
+      withDates.map((t) => ({
+        id: t.id,
+        title: t.title,
+        kind: t.kind,
+        status: t.status,
+        priority: t.priority,
+        assigneeName: t.assignee?.name ?? null,
+        assigneeImage: t.assignee?.image ?? null,
+        isOverdue: t.status !== 'CLOSED' && !!t.dueAt && new Date(t.dueAt) < now,
+        progress: t.progressPercent ?? STATUS_PROGRESS[t.status],
+        startsAt: t.startsAt,
+        dueAt: t.dueAt,
+      })),
+    [withDates, now],
+  )
 
   // ─── Timeline bounds ────────────────────────────────────────────────────────
   const { timelineStart, timelineEnd } = useMemo(() => {
@@ -279,14 +304,17 @@ export function TasksGanttView({
     }
   }, [withDates])
 
-  const scrollToToday = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (!timelineStart) return
-    const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-    if (!body) return
-    const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
-    const todayPx = daysSinceStart * EFFECTIVE_DAY_PX[viewMode]
-    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
-  }, [timelineStart, viewMode, now])
+  const scrollToToday = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      if (!timelineStart) return
+      const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) return
+      const daysSinceStart = Math.floor((now.getTime() - timelineStart.getTime()) / 86_400_000)
+      const todayPx = daysSinceStart * EFFECTIVE_DAY_PX[viewMode]
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
+    },
+    [timelineStart, viewMode, now],
+  )
 
   // Restore scroll position setelah dependency toggle — sebelum browser paint agar tidak glide
   useLayoutEffect(() => {
@@ -296,7 +324,10 @@ export function TasksGanttView({
     let attempts = 0
     const tryRestore = () => {
       const body = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-      if (!body) { if (++attempts < 20) requestAnimationFrame(tryRestore); return }
+      if (!body) {
+        if (++attempts < 20) requestAnimationFrame(tryRestore)
+        return
+      }
       body.scrollLeft = saved
     }
     requestAnimationFrame(tryRestore)
@@ -309,7 +340,10 @@ export function TasksGanttView({
     const tryScroll = () => {
       const content = ganttWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
       if (!content || content.offsetWidth < 200) {
-        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        if (++attempts < 40) {
+          setTimeout(tryScroll, 80)
+          return
+        }
         return
       }
       scrollToToday('instant')
@@ -337,7 +371,6 @@ export function TasksGanttView({
   return (
     <Card withBorder padding="sm" radius="md">
       <Stack gap="sm">
-
         {/* ── Toolbar ── */}
         <Group justify="space-between" align="center" wrap="nowrap">
           <Group gap="xs" wrap="wrap">
@@ -358,7 +391,11 @@ export function TasksGanttView({
                 </Badge>
               </Tooltip>
             )}
-            {saving && <Badge size="xs" color="blue" variant="dot">Menyimpan…</Badge>}
+            {saving && (
+              <Badge size="xs" color="blue" variant="dot">
+                Menyimpan…
+              </Badge>
+            )}
           </Group>
           <Group gap="xs" wrap="nowrap">
             <Tooltip label="Scroll ke hari ini" withArrow>
@@ -378,32 +415,47 @@ export function TasksGanttView({
 
         {/* ── Stats bar ── */}
         <Group gap={6} wrap="wrap">
-          {([
-            { count: stats.open,       label: 'Open',        color: STATUS_COLOR.OPEN },
-            { count: stats.inProgress, label: 'In Progress', color: STATUS_COLOR.IN_PROGRESS },
-            { count: stats.qc,         label: 'QC',          color: STATUS_COLOR.READY_FOR_QC },
-            { count: stats.reopened,   label: 'Reopened',    color: STATUS_COLOR.REOPENED },
-            { count: stats.closed,     label: 'Closed',      color: STATUS_COLOR.CLOSED },
-          ] as const).filter(s => s.count > 0).map(s => (
+          {(
+            [
+              { count: stats.open, label: 'Open', color: STATUS_COLOR.OPEN },
+              { count: stats.inProgress, label: 'In Progress', color: STATUS_COLOR.IN_PROGRESS },
+              { count: stats.qc, label: 'QC', color: STATUS_COLOR.READY_FOR_QC },
+              { count: stats.reopened, label: 'Reopened', color: STATUS_COLOR.REOPENED },
+              { count: stats.closed, label: 'Closed', color: STATUS_COLOR.CLOSED },
+            ] as const
+          )
+            .filter((s) => s.count > 0)
+            .map((s) => (
+              <Badge
+                key={s.label}
+                size="sm"
+                variant="default"
+                style={{ border: 'none' }}
+                leftSection={
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: s.color, flexShrink: 0 }} />
+                }
+              >
+                {s.count} {s.label}
+              </Badge>
+            ))}
+          {stats.overdue > 0 && (
             <Badge
-              key={s.label}
               size="sm"
               variant="default"
               style={{ border: 'none' }}
-              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: s.color, flexShrink: 0 }} />}
-            >
-              {s.count} {s.label}
-            </Badge>
-          ))}
-          {stats.overdue > 0 && (
-            <Badge size="sm" variant="default" style={{ border: 'none' }}
-              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: OVERDUE_COLOR, flexShrink: 0 }} />}
+              leftSection={
+                <div
+                  style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: OVERDUE_COLOR, flexShrink: 0 }}
+                />
+              }
             >
               {stats.overdue} Overdue
             </Badge>
           )}
           <Divider orientation="vertical" />
-          <Text size="xs" c="dimmed">Total {withDates.length}</Text>
+          <Text size="xs" c="dimmed">
+            Total {withDates.length}
+          </Text>
         </Group>
 
         {/* ── Gantt + custom left panel ── */}
@@ -430,11 +482,7 @@ export function TasksGanttView({
           />
 
           {/* Mantine-gantt: sembunyikan left panel bawaan (taskListWidth=0) */}
-          <div
-            ref={ganttWrapperRef}
-            style={{ flex: 1, overflow: 'hidden' }}
-            onScroll={syncScrollFromGantt}
-          >
+          <div ref={ganttWrapperRef} style={{ flex: 1, overflow: 'hidden' }} onScroll={syncScrollFromGantt}>
             <Gantt
               key={ganttTasks.map((t) => `${t.id}:${(t.dependencies ?? []).join('|')}`).join(',')}
               tasks={ganttTasks}
@@ -456,9 +504,9 @@ export function TasksGanttView({
 
         {/* ── Hint ── */}
         <Text size="xs" c="dimmed" ta="center">
-          💡 Seret bar untuk ubah jadwal · Tarik tepi bar untuk ubah durasi · Klik bar untuk buka detail · Tarik ujung bar ke bar lain untuk tambah dependency · Hapus dependency via tab Dependencies di detail task
+          💡 Seret bar untuk ubah jadwal · Tarik tepi bar untuk ubah durasi · Klik bar untuk buka detail · Tarik ujung
+          bar ke bar lain untuk tambah dependency · Hapus dependency via tab Dependencies di detail task
         </Text>
-
       </Stack>
     </Card>
   )

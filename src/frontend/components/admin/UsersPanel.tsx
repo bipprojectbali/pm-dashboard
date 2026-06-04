@@ -1,7 +1,7 @@
 import { ActionIcon, Badge, Card, Group, Menu, Stack, Table, Text, Title } from '@mantine/core'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
 import { usePresence } from '@/frontend/hooks/usePresence'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'

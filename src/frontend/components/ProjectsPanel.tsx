@@ -27,8 +27,8 @@ import { DateInput } from '@mantine/dates'
 import { useHotkeys, useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
 import { Gantt, type GanttTask } from 'mantine-gantt'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TbAlertTriangle,
   TbArrowsSort,
@@ -50,8 +50,8 @@ import {
   TbX,
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
-import { notifyError, notifySuccess } from '../lib/notify'
 import { toLocalDateStr } from '../lib/dates'
+import { notifyError, notifySuccess } from '../lib/notify'
 import { UserAvatar } from './shared/UserAvatar'
 
 export type MemberRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
@@ -139,18 +139,18 @@ const STATUS_COLOR: Record<ProjectStatus, string> = {
 }
 
 const STATUS_ACCENT: Record<ProjectStatus, string> = {
-  DRAFT:     'rgba(134,142,150,0.35)',
-  ACTIVE:    'rgba(34,139,230,0.45)',
-  ON_HOLD:   'rgba(250,176,5,0.45)',
+  DRAFT: 'rgba(134,142,150,0.35)',
+  ACTIVE: 'rgba(34,139,230,0.45)',
+  ON_HOLD: 'rgba(250,176,5,0.45)',
   COMPLETED: 'rgba(64,192,87,0.45)',
   CANCELLED: 'rgba(73,80,87,0.35)',
 }
 const OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
 
 const STATUS_BG: Record<ProjectStatus, string> = {
-  DRAFT:     'rgba(134,142,150,0.05)',
-  ACTIVE:    'rgba(34,139,230,0.05)',
-  ON_HOLD:   'rgba(250,176,5,0.05)',
+  DRAFT: 'rgba(134,142,150,0.05)',
+  ACTIVE: 'rgba(34,139,230,0.05)',
+  ON_HOLD: 'rgba(250,176,5,0.05)',
   COMPLETED: 'rgba(64,192,87,0.05)',
   CANCELLED: 'rgba(73,80,87,0.04)',
 }
@@ -316,8 +316,14 @@ export function ProjectsPanel() {
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
-  const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({ key: 'pm:projects:view', defaultValue: 'grid' })
-  const [groupByStatus, setGroupByStatus] = useLocalStorage<boolean>({ key: 'pm:projects:group-by-status', defaultValue: true })
+  const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({
+    key: 'pm:projects:view',
+    defaultValue: 'grid',
+  })
+  const [groupByStatus, setGroupByStatus] = useLocalStorage<boolean>({
+    key: 'pm:projects:group-by-status',
+    defaultValue: true,
+  })
   const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>({
     key: 'pm:projects:density',
     defaultValue: 'comfortable',
@@ -717,7 +723,14 @@ export function ProjectsPanel() {
       ) : view === 'timeline' ? (
         <ProjectsGanttView projects={filtered} onSelect={(p) => openProject(p.id)} />
       ) : (
-        <ProjectsGrid filtered={filtered} view={view} density={density} groupByStatus={groupByStatus} canCreateProject={canCreateProject} openProject={openProject} />
+        <ProjectsGrid
+          filtered={filtered}
+          view={view}
+          density={density}
+          groupByStatus={groupByStatus}
+          canCreateProject={canCreateProject}
+          openProject={openProject}
+        />
       )}
 
       <CreateProjectModal
@@ -789,9 +802,8 @@ function ProjectListRow({
 }) {
   const { overdue, daysOver } = computeOverdue(p)
   const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
-  const taskDone = p.taskStats && p.taskStats.total > 0
-    ? Math.round((p.taskStats.closed / p.taskStats.total) * 100)
-    : null
+  const taskDone =
+    p.taskStats && p.taskStats.total > 0 ? Math.round((p.taskStats.closed / p.taskStats.total) * 100) : null
   const [hover, setHover] = useState(false)
 
   return (
@@ -803,7 +815,7 @@ function ProjectListRow({
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        transition: 'box-shadow 120ms ease'
+        transition: 'box-shadow 120ms ease',
       }}
       onClick={onOpen}
     >
@@ -850,7 +862,9 @@ function ProjectListRow({
           )}
           <Group gap={4} wrap="nowrap">
             <TbUsers size={12} color="var(--mantine-color-dimmed)" />
-            <Text size="xs" c="dimmed">{p._count.members}</Text>
+            <Text size="xs" c="dimmed">
+              {p._count.members}
+            </Text>
           </Group>
           <Text size="xs" c="dimmed" truncate style={{ maxWidth: 120 }}>
             {p.owner.name}
@@ -879,9 +893,9 @@ function ProjectListRow({
 }
 
 const STATUS_DOT: Record<string, string> = {
-  ACTIVE:    'var(--mantine-color-blue-5)',
-  DRAFT:     'var(--mantine-color-gray-5)',
-  ON_HOLD:   'var(--mantine-color-yellow-5)',
+  ACTIVE: 'var(--mantine-color-blue-5)',
+  DRAFT: 'var(--mantine-color-gray-5)',
+  ON_HOLD: 'var(--mantine-color-yellow-5)',
   COMPLETED: 'var(--mantine-color-green-5)',
   CANCELLED: 'var(--mantine-color-red-5)',
 }
@@ -937,7 +951,10 @@ function ProjectCard({
               <ActionIcon
                 variant="subtle"
                 size="sm"
-                onClick={(e) => { e.stopPropagation(); onEdit() }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
               >
                 <TbPencil size={14} />
               </ActionIcon>
@@ -950,31 +967,68 @@ function ProjectCard({
             {p.status.replace('_', ' ')}
           </Badge>
           <Badge
-            variant="default" size="xs" style={{ border: 'none' }}
-            leftSection={<div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`, flexShrink: 0 }} />}
+            variant="default"
+            size="xs"
+            style={{ border: 'none' }}
+            leftSection={
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`,
+                  flexShrink: 0,
+                }}
+              />
+            }
           >
             {p.priority}
           </Badge>
           {p.myRole ? (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>{p.myRole}</Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              {p.myRole}
+            </Badge>
           ) : isAdmin ? (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>ADMIN VIEW</Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              ADMIN VIEW
+            </Badge>
           ) : (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>READ-ONLY</Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              READ-ONLY
+            </Badge>
           )}
           {p.visibility === 'PRIVATE' && (
-            <Badge variant="default" size="xs" style={{ border: 'none' }}>PRIVATE</Badge>
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              PRIVATE
+            </Badge>
           )}
           {overdue && (
-            <Badge variant="default" size="xs" style={{ border: 'none' }} leftSection={<TbAlertTriangle size={10} color="var(--mantine-color-red-6)" />}>
+            <Badge
+              variant="default"
+              size="xs"
+              style={{ border: 'none' }}
+              leftSection={<TbAlertTriangle size={10} color="var(--mantine-color-red-6)" />}
+            >
               Overdue {daysOver}d
             </Badge>
           )}
           {health && (
             <Tooltip label="Derived from task-completion pace vs. time elapsed">
               <Badge
-                variant="default" size="xs" style={{ border: 'none' }}
-                leftSection={<div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: `var(--mantine-color-${health.color}-6)`, flexShrink: 0 }} />}
+                variant="default"
+                size="xs"
+                style={{ border: 'none' }}
+                leftSection={
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: `var(--mantine-color-${health.color}-6)`,
+                      flexShrink: 0,
+                    }}
+                  />
+                }
               >
                 {health.label.toUpperCase()}
               </Badge>
@@ -982,7 +1036,9 @@ function ProjectCard({
           )}
           {extended && (
             <Tooltip label={`Original deadline: ${formatDate(p.originalEndAt)}`}>
-              <Badge variant="default" size="xs" style={{ border: 'none' }}>Extended</Badge>
+              <Badge variant="default" size="xs" style={{ border: 'none' }}>
+                Extended
+              </Badge>
             </Tooltip>
           )}
         </Group>
@@ -1009,10 +1065,19 @@ function ProjectCard({
           {timeProgress !== null && (
             <div>
               <Group justify="space-between" gap={4} mb={2}>
-                <Text size="xs" c="dimmed">Timeline</Text>
-                <Text size="xs" c={overdue ? 'red' : 'dimmed'}>{timeProgress}%</Text>
+                <Text size="xs" c="dimmed">
+                  Timeline
+                </Text>
+                <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
+                  {timeProgress}%
+                </Text>
               </Group>
-              <Progress value={timeProgress} size="xs" color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'} style={{ opacity: 0.7 }} />
+              <Progress
+                value={timeProgress}
+                size="xs"
+                color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'}
+                style={{ opacity: 0.7 }}
+              />
             </div>
           )}
 
@@ -1021,11 +1086,16 @@ function ProjectCard({
               <Group justify="space-between" gap={4} mb={2}>
                 <Group gap={4}>
                   <TbChecks size={12} color="var(--mantine-color-dimmed)" />
-                  <Text size="xs" c="dimmed">Tasks</Text>
-                </Group>
-                <Tooltip label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}>
                   <Text size="xs" c="dimmed">
-                    {p.taskStats.closed}/{p.taskStats.total} · {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
+                    Tasks
+                  </Text>
+                </Group>
+                <Tooltip
+                  label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}
+                >
+                  <Text size="xs" c="dimmed">
+                    {p.taskStats.closed}/{p.taskStats.total} ·{' '}
+                    {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
                   </Text>
                 </Tooltip>
               </Group>
@@ -1040,7 +1110,10 @@ function ProjectCard({
                   <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="indigo" />
                 </Tooltip>
                 <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
-                  <Progress.Section value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100} color="gray" />
+                  <Progress.Section
+                    value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100}
+                    color="gray"
+                  />
                 </Tooltip>
               </Progress.Root>
             </div>
@@ -1051,11 +1124,20 @@ function ProjectCard({
               <Group justify="space-between" gap={4} mb={2}>
                 <Group gap={4}>
                   <TbFlag size={12} color="var(--mantine-color-dimmed)" />
-                  <Text size="xs" c="dimmed">Milestones</Text>
+                  <Text size="xs" c="dimmed">
+                    Milestones
+                  </Text>
                 </Group>
-                <Text size="xs" c="dimmed">{p.milestoneStats.done}/{p.milestoneStats.total}</Text>
+                <Text size="xs" c="dimmed">
+                  {p.milestoneStats.done}/{p.milestoneStats.total}
+                </Text>
               </Group>
-              <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" color="violet" style={{ opacity: 0.7 }} />
+              <Progress
+                value={(p.milestoneStats.done / p.milestoneStats.total) * 100}
+                size="xs"
+                color="violet"
+                style={{ opacity: 0.7 }}
+              />
             </div>
           )}
         </Stack>
@@ -1063,7 +1145,9 @@ function ProjectCard({
 
       {/* ── Footer ── */}
       <Card.Section
-        inheritPadding px={pad} py="xs"
+        inheritPadding
+        px={pad}
+        py="xs"
         style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
       >
         <Group justify="space-between" wrap="nowrap">
@@ -1075,7 +1159,9 @@ function ProjectCard({
             ))}
             {p.members.length > 4 && (
               <Tooltip label={`${p.members.length - 4} more members`} withArrow>
-                <Avatar size={22} radius="xl" color="gray">+{p.members.length - 4}</Avatar>
+                <Avatar size={22} radius="xl" color="gray">
+                  +{p.members.length - 4}
+                </Avatar>
               </Tooltip>
             )}
           </Avatar.Group>
@@ -1084,12 +1170,20 @@ function ProjectCard({
             <Tooltip label={`${p._count.tasks} tasks`}>
               <Group gap={3} wrap="nowrap">
                 <TbFolder size={12} />
-                <Text size="xs" c="dimmed">{p._count.tasks}</Text>
+                <Text size="xs" c="dimmed">
+                  {p._count.tasks}
+                </Text>
               </Group>
             </Tooltip>
             <Tooltip label={`Owner: ${p.owner.name}`}>
               <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-                <UserAvatar name={p.owner.name} image={p.owner.image} size={18} color="blue" style={{ flexShrink: 0 }} />
+                <UserAvatar
+                  name={p.owner.name}
+                  image={p.owner.image}
+                  size={18}
+                  color="blue"
+                  style={{ flexShrink: 0 }}
+                />
                 <Text size="xs" c="dimmed" truncate style={{ maxWidth: 90 }}>
                   {p.owner.name.split(' ')[0]}
                 </Text>
@@ -1283,7 +1377,8 @@ function CreateProjectModal({
             )}
           </Group>
           <Group grow>
-            <DateInput highlightToday
+            <DateInput
+              highlightToday
               label="Mulai"
               placeholder="Opsional"
               value={startsAt}
@@ -1291,7 +1386,8 @@ function CreateProjectModal({
               clearable
               leftSection={<TbClock size={14} />}
             />
-            <DateInput highlightToday
+            <DateInput
+              highlightToday
               label="Selesai"
               placeholder="Opsional"
               value={endsAt}
@@ -1402,9 +1498,6 @@ function PillButton({
   )
 }
 
-
-
-
 function ProjectsGrid({
   filtered,
   view,
@@ -1424,35 +1517,54 @@ function ProjectsGrid({
     view === 'list' ? (
       <Stack gap="xs">
         {items.map((p) => (
-          <ProjectListRow key={p.id} project={p} isSystemAdmin={canCreateProject}
-            onOpen={() => openProject(p.id)} onEdit={() => openProject(p.id, 'settings')} />
+          <ProjectListRow
+            key={p.id}
+            project={p}
+            isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)}
+            onEdit={() => openProject(p.id, 'settings')}
+          />
         ))}
       </Stack>
     ) : (
-      <SimpleGrid cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }} spacing="md">
+      <SimpleGrid
+        cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }}
+        spacing="md"
+      >
         {items.map((p) => (
-          <ProjectCard key={p.id} project={p} density={density} isSystemAdmin={canCreateProject}
-            onOpen={() => openProject(p.id)} onEdit={() => openProject(p.id, 'settings')} />
+          <ProjectCard
+            key={p.id}
+            project={p}
+            density={density}
+            isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)}
+            onEdit={() => openProject(p.id, 'settings')}
+          />
         ))}
       </SimpleGrid>
     )
 
   if (!groupByStatus) return renderItems(filtered)
 
-  const groups = STATUS_GROUP_ORDER
-    .map((status) => ({ status, items: filtered.filter((p) => p.status === status) }))
-    .filter((g) => g.items.length > 0)
+  const groups = STATUS_GROUP_ORDER.map((status) => ({
+    status,
+    items: filtered.filter((p) => p.status === status),
+  })).filter((g) => g.items.length > 0)
 
   return (
     <Stack gap="xl">
       {groups.map((g) => (
         <Stack key={g.status} gap="sm">
           <Group gap={8} align="center">
-            <Box style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_ACCENT[g.status], flexShrink: 0 }} />
+            <Box
+              style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_ACCENT[g.status], flexShrink: 0 }}
+            />
             <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
               {STATUS_GROUP_LABEL[g.status]}
             </Text>
-            <Text size="xs" c="dimmed">· {g.items.length}</Text>
+            <Text size="xs" c="dimmed">
+              · {g.items.length}
+            </Text>
           </Group>
           {renderItems(g.items)}
         </Stack>
@@ -1472,9 +1584,9 @@ function fmtGanttDate(iso: string | null | undefined): string {
 
 // Muted status colors for project Gantt bars
 const PROJECT_GANTT_COLOR: Record<ProjectStatus, string> = {
-  DRAFT:     '#6c757d',
-  ACTIVE:    '#4a7abf',
-  ON_HOLD:   '#c49a28',
+  DRAFT: '#6c757d',
+  ACTIVE: '#4a7abf',
+  ON_HOLD: '#c49a28',
   COMPLETED: '#3a8f6a',
   CANCELLED: '#868e96',
 }
@@ -1515,29 +1627,35 @@ export function ProjectsGanttView({
     defaultValue: 'week',
   })
 
-  const ganttTasks = useMemo<GanttTask[]>(() =>
-    withDates.map((p) => {
-      const start = new Date(p.startsAt as string)
-      const end = new Date(p.endsAt as string)
-      const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-      const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate())
-      const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
-      const isOverdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
-      const slipped = !!(p.originalEndAt && p.endsAt && p.originalEndAt !== p.endsAt)
-      return {
-        id: p.id,
-        label: p.name,
-        startDate: toLocalDateStr(start),
-        duration,
-        progress: computeTaskProgress(p) ?? 0,
-        color: isOverdue ? PROJECT_GANTT_OVERDUE : slipped ? '#b86d2a' : PROJECT_GANTT_COLOR[p.status],
-        dependencies: [],
-      }
-    }), [withDates, now])
+  const ganttTasks = useMemo<GanttTask[]>(
+    () =>
+      withDates.map((p) => {
+        const start = new Date(p.startsAt as string)
+        const end = new Date(p.endsAt as string)
+        const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+        const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+        const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
+        const isOverdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+        const slipped = !!(p.originalEndAt && p.endsAt && p.originalEndAt !== p.endsAt)
+        return {
+          id: p.id,
+          label: p.name,
+          startDate: toLocalDateStr(start),
+          duration,
+          progress: computeTaskProgress(p) ?? 0,
+          color: isOverdue ? PROJECT_GANTT_OVERDUE : slipped ? '#b86d2a' : PROJECT_GANTT_COLOR[p.status],
+          dependencies: [],
+        }
+      }),
+    [withDates, now],
+  )
 
   const { tlStart, tlEnd } = useMemo(() => {
     if (withDates.length === 0) return { tlStart: undefined, tlEnd: undefined }
-    const toMidnight = (ms: number) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
+    const toMidnight = (ms: number) => {
+      const d = new Date(ms)
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    }
     const allMs = withDates.flatMap((p) => [
       new Date(p.startsAt as string).getTime(),
       new Date(p.endsAt as string).getTime(),
@@ -1548,14 +1666,17 @@ export function ProjectsGanttView({
     }
   }, [withDates])
 
-  const scrollToToday = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (!tlStart) return
-    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-    if (!body) return
-    const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
-    const todayPx = daysSinceStart * PROJ_EFFECTIVE_DAY_PX[viewMode]
-    body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
-  }, [tlStart, viewMode, now])
+  const scrollToToday = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      if (!tlStart) return
+      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) return
+      const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+      const todayPx = daysSinceStart * PROJ_EFFECTIVE_DAY_PX[viewMode]
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
+    },
+    [tlStart, viewMode, now],
+  )
 
   // Auto-scroll on first render — instant agar tidak glide
   useEffect(() => {
@@ -1564,7 +1685,10 @@ export function ProjectsGanttView({
     const tryScroll = () => {
       const content = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
       if (!content || content.offsetWidth < 200) {
-        if (++attempts < 40) { setTimeout(tryScroll, 80); return }
+        if (++attempts < 40) {
+          setTimeout(tryScroll, 80)
+          return
+        }
         return
       }
       scrollToToday('instant')
@@ -1613,7 +1737,9 @@ export function ProjectsGanttView({
         {/* Toolbar */}
         <Group justify="space-between">
           <Group gap="xs">
-            <Text size="xs" c="dimmed">{withDates.length} proyek</Text>
+            <Text size="xs" c="dimmed">
+              {withDates.length} proyek
+            </Text>
             {projects.length > withDates.length && (
               <Tooltip label={`${projects.length - withDates.length} proyek tanpa tanggal tidak ditampilkan`} withArrow>
                 <Badge size="xs" variant="default" style={{ border: 'none' }}>
@@ -1640,44 +1766,127 @@ export function ProjectsGanttView({
         {/* Legend */}
         <Group gap={6} wrap="wrap">
           {(Object.entries(PROJECT_GANTT_COLOR) as [ProjectStatus, string][]).map(([status, color]) => (
-            <Badge key={status} size="xs" variant="default" style={{ border: 'none' }}
-              leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />}
+            <Badge
+              key={status}
+              size="xs"
+              variant="default"
+              style={{ border: 'none' }}
+              leftSection={
+                <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+              }
             >
               {status.replace('_', ' ')}
             </Badge>
           ))}
-          <Badge size="xs" variant="default" style={{ border: 'none' }}
-            leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#b86d2a', flexShrink: 0 }} />}
-          >Slipped</Badge>
-          <Badge size="xs" variant="default" style={{ border: 'none' }}
-            leftSection={<div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: PROJECT_GANTT_OVERDUE, flexShrink: 0 }} />}
-          >Overdue</Badge>
+          <Badge
+            size="xs"
+            variant="default"
+            style={{ border: 'none' }}
+            leftSection={
+              <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#b86d2a', flexShrink: 0 }} />
+            }
+          >
+            Slipped
+          </Badge>
+          <Badge
+            size="xs"
+            variant="default"
+            style={{ border: 'none' }}
+            leftSection={
+              <div
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  backgroundColor: PROJECT_GANTT_OVERDUE,
+                  flexShrink: 0,
+                }}
+              />
+            }
+          >
+            Overdue
+          </Badge>
         </Group>
 
         {/* Gantt + custom sidebar */}
-        <div style={{ display: 'flex', height: totalH, border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-md)', overflow: 'hidden' }}>
-
+        <div
+          style={{
+            display: 'flex',
+            height: totalH,
+            border: '1px solid var(--mantine-color-default-border)',
+            borderRadius: 'var(--mantine-radius-md)',
+            overflow: 'hidden',
+          }}
+        >
           {/* Left sidebar — project names */}
-          <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
+          <div
+            style={{
+              width: 200,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid var(--mantine-color-default-border)',
+            }}
+          >
             {/* Header */}
-            <div style={{ height: HDR_H, flexShrink: 0, borderBottom: '1px solid var(--mantine-color-default-border)', display: 'flex', alignItems: 'flex-end', padding: '0 12px 8px' }}>
-              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>Proyek</Text>
+            <div
+              style={{
+                height: HDR_H,
+                flexShrink: 0,
+                borderBottom: '1px solid var(--mantine-color-default-border)',
+                display: 'flex',
+                alignItems: 'flex-end',
+                padding: '0 12px 8px',
+              }}
+            >
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
+                Proyek
+              </Text>
             </div>
             {/* Rows */}
             <div ref={listRef} onScroll={syncFromList} style={{ flex: 1, overflowY: 'scroll', scrollbarWidth: 'none' }}>
               {withDates.map((p) => {
-                const isOverdue = new Date(p.endsAt as string) < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+                const isOverdue =
+                  new Date(p.endsAt as string) < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
                 return (
-                  <Tooltip key={p.id} label={`${p.status.replace('_',' ')} · ${p.priority}`} withArrow position="right">
+                  <Tooltip
+                    key={p.id}
+                    label={`${p.status.replace('_', ' ')} · ${p.priority}`}
+                    withArrow
+                    position="right"
+                  >
                     <div
                       onClick={() => onSelect(p)}
-                      style={{ height: ROW_H, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 8, borderBottom: '1px solid var(--mantine-color-default-border)', cursor: 'pointer', overflow: 'hidden' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--mantine-color-default-hover)' }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = '' }}
+                      style={{
+                        height: ROW_H,
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 10px',
+                        gap: 8,
+                        borderBottom: '1px solid var(--mantine-color-default-border)',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                      }}
+                      onMouseEnter={(e) => {
+                        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--mantine-color-default-hover)'
+                      }}
+                      onMouseLeave={(e) => {
+                        ;(e.currentTarget as HTMLDivElement).style.background = ''
+                      }}
                     >
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isOverdue ? PROJECT_GANTT_OVERDUE : PROJECT_GANTT_COLOR[p.status], flexShrink: 0 }} />
+                      <div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: isOverdue ? PROJECT_GANTT_OVERDUE : PROJECT_GANTT_COLOR[p.status],
+                          flexShrink: 0,
+                        }}
+                      />
                       <Stack gap={1} style={{ minWidth: 0, flex: 1 }}>
-                        <Text size="xs" fw={500} truncate style={{ minWidth: 0 }} title={p.name}>{p.name}</Text>
+                        <Text size="xs" fw={500} truncate style={{ minWidth: 0 }} title={p.name}>
+                          {p.name}
+                        </Text>
                         <Text size="10px" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {fmtGanttDate(p.startsAt)} → {fmtGanttDate(p.endsAt)}
                         </Text>
@@ -1714,4 +1923,3 @@ export function ProjectsGanttView({
     </Card>
   )
 }
-

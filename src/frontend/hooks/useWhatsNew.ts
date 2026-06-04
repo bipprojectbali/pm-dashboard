@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { getVersionsSince, WHATS_NEW, type WhatsNewVersion } from '../lib/whats-new'
 
 const LS_KEY = 'pm:last-seen-version'

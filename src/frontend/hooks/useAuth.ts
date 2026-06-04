@@ -21,7 +21,9 @@ export function getDefaultRoute(role: Role): string {
 // Sentinel error type agar global handler bisa membedakan 401 dari error lain
 export class UnauthorizedError extends Error {
   status = 401
-  constructor() { super('Session expired') }
+  constructor() {
+    super('Session expired')
+  }
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -43,7 +45,7 @@ export function useSession() {
     queryFn: () => apiFetch<{ user: User | null }>('/api/auth/session'),
     retry: false,
     staleTime: 30_000,
-    refetchInterval: 10 * 60 * 1000,  // poll tiap 10 menit
+    refetchInterval: 10 * 60 * 1000, // poll tiap 10 menit
     refetchIntervalInBackground: false, // jangan poll kalau tab tidak aktif
   })
 }

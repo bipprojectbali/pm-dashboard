@@ -35,8 +35,12 @@ interface ZonedParts {
 export function getZonedParts(tz: string, date: Date = new Date()): ZonedParts {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   }).formatToParts(date)
   const m: Record<string, string> = {}
   for (const p of parts) if (p.type !== 'literal') m[p.type] = p.value
@@ -57,14 +61,19 @@ export function getZonedDateKey(tz: string, date: Date = new Date()): Date {
 export function formatZonedDateLong(tz: string, date: Date = new Date()): string {
   return new Intl.DateTimeFormat('id-ID', {
     timeZone: tz,
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   }).format(date)
 }
 
 export function formatDateKeyShort(dateKey: Date): string {
   return new Intl.DateTimeFormat('id-ID', {
     timeZone: 'UTC',
-    weekday: 'short', day: 'numeric', month: 'short',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
   }).format(dateKey)
 }
 

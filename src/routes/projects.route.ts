@@ -1,17 +1,17 @@
 import Elysia from 'elysia'
-import { prisma } from '../lib/db'
 import { appLog } from '../lib/applog'
+import { prisma } from '../lib/db'
 import { normalizeGithubRepo } from '../lib/github'
 import { emitInvalidate } from '../lib/presence'
 import { computeRetro, renderRetroMarkdown } from '../lib/retro'
 import {
-  requireAuth,
-  requireProjectMember,
-  canReadProject,
-  canManageProject,
   canGrantProjectOwner,
+  canManageProject,
+  canReadProject,
   getIp,
   isSystemAdmin,
+  requireAuth,
+  requireProjectMember,
 } from '../lib/route-helpers'
 
 function audit(userId: string | null, action: string, detail: string | null, ip: string) {
@@ -116,8 +116,7 @@ export function projectsRoutes() {
               readyForQc: s.READY_FOR_QC ?? 0,
               reopened: s.REOPENED ?? 0,
               closed: s.CLOSED ?? 0,
-              total:
-                (s.OPEN ?? 0) + (s.IN_PROGRESS ?? 0) + (s.READY_FOR_QC ?? 0) + (s.REOPENED ?? 0) + (s.CLOSED ?? 0),
+              total: (s.OPEN ?? 0) + (s.IN_PROGRESS ?? 0) + (s.READY_FOR_QC ?? 0) + (s.REOPENED ?? 0) + (s.CLOSED ?? 0),
             },
             milestoneStats: {
               done: doneByProject.get(p.id) ?? 0,

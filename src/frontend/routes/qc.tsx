@@ -16,8 +16,8 @@ import {
   Stack,
   Table,
   Text,
-  TextInput,
   Textarea,
+  TextInput,
   ThemeIcon,
   Timeline,
   Title,
@@ -298,7 +298,11 @@ function NoSelfProject({ role }: { role?: string }) {
             <code>PUT /api/admin/self-project</code> (atau via MCP tool <code>qc_self_project_set</code>).
           </Text>
         </Stack>
-        {role !== 'SUPER_ADMIN' && <Text size="xs" c="dimmed">Hubungi super-admin.</Text>}
+        {role !== 'SUPER_ADMIN' && (
+          <Text size="xs" c="dimmed">
+            Hubungi super-admin.
+          </Text>
+        )}
       </Stack>
     </Card>
   )
@@ -696,8 +700,8 @@ function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose: () => 
   })
 
   const ticket = detailQ.data?.ticket
-  const sb = ticket ? statusBadge[ticket.status] ?? statusBadge.OPEN : null
-  const pb = ticket ? priorityBadge[ticket.priority] ?? priorityBadge.MEDIUM : null
+  const sb = ticket ? (statusBadge[ticket.status] ?? statusBadge.OPEN) : null
+  const pb = ticket ? (priorityBadge[ticket.priority] ?? priorityBadge.MEDIUM) : null
 
   return (
     <Drawer opened onClose={onClose} size="xl" position="right" title="Detail Ticket">
@@ -723,12 +727,7 @@ function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose: () => 
             <Group gap="xs" wrap="nowrap">
               {editMode ? (
                 <>
-                  <Button
-                    size="xs"
-                    leftSection={<TbCheck size={14} />}
-                    onClick={saveEdits}
-                    loading={patchM.isPending}
-                  >
+                  <Button size="xs" leftSection={<TbCheck size={14} />} onClick={saveEdits} loading={patchM.isPending}>
                     Simpan
                   </Button>
                   <Button
@@ -743,7 +742,12 @@ function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose: () => 
                 </>
               ) : (
                 <>
-                  <Button size="xs" variant="light" leftSection={<TbEdit size={14} />} onClick={() => setEditMode(true)}>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    leftSection={<TbEdit size={14} />}
+                    onClick={() => setEditMode(true)}
+                  >
                     Edit
                   </Button>
                   {canDelete && (

@@ -406,74 +406,74 @@ export function WebhookMonitorPanel() {
           />
         </Group>
         <Table.ScrollContainer minWidth={1000}>
-        <Table striped highlightOnHover layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(160)}>When</Table.Th>
-              <Table.Th style={{ width: 90 }}>Status</Table.Th>
-              <Table.Th style={{ width: 200 }}>Reason</Table.Th>
-              <Table.Th style={{ width: 220 }}>Token</Table.Th>
-              <Table.Th style={{ width: 220 }}>Agent</Table.Th>
-              <Table.Th style={{ width: 130 }}>IP</Table.Th>
-              <Table.Th style={{ width: 90 }}>Events</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {pagedLogs.length ? (
-              pagedLogs.map((row) => (
-                <Table.Tr key={row.id}>
-                  <Table.Td style={stickyFirstCell(160)}>{formatRelative(row.createdAt)}</Table.Td>
-                  <Table.Td>
-                    <Badge color={statusColor(row.statusCode)} size="sm">
-                      {row.statusCode}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{row.reason ?? '—'}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {row.token ? (
-                      <Group gap={4}>
-                        <Text size="sm">{row.token.name}</Text>
-                        <Code>{row.token.tokenPrefix}…</Code>
-                      </Group>
-                    ) : (
-                      <Text size="sm" c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    {row.agent ? (
-                      <Text size="sm">
-                        {row.agent.hostname}{' '}
-                        <Text span size="xs" c="dimmed">
-                          ({row.agent.agentId.slice(0, 12)}…)
-                        </Text>
-                      </Text>
-                    ) : (
-                      <Text size="sm" c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Code>{row.ip ?? '—'}</Code>
-                  </Table.Td>
-                  <Table.Td>{row.eventsIn || '—'}</Table.Td>
-                </Table.Tr>
-              ))
-            ) : (
+          <Table striped highlightOnHover layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={7}>
-                  <Text size="sm" c="dimmed">
-                    No matching requests.
-                  </Text>
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(160)}>When</Table.Th>
+                <Table.Th style={{ width: 90 }}>Status</Table.Th>
+                <Table.Th style={{ width: 200 }}>Reason</Table.Th>
+                <Table.Th style={{ width: 220 }}>Token</Table.Th>
+                <Table.Th style={{ width: 220 }}>Agent</Table.Th>
+                <Table.Th style={{ width: 130 }}>IP</Table.Th>
+                <Table.Th style={{ width: 90 }}>Events</Table.Th>
               </Table.Tr>
-            )}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {pagedLogs.length ? (
+                pagedLogs.map((row) => (
+                  <Table.Tr key={row.id}>
+                    <Table.Td style={stickyFirstCell(160)}>{formatRelative(row.createdAt)}</Table.Td>
+                    <Table.Td>
+                      <Badge color={statusColor(row.statusCode)} size="sm">
+                        {row.statusCode}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{row.reason ?? '—'}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {row.token ? (
+                        <Group gap={4}>
+                          <Text size="sm">{row.token.name}</Text>
+                          <Code>{row.token.tokenPrefix}…</Code>
+                        </Group>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      {row.agent ? (
+                        <Text size="sm">
+                          {row.agent.hostname}{' '}
+                          <Text span size="xs" c="dimmed">
+                            ({row.agent.agentId.slice(0, 12)}…)
+                          </Text>
+                        </Text>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Code>{row.ip ?? '—'}</Code>
+                    </Table.Td>
+                    <Table.Td>{row.eventsIn || '—'}</Table.Td>
+                  </Table.Tr>
+                ))
+              ) : (
+                <Table.Tr>
+                  <Table.Td colSpan={7}>
+                    <Text size="sm" c="dimmed">
+                      No matching requests.
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              )}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
         {logs.length > PAGE_SIZE && (
           <Group justify="space-between" mt="sm">

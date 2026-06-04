@@ -16,7 +16,6 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
-import { toLocalDateStr } from '../lib/dates'
 import { useMemo, useState } from 'react'
 import {
   TbBrandGithub,
@@ -30,6 +29,7 @@ import {
   TbTrendingUp,
   TbUsers,
 } from 'react-icons/tb'
+import { toLocalDateStr } from '../lib/dates'
 
 interface RetroTaskRow {
   id: string

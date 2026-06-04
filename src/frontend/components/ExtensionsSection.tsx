@@ -1,12 +1,4 @@
-import {
-  Button,
-  Card,
-  Group,
-  Modal,
-  Stack,
-  Text,
-  Textarea,
-} from '@mantine/core'
+import { Button, Card, Group, Modal, Stack, Text, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -173,7 +165,8 @@ function ExtendDeadlineModal({
         <Text size="sm" c="dimmed">
           Current deadline: <b>{formatDate(currentEndAt)}</b>
         </Text>
-        <DateInput highlightToday
+        <DateInput
+          highlightToday
           label="New deadline"
           value={newEnd}
           onChange={(v) => setNewEnd(v ? new Date(v as unknown as string) : null)}

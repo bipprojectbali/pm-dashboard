@@ -20,15 +20,8 @@ import {
 import { DateInput } from '@mantine/dates'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import {
-  TbAlertTriangle,
-  TbClock,
-  TbDownload,
-  TbFileImport,
-  TbTag,
-  TbUpload,
-} from 'react-icons/tb'
-import { downloadSampleCsv, parseTaskCsv, TASK_CSV_HEADERS, type RowError } from '../lib/csv'
+import { TbAlertTriangle, TbClock, TbDownload, TbFileImport, TbTag, TbUpload } from 'react-icons/tb'
+import { downloadSampleCsv, parseTaskCsv, type RowError, TASK_CSV_HEADERS } from '../lib/csv'
 import { notifyError } from '../lib/notify'
 
 type TaskKind = 'TASK' | 'BUG' | 'QC'
@@ -142,7 +135,8 @@ export function CreateTaskModal({
     }
     return m
   }, [parsed, knownTagNames])
-  const totalErrors = (parsed?.errors.length ?? 0) + Array.from(unknownTagsByRow.values()).reduce((a, b) => a + b.length, 0)
+  const totalErrors =
+    (parsed?.errors.length ?? 0) + Array.from(unknownTagsByRow.values()).reduce((a, b) => a + b.length, 0)
 
   const invalidRange = startsAt && dueAt && dueAt < startsAt
   const availableTags = tagsForProject
@@ -245,14 +239,16 @@ export function CreateTaskModal({
               />
             </Group>
             <Group grow>
-              <DateInput highlightToday
+              <DateInput
+                highlightToday
                 label="Start date"
                 placeholder="Optional"
                 value={startsAt}
                 onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
                 clearable
               />
-              <DateInput highlightToday
+              <DateInput
+                highlightToday
                 label="Due date"
                 placeholder="Optional"
                 value={dueAt}
@@ -294,11 +290,7 @@ export function CreateTaskModal({
                   </Button>
                 )}
               </FileButton>
-              <Button
-                variant="subtle"
-                leftSection={<TbDownload size={14} />}
-                onClick={() => downloadSampleCsv()}
-              >
+              <Button variant="subtle" leftSection={<TbDownload size={14} />} onClick={() => downloadSampleCsv()}>
                 Download sample
               </Button>
               {csvText && (
@@ -374,7 +366,11 @@ export function CreateTaskModal({
                                 <Table.Td>{i + 1}</Table.Td>
                                 <Table.Td style={{ maxWidth: 220 }}>
                                   <Text size="xs" lineClamp={2}>
-                                    {row.title || <Text component="span" c="red">(missing)</Text>}
+                                    {row.title || (
+                                      <Text component="span" c="red">
+                                        (missing)
+                                      </Text>
+                                    )}
                                   </Text>
                                 </Table.Td>
                                 <Table.Td>{row.kind}</Table.Td>
@@ -450,9 +446,7 @@ export function CreateTaskModal({
             <Button
               leftSection={<TbFileImport size={14} />}
               onClick={submitBulk}
-              disabled={
-                !projectId || !parsed || parsed.rows.length === 0 || totalErrors > 0 || loading
-              }
+              disabled={!projectId || !parsed || parsed.rows.length === 0 || totalErrors > 0 || loading}
               loading={loading}
             >
               Import {parsed && totalErrors === 0 ? `${parsed.rows.length} task` : ''}

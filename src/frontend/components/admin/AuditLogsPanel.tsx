@@ -31,12 +31,12 @@ import {
 } from 'react-icons/tb'
 import { EChart } from '@/frontend/components/charts/EChart'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
-import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
-import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 import { toLocalDateStr } from '@/frontend/lib/dates'
+import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 interface AdminUser {
   id: string
@@ -360,81 +360,93 @@ export function AuditLogsPanel() {
 
       <Card withBorder radius="md" p={0}>
         <Table.ScrollContainer minWidth={900}>
-        <Table highlightOnHover layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(180)}>Waktu</Table.Th>
-              <Table.Th style={{ width: 220 }}>User</Table.Th>
-              <Table.Th style={{ width: 160 }}>Action</Table.Th>
-              <Table.Th style={{ width: 220 }}>Detail</Table.Th>
-              <Table.Th style={{ width: 130 }}>IP</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
+          <Table highlightOnHover layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <EmptyRow icon={TbFileText} title="Memuat audit log…" />
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(180)}>Waktu</Table.Th>
+                <Table.Th style={{ width: 220 }}>User</Table.Th>
+                <Table.Th style={{ width: 160 }}>Action</Table.Th>
+                <Table.Th style={{ width: 220 }}>Detail</Table.Th>
+                <Table.Th style={{ width: 130 }}>IP</Table.Th>
               </Table.Tr>
-            )}
-            {filteredLogs.length === 0 && !isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <EmptyRow
-                    icon={TbFileText}
-                    title="Belum ada audit log"
-                    message={
-                      actionFilter || userFilter || windowFilter !== 'all'
-                        ? 'Tidak ada log yang cocok dengan filter. Perluas window atau reset filter.'
-                        : 'Audit log akan muncul saat ada aktivitas login, role change, atau block/unblock.'
-                    }
-                  />
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {pagedLogs.map((log) => {
-              const badge = actionBadge[log.action] ?? { color: 'gray', label: log.action }
-              return (
-                <Table.Tr key={log.id}>
-                  <Table.Td style={stickyFirstCell(180)}>
-                    <Text size="xs" ff="monospace" c="dimmed">
-                      {new Date(log.createdAt).toLocaleString('id-ID', { hour12: false })}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {log.user ? (
-                      <Group gap="xs" wrap="nowrap">
-                        <UserAvatar name={log.user.name} image={log.user.image} size={24} color="blue" style={{ flexShrink: 0 }} />
-                        <Stack gap={0} style={{ minWidth: 0 }}>
-                          <Text size="sm" fw={500} truncate>{log.user.name}</Text>
-                          <Text size="xs" c="dimmed" truncate>{log.user.email}</Text>
-                        </Stack>
-                      </Group>
-                    ) : (
-                      <Text size="sm" c="dimmed">—</Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={badge.color} variant="light" size="sm">
-                      {badge.label}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed" ff="monospace">
-                      {log.detail ?? '—'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="dimmed">
-                      {log.ip ?? '—'}
-                    </Text>
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <EmptyRow icon={TbFileText} title="Memuat audit log…" />
                   </Table.Td>
                 </Table.Tr>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
+              )}
+              {filteredLogs.length === 0 && !isLoading && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <EmptyRow
+                      icon={TbFileText}
+                      title="Belum ada audit log"
+                      message={
+                        actionFilter || userFilter || windowFilter !== 'all'
+                          ? 'Tidak ada log yang cocok dengan filter. Perluas window atau reset filter.'
+                          : 'Audit log akan muncul saat ada aktivitas login, role change, atau block/unblock.'
+                      }
+                    />
+                  </Table.Td>
+                </Table.Tr>
+              )}
+              {pagedLogs.map((log) => {
+                const badge = actionBadge[log.action] ?? { color: 'gray', label: log.action }
+                return (
+                  <Table.Tr key={log.id}>
+                    <Table.Td style={stickyFirstCell(180)}>
+                      <Text size="xs" ff="monospace" c="dimmed">
+                        {new Date(log.createdAt).toLocaleString('id-ID', { hour12: false })}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {log.user ? (
+                        <Group gap="xs" wrap="nowrap">
+                          <UserAvatar
+                            name={log.user.name}
+                            image={log.user.image}
+                            size={24}
+                            color="blue"
+                            style={{ flexShrink: 0 }}
+                          />
+                          <Stack gap={0} style={{ minWidth: 0 }}>
+                            <Text size="sm" fw={500} truncate>
+                              {log.user.name}
+                            </Text>
+                            <Text size="xs" c="dimmed" truncate>
+                              {log.user.email}
+                            </Text>
+                          </Stack>
+                        </Group>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={badge.color} variant="light" size="sm">
+                        {badge.label}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed" ff="monospace">
+                        {log.detail ?? '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="dimmed">
+                        {log.ip ?? '—'}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )
+              })}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
       </Card>
 

@@ -7,9 +7,9 @@ import {
   Divider,
   Group,
   Modal,
-  ScrollArea,
   Pagination,
   Progress,
+  ScrollArea,
   SegmentedControl,
   Select,
   Stack,
@@ -22,7 +22,7 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -58,12 +58,17 @@ function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) =
         autoFocus
       />
       <Group justify="flex-end" gap="xs">
-        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>Batal</Button>
+        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
+          Batal
+        </Button>
         <Button
           color="red"
           size="xs"
           disabled={reason.trim().length < 3}
-          onClick={() => { onConfirm(reason.trim()); modals.closeAll() }}
+          onClick={() => {
+            onConfirm(reason.trim())
+            modals.closeAll()
+          }}
         >
           Hapus
         </Button>
@@ -71,18 +76,19 @@ function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) =
     </Stack>
   )
 }
+
 import { DatePickerInput } from '@mantine/dates'
 import { useLocalStorage } from '@mantine/hooks'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useSession } from '../hooks/useAuth'
-import { notifyError, notifySuccess } from '../lib/notify'
 import { downloadTasksCsv, type ExportTaskRow } from '../lib/csv'
+import { notifyError, notifySuccess } from '../lib/notify'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDashboardOverlay } from './TaskDashboardOverlay'
 import { TaskDetailView } from './TaskDetailView'
 import { TasksGanttView } from './TasksGanttView'
 import { TasksKanbanView } from './TasksKanbanView'
 import { TasksTrashView } from './TasksTrashView'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -220,7 +226,9 @@ export function TasksPanel({
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(null)
+  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(
+    null,
+  )
   const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<string | null>(null)
@@ -385,12 +393,25 @@ export function TasksPanel({
       filtered = [...filtered].sort((a, b) => {
         let va: number | string = 0
         let vb: number | string = 0
-        if (sortBy === 'priority') { va = PRIO[a.priority]; vb = PRIO[b.priority] }
-        else if (sortBy === 'title') { va = a.title.toLowerCase(); vb = b.title.toLowerCase() }
-        else if (sortBy === 'dueAt') { va = a.dueAt ? new Date(a.dueAt).getTime() : Infinity; vb = b.dueAt ? new Date(b.dueAt).getTime() : Infinity }
-        else if (sortBy === 'createdAt') { va = new Date(a.createdAt).getTime(); vb = new Date(b.createdAt).getTime() }
-        else if (sortBy === 'updatedAt') { va = new Date(a.updatedAt).getTime(); vb = new Date(b.updatedAt).getTime() }
-        else if (sortBy === 'estimateHours') { va = a.estimateHours ?? Infinity; vb = b.estimateHours ?? Infinity }
+        if (sortBy === 'priority') {
+          va = PRIO[a.priority]
+          vb = PRIO[b.priority]
+        } else if (sortBy === 'title') {
+          va = a.title.toLowerCase()
+          vb = b.title.toLowerCase()
+        } else if (sortBy === 'dueAt') {
+          va = a.dueAt ? new Date(a.dueAt).getTime() : Infinity
+          vb = b.dueAt ? new Date(b.dueAt).getTime() : Infinity
+        } else if (sortBy === 'createdAt') {
+          va = new Date(a.createdAt).getTime()
+          vb = new Date(b.createdAt).getTime()
+        } else if (sortBy === 'updatedAt') {
+          va = new Date(a.updatedAt).getTime()
+          vb = new Date(b.updatedAt).getTime()
+        } else if (sortBy === 'estimateHours') {
+          va = a.estimateHours ?? Infinity
+          vb = b.estimateHours ?? Infinity
+        }
         if (va < vb) return sortDir === 'asc' ? -1 : 1
         if (va > vb) return sortDir === 'asc' ? 1 : -1
         return 0
@@ -442,14 +463,14 @@ export function TasksPanel({
   const deletableTasks = useMemo(() => tasks.filter(canDeleteTask), [tasks, canDeleteTask])
   const deletableIds = useMemo(() => deletableTasks.map((t) => t.id), [deletableTasks])
   const deletableSelected = useMemo(
-    () => Array.from(selectedIds).filter((id) => {
-      const t = taskById.get(id)
-      return t ? canDeleteTask(t) : false
-    }),
+    () =>
+      Array.from(selectedIds).filter((id) => {
+        const t = taskById.get(id)
+        return t ? canDeleteTask(t) : false
+      }),
     [selectedIds, taskById, canDeleteTask],
   )
-  const allDeletableSelected =
-    deletableIds.length > 0 && deletableIds.every((id) => selectedIds.has(id))
+  const allDeletableSelected = deletableIds.length > 0 && deletableIds.every((id) => selectedIds.has(id))
   const someDeletableSelected = deletableSelected.length > 0 && !allDeletableSelected
   const toggleAllSelection = () => {
     setSelectedIds((prev) => {
@@ -556,7 +577,19 @@ export function TasksPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
+  }, [
+    activeProjectId,
+    status,
+    kind,
+    mine,
+    tagFilter,
+    search,
+    quickFilter,
+    dueDateRange,
+    priorityFilter,
+    sortBy,
+    sortDir,
+  ])
 
   return (
     <Stack gap="md">
@@ -637,15 +670,24 @@ export function TasksPanel({
         </Group>
       </Group>
 
-      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0
-        ? <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
-        : null}
+      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0 ? (
+        <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
+      ) : null}
 
       <Card withBorder padding="sm" radius="md">
         <Stack gap="sm">
-
           {/* ─── Scope ─── */}
-          <Divider label={<Group gap={4}><TbFilter size={11} /><Text size="xs" c="dimmed" fw={600}>Scope</Text></Group>} labelPosition="left" />
+          <Divider
+            label={
+              <Group gap={4}>
+                <TbFilter size={11} />
+                <Text size="xs" c="dimmed" fw={600}>
+                  Scope
+                </Text>
+              </Group>
+            }
+            labelPosition="left"
+          />
           <Group gap="sm" wrap="wrap" align="center">
             {activeProject ? (
               <Badge
@@ -654,7 +696,13 @@ export function TasksPanel({
                 size="lg"
                 leftSection={<TbTag size={12} />}
                 rightSection={
-                  <ActionIcon size="xs" variant="transparent" color="blue" onClick={() => changeProject(null)} aria-label="Clear project filter">
+                  <ActionIcon
+                    size="xs"
+                    variant="transparent"
+                    color="blue"
+                    onClick={() => changeProject(null)}
+                    aria-label="Clear project filter"
+                  >
                     <TbX size={12} />
                   </ActionIcon>
                 }
@@ -672,11 +720,23 @@ export function TasksPanel({
                 w={220}
               />
             )}
-            <Switch label="Assigned to me" checked={mine} onChange={(e) => setMine(e.currentTarget.checked)} size="sm" />
+            <Switch
+              label="Assigned to me"
+              checked={mine}
+              onChange={(e) => setMine(e.currentTarget.checked)}
+              size="sm"
+            />
           </Group>
 
           {/* ─── Tipe Task ─── */}
-          <Divider label={<Text size="xs" c="dimmed" fw={600}>Tipe Task</Text>} labelPosition="left" />
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Tipe Task
+              </Text>
+            }
+            labelPosition="left"
+          />
           <Group gap="sm" wrap="wrap" align="center">
             <Select
               placeholder="All kinds"
@@ -725,7 +785,14 @@ export function TasksPanel({
           </Group>
 
           {/* ─── Urutan ─── */}
-          <Divider label={<Text size="xs" c="dimmed" fw={600}>Urutan</Text>} labelPosition="left" />
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Urutan
+              </Text>
+            }
+            labelPosition="left"
+          />
           <Group gap="sm" wrap="wrap" align="center">
             <Select
               placeholder="Default order"
@@ -756,7 +823,14 @@ export function TasksPanel({
           </Group>
 
           {/* ─── Tanggal ─── */}
-          <Divider label={<Text size="xs" c="dimmed" fw={600}>Tanggal Due</Text>} labelPosition="left" />
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Tanggal Due
+              </Text>
+            }
+            labelPosition="left"
+          />
           <Group gap="sm" wrap="wrap" align="center">
             <DatePickerInput
               type="range"
@@ -770,7 +844,10 @@ export function TasksPanel({
               getDayProps={(raw) => {
                 const date = new Date(raw)
                 const t = new Date()
-                const isToday = date.getDate() === t.getDate() && date.getMonth() === t.getMonth() && date.getFullYear() === t.getFullYear()
+                const isToday =
+                  date.getDate() === t.getDate() &&
+                  date.getMonth() === t.getMonth() &&
+                  date.getFullYear() === t.getFullYear()
                 if (!isToday) return {}
                 return {
                   style: {
@@ -795,7 +872,9 @@ export function TasksPanel({
               size="xs"
               w={230}
             />
-            <Text size="xs" c="dimmed" fw={500}>Quick</Text>
+            <Text size="xs" c="dimmed" fw={500}>
+              Quick
+            </Text>
             <Badge
               color={quickFilter === 'openOnly' ? 'blue' : 'gray'}
               variant={quickFilter === 'openOnly' ? 'filled' : 'light'}
@@ -806,7 +885,9 @@ export function TasksPanel({
               Open only
             </Badge>
             <Divider orientation="vertical" />
-            <Text size="xs" c="dimmed" fw={500}>Attention</Text>
+            <Text size="xs" c="dimmed" fw={500}>
+              Attention
+            </Text>
             <Badge
               color={quickFilter === 'overdue' ? 'red' : 'gray'}
               variant={quickFilter === 'overdue' ? 'filled' : 'light'}
@@ -875,13 +956,15 @@ export function TasksPanel({
               ]}
               ml="auto"
             />
-            <Tooltip label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`} withArrow>
+            <Tooltip
+              label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`}
+              withArrow
+            >
               <ActionIcon variant="light" color="teal" size="sm" onClick={handleExport} disabled={tasks.length === 0}>
                 <TbDownload size={14} />
               </ActionIcon>
             </Tooltip>
           </Group>
-
         </Stack>
       </Card>
 
@@ -933,7 +1016,12 @@ export function TasksPanel({
       ) : (
         <Card withBorder padding={0} radius="md">
           {deletableSelected.length > 0 && (
-            <Group justify="space-between" px="md" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+            <Group
+              justify="space-between"
+              px="md"
+              py="xs"
+              style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+            >
               <Group gap="xs">
                 <Text size="xs" c="dimmed">
                   {deletableSelected.length} terpilih
@@ -957,196 +1045,202 @@ export function TasksPanel({
             </Group>
           )}
           <Table.ScrollContainer minWidth={activeProject ? 1080 : 1220}>
-          <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
-            <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-              <Table.Tr>
-                <Table.Th style={{ width: 36 }}>
-                  <Tooltip label={allDeletableSelected ? 'Bersihkan pilihan' : `Pilih semua ${deletableTasks.length} task`}>
-                    <Checkbox
-                      size="xs"
-                      aria-label="Pilih semua task"
-                      checked={allDeletableSelected}
-                      indeterminate={someDeletableSelected}
-                      onChange={toggleAllSelection}
-                      disabled={deletableTasks.length === 0}
-                    />
-                  </Tooltip>
-                </Table.Th>
-                <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
-                {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}
-                <Table.Th style={{ width: 90 }}>Kind</Table.Th>
-                <Table.Th style={{ width: 130 }}>Status</Table.Th>
-                <Table.Th style={{ width: 110 }}>Priority</Table.Th>
-                <Table.Th style={{ width: 150 }}>Assignee</Table.Th>
-                <Table.Th style={{ width: 110 }}>Due</Table.Th>
-                <Table.Th style={{ width: 90 }}>Hours</Table.Th>
-                <Table.Th style={{ width: 110 }}>Progress</Table.Th>
-                <Table.Th style={{ width: 110 }}>Updated</Table.Th>
-                <Table.Th style={{ width: 40 }} />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {pagedTasks.map((t) => {
-                const variance =
-                  t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
-                const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
-                const deletable = canDeleteTask(t)
-                const checked = selectedIds.has(t.id)
-                return (
-                  <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
-                    <Table.Td onClick={(e) => e.stopPropagation()}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
+              <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                <Table.Tr>
+                  <Table.Th style={{ width: 36 }}>
+                    <Tooltip
+                      label={allDeletableSelected ? 'Bersihkan pilihan' : `Pilih semua ${deletableTasks.length} task`}
+                    >
                       <Checkbox
                         size="xs"
-                        aria-label={`Select task ${t.title}`}
-                        checked={checked}
-                        onChange={() => toggleSelection(t.id)}
-                        disabled={!deletable}
+                        aria-label="Pilih semua task"
+                        checked={allDeletableSelected}
+                        indeterminate={someDeletableSelected}
+                        onChange={toggleAllSelection}
+                        disabled={deletableTasks.length === 0}
                       />
-                    </Table.Td>
-                    <Table.Td style={STICKY_COL_CELL}>
-                      <Stack gap={2}>
-                        <Group gap={6} wrap="nowrap">
-                          <Text size="sm" fw={500} lineClamp={1}>
-                            {t.title}
-                          </Text>
-                          {blocked ? (
-                            <Tooltip label={`Blocked by ${t._count.blockedBy} task(s)`}>
-                              <Badge size="xs" color="gray" variant="filled">
-                                blocked
-                              </Badge>
-                            </Tooltip>
-                          ) : null}
-                        </Group>
-                        {t.tags.length > 0 && (
-                          <Group gap={4} wrap="wrap">
-                            {t.tags.slice(0, 4).map((tt) => (
-                              <Badge key={tt.tagId} size="xs" color={tt.tag.color} variant="light">
-                                {tt.tag.name}
-                              </Badge>
-                            ))}
-                            {t.tags.length > 4 && (
-                              <Text size="xs" c="dimmed">
-                                +{t.tags.length - 4}
-                              </Text>
-                            )}
+                    </Tooltip>
+                  </Table.Th>
+                  <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
+                  {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}
+                  <Table.Th style={{ width: 90 }}>Kind</Table.Th>
+                  <Table.Th style={{ width: 130 }}>Status</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Priority</Table.Th>
+                  <Table.Th style={{ width: 150 }}>Assignee</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Due</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Hours</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Progress</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Updated</Table.Th>
+                  <Table.Th style={{ width: 40 }} />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {pagedTasks.map((t) => {
+                  const variance =
+                    t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
+                  const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
+                  const deletable = canDeleteTask(t)
+                  const checked = selectedIds.has(t.id)
+                  return (
+                    <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
+                      <Table.Td onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          size="xs"
+                          aria-label={`Select task ${t.title}`}
+                          checked={checked}
+                          onChange={() => toggleSelection(t.id)}
+                          disabled={!deletable}
+                        />
+                      </Table.Td>
+                      <Table.Td style={STICKY_COL_CELL}>
+                        <Stack gap={2}>
+                          <Group gap={6} wrap="nowrap">
+                            <Text size="sm" fw={500} lineClamp={1}>
+                              {t.title}
+                            </Text>
+                            {blocked ? (
+                              <Tooltip label={`Blocked by ${t._count.blockedBy} task(s)`}>
+                                <Badge size="xs" color="gray" variant="filled">
+                                  blocked
+                                </Badge>
+                              </Tooltip>
+                            ) : null}
                           </Group>
+                          {t.tags.length > 0 && (
+                            <Group gap={4} wrap="wrap">
+                              {t.tags.slice(0, 4).map((tt) => (
+                                <Badge key={tt.tagId} size="xs" color={tt.tag.color} variant="light">
+                                  {tt.tag.name}
+                                </Badge>
+                              ))}
+                              {t.tags.length > 4 && (
+                                <Text size="xs" c="dimmed">
+                                  +{t.tags.length - 4}
+                                </Text>
+                              )}
+                            </Group>
+                          )}
+                        </Stack>
+                      </Table.Td>
+                      {activeProject ? null : (
+                        <Table.Td>
+                          <Text size="xs" c="dimmed">
+                            {t.project.name}
+                          </Text>
+                        </Table.Td>
+                      )}
+                      <Table.Td>
+                        <Badge color={KIND_COLOR[t.kind]} variant="light" size="sm">
+                          {t.kind}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={STATUS_COLOR[t.status]} variant="light" size="sm">
+                          {t.status.replace('_', ' ')}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={PRIORITY_COLOR[t.priority]} variant="dot" size="sm">
+                          {t.priority}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {t.assignee ? (
+                          <Tooltip label={t.assignee.name} withArrow>
+                            <Group gap={6} wrap="nowrap">
+                              <UserAvatar name={t.assignee.name} image={t.assignee.image} size={20} color="blue" />
+                              <Text size="xs" truncate style={{ maxWidth: 90 }}>
+                                {t.assignee.name.split(' ')[0]}
+                              </Text>
+                            </Group>
+                          </Tooltip>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
                         )}
-                      </Stack>
-                    </Table.Td>
-                    {activeProject ? null : (
+                      </Table.Td>
+                      <Table.Td>
+                        {t.dueAt ? (
+                          (() => {
+                            const dueMs = new Date(t.dueAt).getTime()
+                            const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
+                            return (
+                              <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
+                                {new Date(t.dueAt).toLocaleDateString('id-ID')}
+                              </Text>
+                            )
+                          })()
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Tooltip
+                          label={
+                            t.estimateHours != null || t.actualHours != null
+                              ? `estimate: ${t.estimateHours ?? '—'}h · actual: ${t.actualHours ?? '—'}h${variance != null ? ` · ${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : ''}`
+                              : 'No hours logged'
+                          }
+                        >
+                          <Group gap={4} wrap="nowrap">
+                            <TbClock size={12} />
+                            <Text size="xs" c={variance != null && variance > 0 ? 'red' : 'dimmed'}>
+                              {t.actualHours != null
+                                ? `${t.actualHours}h`
+                                : t.estimateHours != null
+                                  ? `~${t.estimateHours}h`
+                                  : '—'}
+                            </Text>
+                          </Group>
+                        </Tooltip>
+                      </Table.Td>
+                      <Table.Td style={{ minWidth: 90 }}>
+                        {t.progressPercent != null ? (
+                          <Stack gap={2}>
+                            <Text size="xs" c="dimmed">
+                              {t.progressPercent}%
+                            </Text>
+                            <Progress
+                              value={t.progressPercent}
+                              size="xs"
+                              color={t.status === 'CLOSED' ? 'green' : 'blue'}
+                            />
+                          </Stack>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
+                      </Table.Td>
                       <Table.Td>
                         <Text size="xs" c="dimmed">
-                          {t.project.name}
+                          {new Date(t.updatedAt).toLocaleDateString()}
                         </Text>
                       </Table.Td>
-                    )}
-                    <Table.Td>
-                      <Badge color={KIND_COLOR[t.kind]} variant="light" size="sm">
-                        {t.kind}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={STATUS_COLOR[t.status]} variant="light" size="sm">
-                        {t.status.replace('_', ' ')}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={PRIORITY_COLOR[t.priority]} variant="dot" size="sm">
-                        {t.priority}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      {t.assignee ? (
-                        <Tooltip label={t.assignee.name} withArrow>
-                          <Group gap={6} wrap="nowrap">
-                            <UserAvatar name={t.assignee.name} image={t.assignee.image} size={20} color="blue" />
-                            <Text size="xs" truncate style={{ maxWidth: 90 }}>{t.assignee.name.split(' ')[0]}</Text>
-                          </Group>
-                        </Tooltip>
-                      ) : (
-                        <Text size="xs" c="dimmed">—</Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      {t.dueAt ? (
-                        (() => {
-                          const dueMs = new Date(t.dueAt).getTime()
-                          const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
-                          return (
-                            <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
-                              {new Date(t.dueAt).toLocaleDateString('id-ID')}
-                            </Text>
-                          )
-                        })()
-                      ) : (
-                        <Text size="xs" c="dimmed">
-                          —
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Tooltip
-                        label={
-                          t.estimateHours != null || t.actualHours != null
-                            ? `estimate: ${t.estimateHours ?? '—'}h · actual: ${t.actualHours ?? '—'}h${variance != null ? ` · ${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : ''}`
-                            : 'No hours logged'
-                        }
-                      >
-                        <Group gap={4} wrap="nowrap">
-                          <TbClock size={12} />
-                          <Text size="xs" c={variance != null && variance > 0 ? 'red' : 'dimmed'}>
-                            {t.actualHours != null
-                              ? `${t.actualHours}h`
-                              : t.estimateHours != null
-                                ? `~${t.estimateHours}h`
-                                : '—'}
-                          </Text>
-                        </Group>
-                      </Tooltip>
-                    </Table.Td>
-                    <Table.Td style={{ minWidth: 90 }}>
-                      {t.progressPercent != null ? (
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {t.progressPercent}%
-                          </Text>
-                          <Progress
-                            value={t.progressPercent}
-                            size="xs"
-                            color={t.status === 'CLOSED' ? 'green' : 'blue'}
-                          />
-                        </Stack>
-                      ) : (
-                        <Text size="xs" c="dimmed">
-                          —
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed">
-                        {new Date(t.updatedAt).toLocaleDateString()}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td onClick={(e) => e.stopPropagation()}>
-                      {deletable ? (
-                        <Tooltip label="Hapus task">
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            color="red"
-                            onClick={() => confirmDeleteOne(t)}
-                            loading={deleteOne.isPending && deleteOne.variables?.id === t.id}
-                          >
-                            <TbTrash size={14} />
-                          </ActionIcon>
-                        </Tooltip>
-                      ) : null}
-                    </Table.Td>
-                  </Table.Tr>
-                )
-              })}
-            </Table.Tbody>
-          </Table>
+                      <Table.Td onClick={(e) => e.stopPropagation()}>
+                        {deletable ? (
+                          <Tooltip label="Hapus task">
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="red"
+                              onClick={() => confirmDeleteOne(t)}
+                              loading={deleteOne.isPending && deleteOne.variables?.id === t.id}
+                            >
+                              <TbTrash size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        ) : null}
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                })}
+              </Table.Tbody>
+            </Table>
           </Table.ScrollContainer>
           {tasks.length > PAGE_SIZE && (
             <Group justify="space-between" p="md">
@@ -1186,11 +1280,8 @@ export function TasksPanel({
           body: { padding: 'var(--mantine-spacing-lg)' },
         }}
       >
-        {drawerTaskId && (
-          <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />
-        )}
+        {drawerTaskId && <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />}
       </Modal>
     </Stack>
   )
 }
-

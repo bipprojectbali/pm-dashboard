@@ -1,7 +1,7 @@
-import { generateAndSendDailyReport } from './daily-report'
 import { getSetting } from './app-settings'
-import { getReportTimezone, getZonedParts } from './timezone'
 import { appLog } from './applog'
+import { generateAndSendDailyReport } from './daily-report'
+import { getReportTimezone, getZonedParts } from './timezone'
 
 export interface CronRunResult {
   ok: boolean
@@ -24,7 +24,7 @@ export async function runCronNow(): Promise<CronRunResult> {
   const result = await generateAndSendDailyReport({ trigger: 'cron' })
 
   if (!result.ok) {
-    const reason = result.message.includes('berlangsung') ? 'in_flight' as const : undefined
+    const reason = result.message.includes('berlangsung') ? ('in_flight' as const) : undefined
     appLog('warn', `Daily report cron gagal: ${result.message}`)
     return { ok: false, message: result.message, skippedReason: reason }
   }
@@ -60,7 +60,7 @@ export async function runCronAtStartup(): Promise<void> {
   const schedMinute = parseInt((await getSetting('report.scheduleMinute')) ?? '0', 10)
   const tz = await getReportTimezone()
   const now = getZonedParts(tz)
-  const delta = (now.hour * 60 + now.minute) - (schedHour * 60 + schedMinute)
+  const delta = now.hour * 60 + now.minute - (schedHour * 60 + schedMinute)
 
   if (delta < 0 || delta >= 5) return
 

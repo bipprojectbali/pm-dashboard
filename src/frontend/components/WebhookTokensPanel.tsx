@@ -280,122 +280,126 @@ export function WebhookTokensPanel() {
 
       <Card withBorder padding={0} radius="md">
         <Table.ScrollContainer minWidth={1000}>
-        <Table striped highlightOnHover layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(220)}>Name</Table.Th>
-              <Table.Th style={{ width: 110 }}>Status</Table.Th>
-              <Table.Th style={{ width: 160 }}>Prefix</Table.Th>
-              <Table.Th style={{ width: 200 }}>Created by</Table.Th>
-              <Table.Th style={{ width: 130 }}>Expires</Table.Th>
-              <Table.Th style={{ width: 130 }}>Last used</Table.Th>
-              <Table.Th style={{ width: 50 }}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
+          <Table striped highlightOnHover layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={7}>
-                  <EmptyRow title="Memuat token…" />
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(220)}>Name</Table.Th>
+                <Table.Th style={{ width: 110 }}>Status</Table.Th>
+                <Table.Th style={{ width: 160 }}>Prefix</Table.Th>
+                <Table.Th style={{ width: 200 }}>Created by</Table.Th>
+                <Table.Th style={{ width: 130 }}>Expires</Table.Th>
+                <Table.Th style={{ width: 130 }}>Last used</Table.Th>
+                <Table.Th style={{ width: 50 }}></Table.Th>
               </Table.Tr>
-            )}
-            {!isLoading && tokens.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={7}>
-                  <EmptyRow
-                    icon={TbKey}
-                    title="Belum ada token"
-                    message="Klik tombol New token di atas untuk generate webhook token pertama."
-                  />
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {tokens.map((t) => {
-              const expiry = formatExpiry(t.expiresAt)
-              return (
-                <Table.Tr key={t.id}>
-                  <Table.Td style={stickyFirstCell(220)}>
-                    <Text size="sm" fw={500} lineClamp={1}>
-                      {t.name}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge size="sm" color={STATUS_COLOR[t.status]} variant="light">
-                      {t.status}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Code style={{ fontSize: 11 }}>{t.tokenPrefix}…</Code>
-                  </Table.Td>
-                  <Table.Td>
-                    {t.createdBy ? (
-                      <div>
-                        <Text size="xs" fw={500}>
-                          {t.createdBy.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {t.createdBy.email}
-                        </Text>
-                      </div>
-                    ) : (
-                      <Text size="xs" c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c={expiry.expired ? 'red' : 'dimmed'}>
-                      {expiry.text}
-                      {expiry.expired && ' (expired)'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {formatRelative(t.lastUsedAt)}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Menu position="bottom-end">
-                      <Menu.Target>
-                        <ActionIcon variant="subtle" size="sm">
-                          <TbDots size={14} />
-                        </ActionIcon>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        {t.status === 'ACTIVE' && (
-                          <Menu.Item
-                            leftSection={<TbPlayerPause size={14} />}
-                            onClick={() => patchToken.mutate({ id: t.id, status: 'DISABLED' })}
-                          >
-                            Disable
-                          </Menu.Item>
-                        )}
-                        {t.status === 'DISABLED' && (
-                          <Menu.Item
-                            leftSection={<TbPlayerPlay size={14} />}
-                            onClick={() => patchToken.mutate({ id: t.id, status: 'ACTIVE' })}
-                          >
-                            Enable
-                          </Menu.Item>
-                        )}
-                        {t.status !== 'REVOKED' && (
-                          <Menu.Item leftSection={<TbShieldOff size={14} />} color="red" onClick={() => openRevoke(t)}>
-                            Revoke
-                          </Menu.Item>
-                        )}
-                        <Menu.Divider />
-                        <Menu.Item leftSection={<TbTrash size={14} />} color="red" onClick={() => openDelete(t)}>
-                          Delete permanently
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading && (
+                <Table.Tr>
+                  <Table.Td colSpan={7}>
+                    <EmptyRow title="Memuat token…" />
                   </Table.Td>
                 </Table.Tr>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
+              )}
+              {!isLoading && tokens.length === 0 && (
+                <Table.Tr>
+                  <Table.Td colSpan={7}>
+                    <EmptyRow
+                      icon={TbKey}
+                      title="Belum ada token"
+                      message="Klik tombol New token di atas untuk generate webhook token pertama."
+                    />
+                  </Table.Td>
+                </Table.Tr>
+              )}
+              {tokens.map((t) => {
+                const expiry = formatExpiry(t.expiresAt)
+                return (
+                  <Table.Tr key={t.id}>
+                    <Table.Td style={stickyFirstCell(220)}>
+                      <Text size="sm" fw={500} lineClamp={1}>
+                        {t.name}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge size="sm" color={STATUS_COLOR[t.status]} variant="light">
+                        {t.status}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Code style={{ fontSize: 11 }}>{t.tokenPrefix}…</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      {t.createdBy ? (
+                        <div>
+                          <Text size="xs" fw={500}>
+                            {t.createdBy.name}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {t.createdBy.email}
+                          </Text>
+                        </div>
+                      ) : (
+                        <Text size="xs" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c={expiry.expired ? 'red' : 'dimmed'}>
+                        {expiry.text}
+                        {expiry.expired && ' (expired)'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed">
+                        {formatRelative(t.lastUsedAt)}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Menu position="bottom-end">
+                        <Menu.Target>
+                          <ActionIcon variant="subtle" size="sm">
+                            <TbDots size={14} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {t.status === 'ACTIVE' && (
+                            <Menu.Item
+                              leftSection={<TbPlayerPause size={14} />}
+                              onClick={() => patchToken.mutate({ id: t.id, status: 'DISABLED' })}
+                            >
+                              Disable
+                            </Menu.Item>
+                          )}
+                          {t.status === 'DISABLED' && (
+                            <Menu.Item
+                              leftSection={<TbPlayerPlay size={14} />}
+                              onClick={() => patchToken.mutate({ id: t.id, status: 'ACTIVE' })}
+                            >
+                              Enable
+                            </Menu.Item>
+                          )}
+                          {t.status !== 'REVOKED' && (
+                            <Menu.Item
+                              leftSection={<TbShieldOff size={14} />}
+                              color="red"
+                              onClick={() => openRevoke(t)}
+                            >
+                              Revoke
+                            </Menu.Item>
+                          )}
+                          <Menu.Divider />
+                          <Menu.Item leftSection={<TbTrash size={14} />} color="red" onClick={() => openDelete(t)}>
+                            Delete permanently
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
+                  </Table.Tr>
+                )
+              })}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
       </Card>
     </Stack>

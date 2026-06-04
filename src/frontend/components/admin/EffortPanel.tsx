@@ -204,115 +204,115 @@ function VarianceView() {
           </Tooltip>
         </Group>
         <Table.ScrollContainer minWidth={1100}>
-        <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(220)}>Task</Table.Th>
-              <Table.Th style={{ width: 160 }}>Project</Table.Th>
-              <Table.Th style={{ width: 200 }}>Assignee</Table.Th>
-              <Table.Th style={{ width: 100 }}>Priority</Table.Th>
-              <Table.Th style={{ width: 110 }}>
-                <Tooltip label="Estimasi jam dari field estimateHours. Diisi saat task dibuat.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Estimate</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 100 }}>
-                <Tooltip label="Jumlah jam ActivityWatch window events assignee yang jatuh di window task aktif.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Actual</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 110 }}>
-                <Tooltip label="(Actual − Estimate) / Estimate × 100. Positif = over budget, negatif = under. Rentang ±25% = on track.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Variance</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 140 }}>
-                <Tooltip label="Kategori: over / under / on / missing-estimate (tidak ada estimateHours) / no-activity (tidak ada event pm-watch) / no-assignee.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Verdict</span>
-                </Tooltip>
-              </Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading ? (
+          <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={8}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    Loading…
-                  </Text>
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(220)}>Task</Table.Th>
+                <Table.Th style={{ width: 160 }}>Project</Table.Th>
+                <Table.Th style={{ width: 200 }}>Assignee</Table.Th>
+                <Table.Th style={{ width: 100 }}>Priority</Table.Th>
+                <Table.Th style={{ width: 110 }}>
+                  <Tooltip label="Estimasi jam dari field estimateHours. Diisi saat task dibuat.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Estimate</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 100 }}>
+                  <Tooltip label="Jumlah jam ActivityWatch window events assignee yang jatuh di window task aktif.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Actual</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 110 }}>
+                  <Tooltip label="(Actual − Estimate) / Estimate × 100. Positif = over budget, negatif = under. Rentang ±25% = on track.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Variance</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 140 }}>
+                  <Tooltip label="Kategori: over / under / on / missing-estimate (tidak ada estimateHours) / no-activity (tidak ada event pm-watch) / no-assignee.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Verdict</span>
+                  </Tooltip>
+                </Table.Th>
               </Table.Tr>
-            ) : rows.length === 0 ? (
-              <Table.Tr>
-                <Table.Td colSpan={8}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    No tasks yet.
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            ) : (
-              pagedRows.map((r) => (
-                <Table.Tr key={r.taskId}>
-                  <Table.Td style={stickyFirstCell(220)}>
-                    <Text size="sm" fw={500} lineClamp={1}>
-                      {r.title}
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={8}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      Loading…
                     </Text>
-                    <Text size="xs" c="dimmed">
-                      {r.status}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" lineClamp={1}>
-                      {r.projectName}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c={r.assigneeEmail ? undefined : 'dimmed'}>
-                      {r.assigneeEmail ?? '(unassigned)'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge size="xs" color={priorityColor[r.priority as keyof typeof priorityColor]} variant="light">
-                      {r.priority}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace">
-                      {r.estimateHours !== null ? `${r.estimateHours}h` : '—'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace">
-                      {r.actualHours}h
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text
-                      size="xs"
-                      ff="monospace"
-                      c={
-                        r.variancePercent === null
-                          ? 'dimmed'
-                          : r.variancePercent > 25
-                            ? 'red'
-                            : r.variancePercent < -25
-                              ? 'teal'
-                              : undefined
-                      }
-                    >
-                      {r.variancePercent === null ? '—' : `${r.variancePercent > 0 ? '+' : ''}${r.variancePercent}%`}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge size="xs" variant="light" color={verdictColor[r.verdict]}>
-                      {r.verdict}
-                    </Badge>
                   </Table.Td>
                 </Table.Tr>
-              ))
-            )}
-          </Table.Tbody>
-        </Table>
+              ) : rows.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={8}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      No tasks yet.
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ) : (
+                pagedRows.map((r) => (
+                  <Table.Tr key={r.taskId}>
+                    <Table.Td style={stickyFirstCell(220)}>
+                      <Text size="sm" fw={500} lineClamp={1}>
+                        {r.title}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {r.status}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" lineClamp={1}>
+                        {r.projectName}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c={r.assigneeEmail ? undefined : 'dimmed'}>
+                        {r.assigneeEmail ?? '(unassigned)'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge size="xs" color={priorityColor[r.priority as keyof typeof priorityColor]} variant="light">
+                        {r.priority}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace">
+                        {r.estimateHours !== null ? `${r.estimateHours}h` : '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace">
+                        {r.actualHours}h
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        size="xs"
+                        ff="monospace"
+                        c={
+                          r.variancePercent === null
+                            ? 'dimmed'
+                            : r.variancePercent > 25
+                              ? 'red'
+                              : r.variancePercent < -25
+                                ? 'teal'
+                                : undefined
+                        }
+                      >
+                        {r.variancePercent === null ? '—' : `${r.variancePercent > 0 ? '+' : ''}${r.variancePercent}%`}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge size="xs" variant="light" color={verdictColor[r.verdict]}>
+                        {r.verdict}
+                      </Badge>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              )}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
         {rows.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">
@@ -372,93 +372,93 @@ function GhostView() {
           </Tooltip>
         </Group>
         <Table.ScrollContainer minWidth={950}>
-        <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(220)}>Task</Table.Th>
-              <Table.Th style={{ width: 160 }}>Project</Table.Th>
-              <Table.Th style={{ width: 200 }}>Assignee</Table.Th>
-              <Table.Th style={{ width: 90 }}>
-                <Tooltip label="Berapa hari sejak task terakhir diupdate (updatedAt).">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Stale</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 100 }}>
-                <Tooltip label="Jam ActivityWatch events dari agent assignee pada task ini dalam 7 hari terakhir. 0 = benar-benar tidak disentuh.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Hours 7d</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 200 }}>
-                <Tooltip label="Stalled: assignee online tapi task stuck. Abandoned: assignee offline >24 jam, kemungkinan diabaikan.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Signal</span>
-                </Tooltip>
-              </Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading ? (
+          <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    Loading…
-                  </Text>
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(220)}>Task</Table.Th>
+                <Table.Th style={{ width: 160 }}>Project</Table.Th>
+                <Table.Th style={{ width: 200 }}>Assignee</Table.Th>
+                <Table.Th style={{ width: 90 }}>
+                  <Tooltip label="Berapa hari sejak task terakhir diupdate (updatedAt).">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Stale</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 100 }}>
+                  <Tooltip label="Jam ActivityWatch events dari agent assignee pada task ini dalam 7 hari terakhir. 0 = benar-benar tidak disentuh.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Hours 7d</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 200 }}>
+                  <Tooltip label="Stalled: assignee online tapi task stuck. Abandoned: assignee offline >24 jam, kemungkinan diabaikan.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Signal</span>
+                  </Tooltip>
+                </Table.Th>
               </Table.Tr>
-            ) : rows.length === 0 ? (
-              <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    No ghost tasks. Nice.
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            ) : (
-              pagedRows.map((r) => (
-                <Table.Tr key={r.taskId}>
-                  <Table.Td style={stickyFirstCell(220)}>
-                    <Text size="sm" fw={500} lineClamp={1}>
-                      {r.title}
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={6}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      Loading…
                     </Text>
-                    <Badge size="xs" color={priorityColor[r.priority as keyof typeof priorityColor]} variant="light">
-                      {r.priority}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" lineClamp={1}>
-                      {r.projectName}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c={r.assigneeEmail ? undefined : 'dimmed'} lineClamp={1}>
-                      {r.assigneeEmail ?? '(unassigned)'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="orange">
-                      {r.daysStale}d
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace">
-                      {r.actualHoursLast7d}h
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {r.assigneeOnlineLast24h ? (
-                      <Badge size="xs" color="orange" variant="light">
-                        stalled (user active)
-                      </Badge>
-                    ) : (
-                      <Badge size="xs" color="red" variant="light">
-                        abandoned (user offline)
-                      </Badge>
-                    )}
                   </Table.Td>
                 </Table.Tr>
-              ))
-            )}
-          </Table.Tbody>
-        </Table>
+              ) : rows.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={6}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      No ghost tasks. Nice.
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ) : (
+                pagedRows.map((r) => (
+                  <Table.Tr key={r.taskId}>
+                    <Table.Td style={stickyFirstCell(220)}>
+                      <Text size="sm" fw={500} lineClamp={1}>
+                        {r.title}
+                      </Text>
+                      <Badge size="xs" color={priorityColor[r.priority as keyof typeof priorityColor]} variant="light">
+                        {r.priority}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" lineClamp={1}>
+                        {r.projectName}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c={r.assigneeEmail ? undefined : 'dimmed'} lineClamp={1}>
+                        {r.assigneeEmail ?? '(unassigned)'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="orange">
+                        {r.daysStale}d
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace">
+                        {r.actualHoursLast7d}h
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {r.assigneeOnlineLast24h ? (
+                        <Badge size="xs" color="orange" variant="light">
+                          stalled (user active)
+                        </Badge>
+                      ) : (
+                        <Badge size="xs" color="red" variant="light">
+                          abandoned (user offline)
+                        </Badge>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              )}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
         {rows.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">
@@ -517,100 +517,100 @@ function PhantomView() {
           </Tooltip>
         </Group>
         <Table.ScrollContainer minWidth={800}>
-        <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={stickyFirstHeader(240)}>User</Table.Th>
-              <Table.Th style={{ width: 100 }}>
-                <Tooltip label="Seluruh jam ActivityWatch window-events dari agent user dalam 7 hari terakhir.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Total</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 100 }}>
-                <Tooltip label="Jam yang jatuh di window salah satu task user (IN_PROGRESS atau baru closed).">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Tracked</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 100 }}>
-                <Tooltip label="Total − Tracked. Jam kerja yang tidak punya task terkait.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Phantom</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 110 }}>
-                <Tooltip label="Phantom / Total × 100. >50% = peringatan, banyak pekerjaan tidak tercatat.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>% Phantom</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th style={{ width: 110 }}>Open tasks</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading ? (
+          <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="md" layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    Loading…
-                  </Text>
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(240)}>User</Table.Th>
+                <Table.Th style={{ width: 100 }}>
+                  <Tooltip label="Seluruh jam ActivityWatch window-events dari agent user dalam 7 hari terakhir.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Total</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 100 }}>
+                  <Tooltip label="Jam yang jatuh di window salah satu task user (IN_PROGRESS atau baru closed).">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Tracked</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 100 }}>
+                  <Tooltip label="Total − Tracked. Jam kerja yang tidak punya task terkait.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Phantom</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 110 }}>
+                  <Tooltip label="Phantom / Total × 100. >50% = peringatan, banyak pekerjaan tidak tercatat.">
+                    <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>% Phantom</span>
+                  </Tooltip>
+                </Table.Th>
+                <Table.Th style={{ width: 110 }}>Open tasks</Table.Th>
               </Table.Tr>
-            ) : rows.length === 0 ? (
-              <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed" size="sm" ta="center" py="md">
-                    No activity tracked in the last 7 days.
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            ) : (
-              pagedRows.map((r) => (
-                <Table.Tr key={r.userId}>
-                  <Table.Td style={stickyFirstCell(240)}>
-                    <Text size="xs" lineClamp={1}>
-                      {r.email}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace">
-                      {r.totalHours}h
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="teal">
-                      {r.trackedHours}h
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="orange">
-                      {r.phantomHours}h
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text
-                      size="xs"
-                      ff="monospace"
-                      c={
-                        r.phantomPercent === null
-                          ? 'dimmed'
-                          : r.phantomPercent > 50
-                            ? 'red'
-                            : r.phantomPercent > 25
-                              ? 'orange'
-                              : 'teal'
-                      }
-                    >
-                      {r.phantomPercent === null ? '—' : `${r.phantomPercent}%`}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace">
-                      {r.openTaskCount}
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={6}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      Loading…
                     </Text>
                   </Table.Td>
                 </Table.Tr>
-              ))
-            )}
-          </Table.Tbody>
-        </Table>
+              ) : rows.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={6}>
+                    <Text c="dimmed" size="sm" ta="center" py="md">
+                      No activity tracked in the last 7 days.
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ) : (
+                pagedRows.map((r) => (
+                  <Table.Tr key={r.userId}>
+                    <Table.Td style={stickyFirstCell(240)}>
+                      <Text size="xs" lineClamp={1}>
+                        {r.email}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace">
+                        {r.totalHours}h
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="teal">
+                        {r.trackedHours}h
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="orange">
+                        {r.phantomHours}h
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        size="xs"
+                        ff="monospace"
+                        c={
+                          r.phantomPercent === null
+                            ? 'dimmed'
+                            : r.phantomPercent > 50
+                              ? 'red'
+                              : r.phantomPercent > 25
+                                ? 'orange'
+                                : 'teal'
+                        }
+                      >
+                        {r.phantomPercent === null ? '—' : `${r.phantomPercent}%`}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace">
+                        {r.openTaskCount}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              )}
+            </Table.Tbody>
+          </Table>
         </Table.ScrollContainer>
         {rows.length > PAGE_SIZE && (
           <Group justify="space-between" p="md">

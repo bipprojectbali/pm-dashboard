@@ -1,14 +1,4 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Checkbox,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Badge, Button, Checkbox, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -180,7 +170,8 @@ export function MilestonesSection({ projectId, canManage }: { projectId: string;
             onChange={(e) => setTitle(e.currentTarget.value)}
             style={{ flex: 1 }}
           />
-          <DateInput highlightToday
+          <DateInput
+            highlightToday
             label="Due"
             value={dueAt}
             onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}

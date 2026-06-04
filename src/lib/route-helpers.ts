@@ -1,6 +1,6 @@
+import { auth } from './auth'
 import { prisma } from './db'
 import { env } from './env'
-import { auth } from './auth'
 
 export type ProjectRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
 
@@ -8,11 +8,7 @@ export const SESSION_TTL_SEC = 7 * 24 * 60 * 60
 export const SESSION_REFRESH_THRESHOLD_SEC = 24 * 60 * 60
 
 export function getIp(request: Request): string {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    'unknown'
-  )
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? request.headers.get('x-real-ip') ?? 'unknown'
 }
 
 export function getPublicOrigin(request: Request): string {
@@ -41,18 +37,12 @@ export function isSystemAdmin(role: string | undefined | null): boolean {
   return role === 'ADMIN' || role === 'SUPER_ADMIN'
 }
 
-export function canManageProject(
-  authCtx: { role: string },
-  membership: { role: ProjectRole } | null,
-): boolean {
+export function canManageProject(authCtx: { role: string }, membership: { role: ProjectRole } | null): boolean {
   if (isSystemAdmin(authCtx.role)) return true
   return membership?.role === 'OWNER' || membership?.role === 'PM'
 }
 
-export function canGrantProjectOwner(
-  authCtx: { role: string },
-  membership: { role: ProjectRole } | null,
-): boolean {
+export function canGrantProjectOwner(authCtx: { role: string }, membership: { role: ProjectRole } | null): boolean {
   if (authCtx.role === 'SUPER_ADMIN') return true
   return membership?.role === 'OWNER'
 }
@@ -81,18 +71,11 @@ export async function requireAuth(
     const secondsUntilExpiry = (plainSession.expiresAt.getTime() - Date.now()) / 1000
     if (secondsUntilExpiry < SESSION_TTL_SEC - SESSION_REFRESH_THRESHOLD_SEC) {
       const newExpiry = new Date(Date.now() + SESSION_TTL_SEC * 1000)
-      await prisma.session
-        .update({ where: { id: plainSession.id }, data: { expiresAt: newExpiry } })
-        .catch(() => {})
+      await prisma.session.update({ where: { id: plainSession.id }, data: { expiresAt: newExpiry } }).catch(() => {})
       if (responseHeaders) responseHeaders.set('set-cookie', sessionCookie(rawToken, SESSION_TTL_SEC))
     }
-    if (
-      env.SUPER_ADMIN_EMAILS.includes(plainSession.user.email) &&
-      plainSession.user.role !== 'SUPER_ADMIN'
-    ) {
-      await prisma.user
-        .update({ where: { id: plainSession.user.id }, data: { role: 'SUPER_ADMIN' } })
-        .catch(() => {})
+    if (env.SUPER_ADMIN_EMAILS.includes(plainSession.user.email) && plainSession.user.role !== 'SUPER_ADMIN') {
+      await prisma.user.update({ where: { id: plainSession.user.id }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
       return { userId: plainSession.user.id, role: 'SUPER_ADMIN', email: plainSession.user.email }
     }
     return {
@@ -110,19 +93,14 @@ export async function requireAuth(
   if (isBlocked) return null
 
   if (env.SUPER_ADMIN_EMAILS.includes(baSession.user.email) && userRole !== 'SUPER_ADMIN') {
-    await prisma.user
-      .update({ where: { id: baSession.user.id }, data: { role: 'SUPER_ADMIN' } })
-      .catch(() => {})
+    await prisma.user.update({ where: { id: baSession.user.id }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
     return { userId: baSession.user.id, role: 'SUPER_ADMIN', email: baSession.user.email }
   }
 
   return { userId: baSession.user.id, role: userRole, email: baSession.user.email }
 }
 
-export async function requireProjectMember(
-  projectId: string,
-  userId: string,
-): Promise<{ role: ProjectRole } | null> {
+export async function requireProjectMember(projectId: string, userId: string): Promise<{ role: ProjectRole } | null> {
   const m = await prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },
     select: { role: true },
@@ -141,11 +119,7 @@ export async function canReadProject(
   if (!project) return { ok: false, status: 404, membership: null }
   const membership = await requireProjectMember(projectId, authCtx.userId)
   const admin = isSystemAdmin(authCtx.role)
-  const isVisible =
-    admin ||
-    membership != null ||
-    project.visibility === 'INTERNAL' ||
-    project.visibility === 'PUBLIC'
+  const isVisible = admin || membership != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
   if (!isVisible) return { ok: false, status: 403, membership }
   return { ok: true, status: null, membership }
 }

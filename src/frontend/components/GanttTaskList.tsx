@@ -69,13 +69,17 @@ const PRIORITY_COLOR: Record<GanttTaskMeta['priority'], string> = {
 }
 
 const PRIORITY_LABEL: Record<GanttTaskMeta['priority'], string> = {
-  LOW: '↓', MEDIUM: '→', HIGH: '↑', CRITICAL: '⚑',
+  LOW: '↓',
+  MEDIUM: '→',
+  HIGH: '↑',
+  CRITICAL: '⚑',
 }
 
 const KIND_COLOR: Record<GanttTaskMeta['kind'], string> = {
-  TASK: 'blue', BUG: 'red', QC: 'teal',
+  TASK: 'blue',
+  BUG: 'red',
+  QC: 'teal',
 }
-
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -114,22 +118,15 @@ export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
               <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
                 Task
               </Text>
-              <Text size="xs" c="dimmed">/ Assignee</Text>
+              <Text size="xs" c="dimmed">
+                / Assignee
+              </Text>
             </Group>
           )}
           {onToggleCollapse && (
             <Tooltip label={collapsed ? 'Tampilkan panel' : 'Sembunyikan panel'} position="right" withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                onClick={onToggleCollapse}
-                style={{ flexShrink: 0 }}
-              >
-                {collapsed
-                  ? <TbLayoutSidebarLeftExpand size={14} />
-                  : <TbLayoutSidebarLeftCollapse size={14} />
-                }
+              <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCollapse} style={{ flexShrink: 0 }}>
+                {collapsed ? <TbLayoutSidebarLeftExpand size={14} /> : <TbLayoutSidebarLeftCollapse size={14} />}
               </ActionIcon>
             </Tooltip>
           )}
@@ -146,15 +143,10 @@ export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
             scrollbarWidth: 'none',
           }}
         >
-          {tasks.map((task) => (
+          {tasks.map((task) =>
             collapsed ? (
               /* Collapsed: hanya avatar assignee */
-              <Tooltip
-                key={task.id}
-                label={task.assigneeName ?? 'Unassigned'}
-                position="right"
-                withArrow
-              >
+              <Tooltip key={task.id} label={task.assigneeName ?? 'Unassigned'} position="right" withArrow>
                 <Box
                   style={{
                     height: rowHeight,
@@ -164,23 +156,13 @@ export const GanttTaskList = forwardRef<HTMLDivElement, Props>(
                     borderBottom: '1px solid var(--mantine-color-default-border)',
                   }}
                 >
-                  <UserAvatar
-                    name={task.assigneeName}
-                    image={task.assigneeImage}
-                    size={30}
-                    color="blue"
-                  />
+                  <UserAvatar name={task.assigneeName} image={task.assigneeImage} size={30} color="blue" />
                 </Box>
               </Tooltip>
             ) : (
-              <TaskRow
-                key={task.id}
-                task={task}
-                rowHeight={rowHeight}
-                onClick={() => onTaskClick(task.id)}
-              />
-            )
-          ))}
+              <TaskRow key={task.id} task={task} rowHeight={rowHeight} onClick={() => onTaskClick(task.id)} />
+            ),
+          )}
         </Box>
       </Box>
     )
@@ -191,15 +173,7 @@ GanttTaskList.displayName = 'GanttTaskList'
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
 
-function TaskRow({
-  task,
-  rowHeight,
-  onClick,
-}: {
-  task: GanttTaskMeta
-  rowHeight: number
-  onClick: () => void
-}) {
+function TaskRow({ task, rowHeight, onClick }: { task: GanttTaskMeta; rowHeight: number; onClick: () => void }) {
   const statusColor = task.isOverdue ? 'red' : STATUS_COLOR[task.status]
   const statusLabel = task.isOverdue ? 'Overdue' : STATUS_SHORT[task.status]
 
@@ -218,8 +192,7 @@ function TaskRow({
         overflow: 'hidden',
       }}
       onMouseEnter={(e) => {
-        ;(e.currentTarget as HTMLDivElement).style.background =
-          'var(--mantine-color-default-hover)'
+        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--mantine-color-default-hover)'
       }}
       onMouseLeave={(e) => {
         ;(e.currentTarget as HTMLDivElement).style.background = ''
@@ -241,22 +214,11 @@ function TaskRow({
         {/* Title row */}
         <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
           {task.kind !== 'TASK' && (
-            <Badge
-              size="xs"
-              color={KIND_COLOR[task.kind]}
-              variant="light"
-              style={{ flexShrink: 0, fontSize: 9 }}
-            >
+            <Badge size="xs" color={KIND_COLOR[task.kind]} variant="light" style={{ flexShrink: 0, fontSize: 9 }}>
               {task.kind}
             </Badge>
           )}
-          <Text
-            size="xs"
-            fw={500}
-            truncate
-            style={{ minWidth: 0 }}
-            title={task.title}
-          >
+          <Text size="xs" fw={500} truncate style={{ minWidth: 0 }} title={task.title}>
             {task.title}
           </Text>
         </Group>
@@ -287,7 +249,9 @@ function TaskRow({
             </Text>
           )}
           {!task.assigneeName && (
-            <Text size="10px" c="dimmed">Unassigned</Text>
+            <Text size="10px" c="dimmed">
+              Unassigned
+            </Text>
           )}
         </Group>
 

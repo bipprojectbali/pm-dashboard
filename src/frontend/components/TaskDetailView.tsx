@@ -26,6 +26,7 @@ import {
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useHotkeys } from '@mantine/hooks'
+import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -56,7 +57,6 @@ import {
   TbUpload,
   TbX,
 } from 'react-icons/tb'
-import { modals } from '@mantine/modals'
 import { useSession } from '@/frontend/hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { Breadcrumbs } from './shared/Breadcrumbs'
@@ -498,7 +498,9 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
         </Group>
         <Group gap={6}>
           {taskQ.isFetching && !taskQ.isLoading && (
-            <Badge variant="dot" color="blue" size="xs">Sync…</Badge>
+            <Badge variant="dot" color="blue" size="xs">
+              Sync…
+            </Badge>
           )}
           <Tooltip label="Refresh">
             <ActionIcon variant="subtle" size="md" onClick={() => taskQ.refetch()} loading={taskQ.isFetching}>
@@ -523,11 +525,16 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             <Stack gap={6} style={{ flex: 1 }}>
               <Skeleton height={22} width="55%" />
               <Skeleton height={13} width="40%" />
-              <Group gap={6}><Skeleton height={18} width={52} radius="xl" /><Skeleton height={18} width={68} radius="xl" /></Group>
+              <Group gap={6}>
+                <Skeleton height={18} width={52} radius="xl" />
+                <Skeleton height={18} width={68} radius="xl" />
+              </Group>
             </Stack>
           </Group>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            {[80, 80, 120, 120].map((h, i) => <Skeleton key={i} height={h} radius="md" />)}
+            {[80, 80, 120, 120].map((h, i) => (
+              <Skeleton key={i} height={h} radius="md" />
+            ))}
           </SimpleGrid>
         </Stack>
       ) : taskQ.error ? (
@@ -535,8 +542,18 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
           <Stack gap="xs">
             <Text size="sm">{(taskQ.error as Error).message}</Text>
             <Group gap="xs">
-              <Button size="xs" variant="light" color="red" leftSection={<TbRefresh size={13} />} onClick={() => taskQ.refetch()}>Coba lagi</Button>
-              <Button size="xs" variant="subtle" onClick={onBack}>Kembali</Button>
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                leftSection={<TbRefresh size={13} />}
+                onClick={() => taskQ.refetch()}
+              >
+                Coba lagi
+              </Button>
+              <Button size="xs" variant="subtle" onClick={onBack}>
+                Kembali
+              </Button>
             </Group>
           </Stack>
         </Alert>
@@ -546,17 +563,24 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
         </Alert>
       ) : (
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing={0} style={{ minHeight: 0 }}>
-
           {/* ── Left: main content ── */}
-          <Stack
-            gap="md"
-            p="md"
-            style={{ borderRight: '1px solid var(--mantine-color-default-border)', minWidth: 0 }}
-          >
+          <Stack gap="md" p="md" style={{ borderRight: '1px solid var(--mantine-color-default-border)', minWidth: 0 }}>
             {/* Title + kind icon */}
             <Group gap="sm" align="flex-start" wrap="nowrap">
-              <ThemeIcon variant="light" color={KIND_COLOR[task.kind]} size={40} radius="md" style={{ flexShrink: 0, marginTop: 2 }}>
-                {task.kind === 'BUG' ? <TbBug size={20} /> : task.kind === 'QC' ? <TbShieldCheck size={20} /> : <TbListCheck size={20} />}
+              <ThemeIcon
+                variant="light"
+                color={KIND_COLOR[task.kind]}
+                size={40}
+                radius="md"
+                style={{ flexShrink: 0, marginTop: 2 }}
+              >
+                {task.kind === 'BUG' ? (
+                  <TbBug size={20} />
+                ) : task.kind === 'QC' ? (
+                  <TbShieldCheck size={20} />
+                ) : (
+                  <TbListCheck size={20} />
+                )}
               </ThemeIcon>
               <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
                 {editingTitle ? (
@@ -565,16 +589,27 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                       value={draftTitle}
                       onChange={(e) => setDraftTitle(e.currentTarget.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') { e.preventDefault(); saveTitle() }
-                        else if (e.key === 'Escape') setEditingTitle(false)
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveTitle()
+                        } else if (e.key === 'Escape') setEditingTitle(false)
                       }}
                       size="sm"
                       maxLength={500}
                       style={{ flex: 1 }}
                       autoFocus
                     />
-                    <ActionIcon variant="light" color="blue" size="sm" onClick={saveTitle} loading={update.isPending}><TbCheck size={14} /></ActionIcon>
-                    <ActionIcon variant="subtle" size="sm" onClick={() => setEditingTitle(false)} disabled={update.isPending}><TbX size={14} /></ActionIcon>
+                    <ActionIcon variant="light" color="blue" size="sm" onClick={saveTitle} loading={update.isPending}>
+                      <TbCheck size={14} />
+                    </ActionIcon>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => setEditingTitle(false)}
+                      disabled={update.isPending}
+                    >
+                      <TbX size={14} />
+                    </ActionIcon>
                   </Group>
                 ) : (
                   <Group gap={6} wrap="nowrap" align="flex-start">
@@ -583,7 +618,13 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                     </Text>
                     {canWrite && (
                       <Tooltip label="Edit judul">
-                        <ActionIcon variant="subtle" size="xs" color="gray" onClick={() => setEditingTitle(true)} style={{ marginTop: 3, flexShrink: 0 }}>
+                        <ActionIcon
+                          variant="subtle"
+                          size="xs"
+                          color="gray"
+                          onClick={() => setEditingTitle(true)}
+                          style={{ marginTop: 3, flexShrink: 0 }}
+                        >
                           <TbEdit size={12} />
                         </ActionIcon>
                       </Tooltip>
@@ -591,22 +632,53 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                   </Group>
                 )}
                 <Group gap={4} wrap="wrap">
-                  <Badge color={KIND_COLOR[task.kind]} variant="light" size="xs">{task.kind}</Badge>
-                  <Badge color={STATUS_COLOR[task.status]} variant="filled" size="xs">{task.status.replace(/_/g, ' ')}</Badge>
-                  <Badge color={PRIORITY_COLOR[task.priority]} variant="light" size="xs"
-                    leftSection={<div style={{ width: 5, height: 5, borderRadius: '50%', background: `var(--mantine-color-${PRIORITY_COLOR[task.priority]}-6)` }} />}
-                  >{task.priority}</Badge>
-                  {isOverdue && <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={9} />}>Overdue</Badge>}
-                  {task.blockedBy.length > 0 && task.status !== 'CLOSED' && (
-                    <Badge color="orange" variant="light" size="xs" leftSection={<TbLock size={9} />}>Blocked</Badge>
+                  <Badge color={KIND_COLOR[task.kind]} variant="light" size="xs">
+                    {task.kind}
+                  </Badge>
+                  <Badge color={STATUS_COLOR[task.status]} variant="filled" size="xs">
+                    {task.status.replace(/_/g, ' ')}
+                  </Badge>
+                  <Badge
+                    color={PRIORITY_COLOR[task.priority]}
+                    variant="light"
+                    size="xs"
+                    leftSection={
+                      <div
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: `var(--mantine-color-${PRIORITY_COLOR[task.priority]}-6)`,
+                        }}
+                      />
+                    }
+                  >
+                    {task.priority}
+                  </Badge>
+                  {isOverdue && (
+                    <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={9} />}>
+                      Overdue
+                    </Badge>
                   )}
-                  {task.route && <Badge color="gray" variant="light" size="xs" leftSection={<TbLink size={9} />}>{task.route}</Badge>}
+                  {task.blockedBy.length > 0 && task.status !== 'CLOSED' && (
+                    <Badge color="orange" variant="light" size="xs" leftSection={<TbLock size={9} />}>
+                      Blocked
+                    </Badge>
+                  )}
+                  {task.route && (
+                    <Badge color="gray" variant="light" size="xs" leftSection={<TbLink size={9} />}>
+                      {task.route}
+                    </Badge>
+                  )}
                   {task.tags.map((t) => (
-                    <Badge key={t.tagId} color={t.tag.color} variant="dot" size="xs">{t.tag.name}</Badge>
+                    <Badge key={t.tagId} color={t.tag.color} variant="dot" size="xs">
+                      {t.tag.name}
+                    </Badge>
                   ))}
                 </Group>
                 <Text size="xs" c="dimmed">
-                  #{task.id.slice(0, 8)} · {task.project.name} · {task.reporter.name} · {new Date(task.createdAt).toLocaleDateString('id-ID')}
+                  #{task.id.slice(0, 8)} · {task.project.name} · {task.reporter.name} ·{' '}
+                  {new Date(task.createdAt).toLocaleDateString('id-ID')}
                 </Text>
               </Stack>
             </Group>
@@ -616,7 +688,9 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             {/* Description */}
             <Stack gap={6}>
               <Group justify="space-between">
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Deskripsi</Text>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Deskripsi
+                </Text>
                 {canWrite && !editingDescription && (
                   <ActionIcon variant="subtle" size="xs" color="gray" onClick={() => setEditingDescription(true)}>
                     <TbEdit size={12} />
@@ -628,17 +702,38 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                   <Textarea
                     value={draftDescription}
                     onChange={(e) => setDraftDescription(e.currentTarget.value)}
-                    autosize minRows={3}
+                    autosize
+                    minRows={3}
                     placeholder="Deskripsi, steps to reproduce, expected vs actual…"
                     autoFocus
                   />
                   <Group justify="flex-end" gap="xs">
-                    <Button size="xs" variant="subtle" leftSection={<TbX size={12} />} onClick={() => setEditingDescription(false)} disabled={update.isPending}>Batal</Button>
-                    <Button size="xs" leftSection={<TbCheck size={12} />} onClick={saveDescription} loading={update.isPending}>Simpan</Button>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      leftSection={<TbX size={12} />}
+                      onClick={() => setEditingDescription(false)}
+                      disabled={update.isPending}
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      size="xs"
+                      leftSection={<TbCheck size={12} />}
+                      onClick={saveDescription}
+                      loading={update.isPending}
+                    >
+                      Simpan
+                    </Button>
                   </Group>
                 </Stack>
               ) : (
-                <Text size="sm" c={task.description ? undefined : 'dimmed'} fs={task.description ? undefined : 'italic'} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                <Text
+                  size="sm"
+                  c={task.description ? undefined : 'dimmed'}
+                  fs={task.description ? undefined : 'italic'}
+                  style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+                >
                   {task.description || 'Belum ada deskripsi'}
                 </Text>
               )}
@@ -646,53 +741,97 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
 
             {/* Tabs */}
             <Card withBorder radius="md" padding={0} style={{ overflow: 'hidden' }}>
-              <Tabs defaultValue="checklist" keepMounted={false}
+              <Tabs
+                defaultValue="checklist"
+                keepMounted={false}
                 styles={{
                   list: { paddingInline: 8, paddingTop: 4, background: 'var(--mantine-color-default-hover)' },
                   tab: { fontWeight: 500, fontSize: 'var(--mantine-font-size-xs)' },
                 }}
               >
                 <Tabs.List>
-                  <Tabs.Tab value="checklist" leftSection={<TbListCheck size={13} />}
-                    rightSection={task.checklist.length ? <TabCount value={`${task.checklist.filter(c=>c.done).length}/${task.checklist.length}`} color={task.checklist.every(c=>c.done)&&task.checklist.length>0?'green':'gray'} /> : undefined}
-                  >Checklist</Tabs.Tab>
-                  <Tabs.Tab value="comments" leftSection={<TbMessage size={13} />}
+                  <Tabs.Tab
+                    value="checklist"
+                    leftSection={<TbListCheck size={13} />}
+                    rightSection={
+                      task.checklist.length ? (
+                        <TabCount
+                          value={`${task.checklist.filter((c) => c.done).length}/${task.checklist.length}`}
+                          color={task.checklist.every((c) => c.done) && task.checklist.length > 0 ? 'green' : 'gray'}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    Checklist
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="comments"
+                    leftSection={<TbMessage size={13} />}
                     rightSection={task.comments.length ? <TabCount value={task.comments.length} /> : undefined}
-                  >Komentar</Tabs.Tab>
-                  <Tabs.Tab value="evidence" leftSection={<TbPaperclip size={13} />}
+                  >
+                    Komentar
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="evidence"
+                    leftSection={<TbPaperclip size={13} />}
                     rightSection={task.evidence.length ? <TabCount value={task.evidence.length} /> : undefined}
-                  >Evidence</Tabs.Tab>
-                  <Tabs.Tab value="dependencies" leftSection={<TbLock size={13} />}
-                    rightSection={task.blockedBy.length+task.blocks.length>0 ? <TabCount value={`${task.blockedBy.length}/${task.blocks.length}`} color={task.blockedBy.length>0?'orange':'gray'} /> : undefined}
-                  >Deps</Tabs.Tab>
-                  <Tabs.Tab value="activity" leftSection={<TbActivity size={13} />}>Aktivitas</Tabs.Tab>
+                  >
+                    Evidence
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="dependencies"
+                    leftSection={<TbLock size={13} />}
+                    rightSection={
+                      task.blockedBy.length + task.blocks.length > 0 ? (
+                        <TabCount
+                          value={`${task.blockedBy.length}/${task.blocks.length}`}
+                          color={task.blockedBy.length > 0 ? 'orange' : 'gray'}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    Deps
+                  </Tabs.Tab>
+                  <Tabs.Tab value="activity" leftSection={<TbActivity size={13} />}>
+                    Aktivitas
+                  </Tabs.Tab>
                 </Tabs.List>
                 <Tabs.Panel value="checklist" p="sm">
-                  <ChecklistSection items={task.checklist} canWrite={canWrite}
-                    onToggle={(id,done)=>updateChecklist.mutate({id,body:{done}})}
-                    onAdd={(title)=>addChecklist.mutate(title)}
-                    onRemove={(id)=>removeChecklist.mutate(id)}
+                  <ChecklistSection
+                    items={task.checklist}
+                    canWrite={canWrite}
+                    onToggle={(id, done) => updateChecklist.mutate({ id, body: { done } })}
+                    onAdd={(title) => addChecklist.mutate(title)}
+                    onRemove={(id) => removeChecklist.mutate(id)}
                     adding={addChecklist.isPending}
                   />
                 </Tabs.Panel>
                 <Tabs.Panel value="comments" p="sm">
-                  <CommentsSection comments={task.comments} canWrite={canWrite}
-                    onSubmit={(body)=>addComment.mutate(body)}
+                  <CommentsSection
+                    comments={task.comments}
+                    canWrite={canWrite}
+                    onSubmit={(body) => addComment.mutate(body)}
                     loading={addComment.isPending}
-                    error={addComment.error?(addComment.error as Error).message:undefined}
+                    error={addComment.error ? (addComment.error as Error).message : undefined}
                   />
                 </Tabs.Panel>
                 <Tabs.Panel value="evidence" p="sm">
-                  <EvidenceSection taskId={task.id} items={task.evidence} canWrite={canWrite}
-                    onSubmit={(body)=>addEvidence.mutate(body)}
+                  <EvidenceSection
+                    taskId={task.id}
+                    items={task.evidence}
+                    canWrite={canWrite}
+                    onSubmit={(body) => addEvidence.mutate(body)}
                     loading={addEvidence.isPending}
-                    error={addEvidence.error?(addEvidence.error as Error).message:undefined}
+                    error={addEvidence.error ? (addEvidence.error as Error).message : undefined}
                   />
                 </Tabs.Panel>
                 <Tabs.Panel value="dependencies" p="sm">
-                  <DependenciesSection task={task} projectTasks={projectTasksQ.data?.tasks??[]} canWrite={canWrite}
-                    onAdd={(blockedById)=>addDependency.mutate(blockedById)}
-                    onRemove={(blockedById)=>removeDependency.mutate(blockedById)}
+                  <DependenciesSection
+                    task={task}
+                    projectTasks={projectTasksQ.data?.tasks ?? []}
+                    canWrite={canWrite}
+                    onAdd={(blockedById) => addDependency.mutate(blockedById)}
+                    onRemove={(blockedById) => removeDependency.mutate(blockedById)}
                   />
                 </Tabs.Panel>
                 <Tabs.Panel value="activity" p="sm">
@@ -704,29 +843,50 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
 
           {/* ── Right: sidebar ── */}
           <Stack gap="md" p="md" style={{ minWidth: 0 }}>
-
             {/* Status transitions */}
             {canWrite && allowedTransitions(task.status, task.kind).length > 0 && (
               <Stack gap={6}>
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Ubah Status</Text>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Ubah Status
+                </Text>
                 <Group gap="xs" wrap="wrap">
                   {allowedTransitions(task.status, task.kind).map((s) => (
-                    <Button key={s} size="xs" variant="light" color={STATUS_COLOR[s]}
-                      onClick={() => update.mutate({ status: s })} loading={update.isPending}
-                      leftSection={<div style={{ width: 6, height: 6, borderRadius: '50%', background: `var(--mantine-color-${STATUS_COLOR[s]}-6)` }} />}
+                    <Button
+                      key={s}
+                      size="xs"
+                      variant="light"
+                      color={STATUS_COLOR[s]}
+                      onClick={() => update.mutate({ status: s })}
+                      loading={update.isPending}
+                      leftSection={
+                        <div
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: `var(--mantine-color-${STATUS_COLOR[s]}-6)`,
+                          }}
+                        />
+                      }
                     >
                       {s.replace(/_/g, ' ')}
                     </Button>
                   ))}
                 </Group>
-                {update.error && <Text size="xs" c="red">{(update.error as Error).message}</Text>}
+                {update.error && (
+                  <Text size="xs" c="red">
+                    {(update.error as Error).message}
+                  </Text>
+                )}
               </Stack>
             )}
 
             {/* Assignee + Priority */}
             {canWrite && (
               <Stack gap="sm">
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Pengaturan</Text>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Pengaturan
+                </Text>
                 <Select
                   label="Prioritas"
                   size="xs"
@@ -739,30 +899,49 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                   size="xs"
                   placeholder="Tidak ada"
                   clearable
-                  data={projectQ.data?.project.members.map((m) => ({ value: m.user.id, label: `${m.user.name} · ${m.role}` })) ?? []}
+                  data={
+                    projectQ.data?.project.members.map((m) => ({
+                      value: m.user.id,
+                      label: `${m.user.name} · ${m.role}`,
+                    })) ?? []
+                  }
                   value={task.assignee?.id ?? null}
                   onChange={(v) => update.mutate({ assigneeId: v })}
-                  leftSection={task.assignee ? <UserAvatar name={task.assignee.name} image={task.assignee.image} size={16} color="blue" /> : undefined}
+                  leftSection={
+                    task.assignee ? (
+                      <UserAvatar name={task.assignee.name} image={task.assignee.image} size={16} color="blue" />
+                    ) : undefined
+                  }
                 />
               </Stack>
             )}
 
             {/* Reporter + Assignee display */}
             <Stack gap={6}>
-              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>People</Text>
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                People
+              </Text>
               <Group gap="xs" wrap="nowrap">
                 <UserAvatar name={task.reporter.name} image={task.reporter.image} size={26} color="gray" />
                 <Stack gap={0}>
-                  <Text size="xs" fw={500}>{task.reporter.name}</Text>
-                  <Text size="xs" c="dimmed">Reporter</Text>
+                  <Text size="xs" fw={500}>
+                    {task.reporter.name}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Reporter
+                  </Text>
                 </Stack>
               </Group>
               {task.assignee && (
                 <Group gap="xs" wrap="nowrap">
                   <UserAvatar name={task.assignee.name} image={task.assignee.image} size={26} color="blue" />
                   <Stack gap={0}>
-                    <Text size="xs" fw={500}>{task.assignee.name}</Text>
-                    <Text size="xs" c="dimmed">Assignee</Text>
+                    <Text size="xs" fw={500}>
+                      {task.assignee.name}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Assignee
+                    </Text>
                   </Stack>
                 </Group>
               )}
@@ -772,26 +951,64 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
 
             {/* Dates + Estimate */}
             <Stack gap="sm">
-              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Planning</Text>
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                Planning
+              </Text>
               {canWrite ? (
                 <Stack gap="xs">
-                  <DateInput highlightToday label="Mulai" placeholder="Opsional" size="xs" clearable
+                  <DateInput
+                    highlightToday
+                    label="Mulai"
+                    placeholder="Opsional"
+                    size="xs"
+                    clearable
                     leftSection={<TbCalendarEvent size={13} />}
                     value={task.startsAt ? new Date(task.startsAt) : null}
-                    onChange={(v) => update.mutate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })}
+                    onChange={(v) =>
+                      update.mutate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })
+                    }
                   />
-                  <DateInput highlightToday label="Tenggat" placeholder="Opsional" size="xs" clearable
+                  <DateInput
+                    highlightToday
+                    label="Tenggat"
+                    placeholder="Opsional"
+                    size="xs"
+                    clearable
                     leftSection={<TbCalendarEvent size={13} />}
                     value={task.dueAt ? new Date(task.dueAt) : null}
-                    onChange={(v) => update.mutate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })}
+                    onChange={(v) =>
+                      update.mutate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })
+                    }
                   />
                   <EstimateField value={task.estimateHours} onCommit={(v) => update.mutate({ estimateHours: v })} />
                 </Stack>
               ) : (
                 <Stack gap={4}>
-                  {task.startsAt && <Group gap={6}><TbCalendarEvent size={13} /><Text size="xs">{new Date(task.startsAt).toLocaleDateString('id-ID')}</Text><Text size="xs" c="dimmed">mulai</Text></Group>}
-                  {task.dueAt && <Group gap={6}><TbCalendarEvent size={13} /><Text size="xs" c={isOverdue ? 'red' : undefined}>{new Date(task.dueAt).toLocaleDateString('id-ID')}</Text><Text size="xs" c="dimmed">tenggat</Text></Group>}
-                  {!task.startsAt && !task.dueAt && <Text size="xs" c="dimmed" fs="italic">Belum ada jadwal</Text>}
+                  {task.startsAt && (
+                    <Group gap={6}>
+                      <TbCalendarEvent size={13} />
+                      <Text size="xs">{new Date(task.startsAt).toLocaleDateString('id-ID')}</Text>
+                      <Text size="xs" c="dimmed">
+                        mulai
+                      </Text>
+                    </Group>
+                  )}
+                  {task.dueAt && (
+                    <Group gap={6}>
+                      <TbCalendarEvent size={13} />
+                      <Text size="xs" c={isOverdue ? 'red' : undefined}>
+                        {new Date(task.dueAt).toLocaleDateString('id-ID')}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        tenggat
+                      </Text>
+                    </Group>
+                  )}
+                  {!task.startsAt && !task.dueAt && (
+                    <Text size="xs" c="dimmed" fs="italic">
+                      Belum ada jadwal
+                    </Text>
+                  )}
                 </Stack>
               )}
             </Stack>
@@ -799,7 +1016,9 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             {/* Tags */}
             {canWrite && (
               <Stack gap={6}>
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Tags</Text>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Tags
+                </Text>
                 <TagsPicker
                   projectId={task.projectId}
                   currentTagIds={task.tags.map((t) => t.tagId)}
@@ -864,8 +1083,12 @@ function CommentsSection({
             <Group justify="space-between" mb={4} wrap="nowrap">
               <Group gap="xs" wrap="nowrap">
                 <UserAvatar name={c.author.name} image={c.author.image} size={22} color="blue" />
-                <Text size="xs" fw={600}>{c.author.name}</Text>
-                <Badge size="xs" variant="light">{c.authorTag}</Badge>
+                <Text size="xs" fw={600}>
+                  {c.author.name}
+                </Text>
+                <Badge size="xs" variant="light">
+                  {c.authorTag}
+                </Badge>
               </Group>
               <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                 {new Date(c.createdAt).toLocaleString()}

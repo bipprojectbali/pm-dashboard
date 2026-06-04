@@ -1,10 +1,10 @@
 import { betterAuth } from 'better-auth'
-import { createAuthMiddleware } from 'better-auth/api'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
+import { createAuthMiddleware } from 'better-auth/api'
+import { appLog } from './applog'
 import { prisma } from './db'
 import { env } from './env'
 import { redis } from './redis'
-import { appLog } from './applog'
 
 // ─── Bun.password compatibility adapter ─────────────────────────────────────
 // Existing users have bcrypt hashes in User.password (via Bun.password.hash).
@@ -12,8 +12,7 @@ import { appLog } from './applog'
 // We override hash/verify to use Bun.password (bcrypt) so existing hashes work.
 const bunPasswordAdapter = {
   hash: (password: string) => Bun.password.hash(password, { algorithm: 'bcrypt' }),
-  verify: async ({ hash, password }: { hash: string; password: string }) =>
-    Bun.password.verify(password, hash),
+  verify: async ({ hash, password }: { hash: string; password: string }) => Bun.password.verify(password, hash),
 }
 
 // ─── Better Auth configuration ────────────────────────────────────────────────
@@ -54,8 +53,8 @@ export const auth = betterAuth({
 
   // ─── Session ───────────────────────────────────────────────────────────────
   session: {
-    expiresIn: 60 * 60 * 24 * 7,  // 7 days TTL (matches SESSION_TTL_SEC)
-    updateAge: 60 * 60 * 24,       // Sliding: refresh if session is >1 day old
+    expiresIn: 60 * 60 * 24 * 7, // 7 days TTL (matches SESSION_TTL_SEC)
+    updateAge: 60 * 60 * 24, // Sliding: refresh if session is >1 day old
     // Force session rows into the DB even when secondaryStorage (Redis) is configured.
     // Without this, Better Auth stores sessions only in Redis and the custom
     // GET /api/auth/session endpoint (which queries the DB) always returns 401.
@@ -92,14 +91,14 @@ export const auth = betterAuth({
       role: {
         type: 'string' as const,
         defaultValue: 'USER',
-        input: false,    // not settable by client requests
-        returned: true,  // included in session.user response (server-readable)
+        input: false, // not settable by client requests
+        returned: true, // included in session.user response (server-readable)
       },
       blocked: {
         type: 'boolean' as const,
         defaultValue: false,
         input: false,
-        returned: true,  // exposed in getSession() so requireAuth() can check it
+        returned: true, // exposed in getSession() so requireAuth() can check it
       },
     },
   },
@@ -109,7 +108,7 @@ export const auth = betterAuth({
   // Disabled in test/development environments — enabled only in production.
   rateLimit: {
     enabled: env.NODE_ENV === 'production',
-    window: 15 * 60,  // 15 minutes
+    window: 15 * 60, // 15 minutes
     max: 10,
     storage: 'secondary-storage' as const,
   },
@@ -159,9 +158,7 @@ export const auth = betterAuth({
             env.SUPER_ADMIN_EMAILS.includes(user.email) &&
             (user as unknown as { role: string }).role !== 'SUPER_ADMIN'
           ) {
-            await prisma.user
-              .update({ where: { id: user.id }, data: { role: 'SUPER_ADMIN' } })
-              .catch(() => {})
+            await prisma.user.update({ where: { id: user.id }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
             appLog('info', `Auto-promoted ${user.email} to SUPER_ADMIN (Better Auth user create)`)
           }
         },
@@ -178,9 +175,7 @@ export const auth = betterAuth({
       }
 
       const getIp = (req: Request) =>
-        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-        req.headers.get('x-real-ip') ??
-        'unknown'
+        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
 
       try {
         const ip = ctx.request ? getIp(ctx.request) : 'unknown'
@@ -191,16 +186,12 @@ export const auth = betterAuth({
           const userId = returned?.user?.id
           if (userId) {
             const provider = path === '/sign-in/social' ? 'via Google OAuth (Better Auth)' : 'via email (Better Auth)'
-            await prisma.auditLog
-              .create({ data: { userId, action: 'LOGIN', detail: provider, ip } })
-              .catch(() => {})
+            await prisma.auditLog.create({ data: { userId, action: 'LOGIN', detail: provider, ip } }).catch(() => {})
 
             // SUPER_ADMIN auto-promotion on email login (redundant safety check)
             const userEmail = returned?.user?.email
             if (userEmail && env.SUPER_ADMIN_EMAILS.includes(userEmail) && returned?.user?.role !== 'SUPER_ADMIN') {
-              await prisma.user
-                .update({ where: { id: userId }, data: { role: 'SUPER_ADMIN' } })
-                .catch(() => {})
+              await prisma.user.update({ where: { id: userId }, data: { role: 'SUPER_ADMIN' } }).catch(() => {})
               appLog('info', `Auto-promoted ${userEmail} to SUPER_ADMIN on Better Auth login`)
             }
           }

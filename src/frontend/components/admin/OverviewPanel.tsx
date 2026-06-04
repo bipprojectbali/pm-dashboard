@@ -451,7 +451,10 @@ export function OverviewPanel() {
         const todayKey = new Date().toISOString().slice(0, 10)
         const weekKey = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
         const todayEvents = events.filter((e) => e.startsAt.slice(0, 10) === todayKey)
-        const weekEvents = events.filter((e) => { const k = e.startsAt.slice(0, 10); return k > todayKey && k <= weekKey })
+        const weekEvents = events.filter((e) => {
+          const k = e.startsAt.slice(0, 10)
+          return k > todayKey && k <= weekKey
+        })
         const shown = [...todayEvents, ...weekEvents].slice(0, 6)
         if (!eventsQ.data && eventsQ.isLoading) return null
         if (shown.length === 0) return null
@@ -461,8 +464,16 @@ export function OverviewPanel() {
               <Group gap="xs">
                 <TbCalendarEvent size={16} />
                 <Title order={5}>Events Mendatang</Title>
-                {todayEvents.length > 0 && <Badge size="xs" color="red" variant="filled">{todayEvents.length} hari ini</Badge>}
-                {weekEvents.length > 0 && <Badge size="xs" color="blue" variant="light">{weekEvents.length} minggu ini</Badge>}
+                {todayEvents.length > 0 && (
+                  <Badge size="xs" color="red" variant="filled">
+                    {todayEvents.length} hari ini
+                  </Badge>
+                )}
+                {weekEvents.length > 0 && (
+                  <Badge size="xs" color="blue" variant="light">
+                    {weekEvents.length} minggu ini
+                  </Badge>
+                )}
               </Group>
               <Text
                 size="xs"
@@ -484,15 +495,27 @@ export function OverviewPanel() {
                     style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 8px' }}
                     onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
                   >
-                    <TbCalendarEvent size={13} color={`var(--mantine-color-${isToday ? 'red' : 'blue'}-5)`} style={{ flexShrink: 0 }} />
-                    <Text size="sm" truncate style={{ flex: 1 }}>{e.title}</Text>
+                    <TbCalendarEvent
+                      size={13}
+                      color={`var(--mantine-color-${isToday ? 'red' : 'blue'}-5)`}
+                      style={{ flexShrink: 0 }}
+                    />
+                    <Text size="sm" truncate style={{ flex: 1 }}>
+                      {e.title}
+                    </Text>
                     {e.tags.slice(0, 2).map((t) => (
-                      <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">{t.tag.name}</Badge>
+                      <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">
+                        {t.tag.name}
+                      </Badge>
                     ))}
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {isToday
                         ? new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                        : new Date(e.startsAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        : new Date(e.startsAt).toLocaleDateString('id-ID', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                          })}
                     </Text>
                   </Group>
                 )
@@ -584,7 +607,15 @@ export function OverviewPanel() {
               <Badge color={ACTION_COLOR[log.action] ?? 'gray'} variant="light" size="sm">
                 {log.action}
               </Badge>
-              {log.user && <UserAvatar name={log.user.name} image={log.user.image} size={20} color="blue" style={{ flexShrink: 0 }} />}
+              {log.user && (
+                <UserAvatar
+                  name={log.user.name}
+                  image={log.user.image}
+                  size={20}
+                  color="blue"
+                  style={{ flexShrink: 0 }}
+                />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text size="sm" lineClamp={1}>
                   <Text component="span" fw={500}>
@@ -933,8 +964,12 @@ function TeamLoadSection({ rows }: { rows: LoadRow[] }) {
             <Group gap="xs" wrap="nowrap" style={{ minWidth: 160, flex: '0 0 160px' }}>
               <UserAvatar name={r.name} image={r.image} size={28} color="blue" style={{ flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <Text size="sm" fw={500} truncate>{r.name}</Text>
-                <Text size="xs" c="dimmed" truncate>{r.role ?? '—'}</Text>
+                <Text size="sm" fw={500} truncate>
+                  {r.name}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  {r.role ?? '—'}
+                </Text>
               </div>
             </Group>
             <div style={{ flex: 1, minWidth: 0 }}>

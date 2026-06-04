@@ -5,6 +5,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [0.6.1] - 2026-06-04
+
+### Ditambahkan
+- **File Health** — tab baru di /dev Konsol menampilkan ukuran setiap file vs batas FILE_HEALTH.md; status OK/Warning/Over dengan progress bar, filter, pagination Mantine, copy satuan/terpilih/semua, dan double-click buka di editor
+- **Events Mendatang di Ringkasan** — card "Events Mendatang" muncul di Ringkasan PM (kolom kanan) dan Ringkasan Admin (sebelum Red Flags); data dibagi dari cache badge tanpa request tambahan
+
+### Diperbaiki
+- Kanban: drag IN_PROGRESS → OPEN untuk task kind BUG/QC kini berfungsi
+- Kanban: tombol hapus bulk dan hapus per-card tersedia di mode Select
+- Events: form create/edit kini inline (route navigation), bukan modal — tombol Simpan berfungsi reliabel
+- Events: list tidak lagi kosong setelah membuat event (default showAll=true, bukan upcoming)
+- Events: tag filter tidak lagi menampilkan data stale setelah tag baru dibuat
+- Events: tombol edit dari card membuka form edit (bukan detail view)
+- Events: event multi-tag tidak lagi tampil duplikat saat grouping per tag
+
+---
+
 ## [0.4.6] - 2026-05-18
 
 ### Ditambahkan

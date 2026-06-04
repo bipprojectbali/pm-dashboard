@@ -1,21 +1,11 @@
-import {
-  Badge,
-  Button,
-  Divider,
-  Group,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  ThemeIcon,
-} from '@mantine/core'
+import { Badge, Button, Divider, Group, Modal, ScrollArea, Stack, Text, ThemeIcon } from '@mantine/core'
 import { TbBug, TbRocket, TbSparkles } from 'react-icons/tb'
 import type { ChangeKind, WhatsNewVersion } from '../lib/whats-new'
 
 const KIND_CONFIG: Record<ChangeKind, { icon: React.ReactNode; color: string; label: string }> = {
-  feature:     { icon: <TbSparkles size={13} />, color: 'violet', label: 'Fitur Baru' },
-  fix:         { icon: <TbBug size={13} />,      color: 'red',    label: 'Perbaikan' },
-  improvement: { icon: <TbRocket size={13} />,   color: 'teal',   label: 'Peningkatan' },
+  feature: { icon: <TbSparkles size={13} />, color: 'violet', label: 'Fitur Baru' },
+  fix: { icon: <TbBug size={13} />, color: 'red', label: 'Perbaikan' },
+  improvement: { icon: <TbRocket size={13} />, color: 'teal', label: 'Peningkatan' },
 }
 
 export function WhatsNewModal({
@@ -36,8 +26,12 @@ export function WhatsNewModal({
       onClose={onClose}
       title={
         <Group gap="xs" align="center">
-          <Text fw={700} size="lg">Yang Baru</Text>
-          <Badge color="violet" variant="filled" size="md">v{latest.version}</Badge>
+          <Text fw={700} size="lg">
+            Yang Baru
+          </Text>
+          <Badge color="violet" variant="filled" size="md">
+            v{latest.version}
+          </Badge>
         </Group>
       }
       size="md"
@@ -52,27 +46,28 @@ export function WhatsNewModal({
             {vi > 0 && (
               <Group gap="xs" align="center">
                 <Divider style={{ flex: 1 }} />
-                <Badge variant="light" color="gray" size="sm">v{v.version} · {v.date}</Badge>
+                <Badge variant="light" color="gray" size="sm">
+                  v{v.version} · {v.date}
+                </Badge>
                 <Divider style={{ flex: 1 }} />
               </Group>
             )}
             {vi === 0 && (
-              <Text size="xs" c="dimmed">{v.date}</Text>
+              <Text size="xs" c="dimmed">
+                {v.date}
+              </Text>
             )}
             <Stack gap={8}>
               {v.entries.map((entry, i) => {
                 const cfg = KIND_CONFIG[entry.kind]
                 return (
                   <Group key={i} gap="sm" wrap="nowrap" align="flex-start">
-                    <ThemeIcon
-                      size="sm"
-                      color={cfg.color}
-                      variant="light"
-                      style={{ flexShrink: 0, marginTop: 1 }}
-                    >
+                    <ThemeIcon size="sm" color={cfg.color} variant="light" style={{ flexShrink: 0, marginTop: 1 }}>
                       {cfg.icon}
                     </ThemeIcon>
-                    <Text size="sm" style={{ lineHeight: 1.5 }}>{entry.text}</Text>
+                    <Text size="sm" style={{ lineHeight: 1.5 }}>
+                      {entry.text}
+                    </Text>
                   </Group>
                 )
               })}

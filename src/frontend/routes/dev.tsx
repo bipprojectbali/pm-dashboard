@@ -50,11 +50,12 @@ import {
   TbChartBar,
   TbChevronRight,
   TbCircleFilled,
-  TbCode,
   TbCloudDownload,
+  TbCode,
   TbCopy,
   TbDatabase,
   TbDeviceDesktop,
+  TbFileAlert,
   TbFileText,
   TbKey,
   TbLayoutDashboard,
@@ -69,11 +70,12 @@ import {
   TbUsers,
   TbWifi,
 } from 'react-icons/tb'
-import { AiSettingsPanel } from '@/frontend/components/AiSettingsPanel'
-import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
 import { AgentsPanel } from '@/frontend/components/AgentsPanel'
+import { AiSettingsPanel } from '@/frontend/components/AiSettingsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
+import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
+import { FileHealthPanel } from '@/frontend/components/FileHealthPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
@@ -96,6 +98,7 @@ const validTabs = [
   'user-logs',
   'database',
   'project',
+  'file-health',
   'sync',
   'channel',
   'ai',
@@ -138,6 +141,10 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   project: {
     label: 'Struktur Proyek',
     description: 'Routes, file graph, env vars, test coverage, dependencies, migrasi.',
+  },
+  'file-health': {
+    label: 'File Health',
+    description: 'Ukuran setiap file vs batas FILE_HEALTH.md. Over limit ditampilkan merah.',
   },
   sync: {
     label: 'Data Sync',
@@ -209,7 +216,13 @@ const navGroups: DevNavGroup[] = [
     items: [
       { label: 'Agent', icon: TbDeviceDesktop, key: 'agents', badgeKey: 'pendingAgents', badgeColor: 'orange' },
       { label: 'Token Webhook', icon: TbKey, key: 'webhook-tokens' },
-      { label: 'Monitor Webhook', icon: TbChartBar, key: 'webhook-monitor', badgeKey: 'webhookFail24h', badgeColor: 'red' },
+      {
+        label: 'Monitor Webhook',
+        icon: TbChartBar,
+        key: 'webhook-monitor',
+        badgeKey: 'webhookFail24h',
+        badgeColor: 'red',
+      },
     ],
   },
   {
@@ -224,6 +237,7 @@ const navGroups: DevNavGroup[] = [
     items: [
       { label: 'Database', icon: TbDatabase, key: 'database' },
       { label: 'Proyek', icon: TbSitemap, key: 'project' },
+      { label: 'File Health', icon: TbFileAlert, key: 'file-health' },
       { label: 'Data Sync', icon: TbCloudDownload, key: 'sync' },
     ],
   },
@@ -285,7 +299,12 @@ function DevPage() {
       }}
       padding="md"
       styles={{
-        navbar: { backgroundColor: 'var(--app-navbar-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        navbar: {
+          backgroundColor: 'var(--app-navbar-bg)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        },
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
@@ -323,7 +342,12 @@ function DevPage() {
                 const badgeCount = item.badgeKey ? badges[item.badgeKey] : 0
                 if (collapsed && !isMobile) {
                   return (
-                    <Tooltip key={item.key} label={badgeCount > 0 ? `${item.label} (${badgeCount})` : item.label} position="right" withArrow>
+                    <Tooltip
+                      key={item.key}
+                      label={badgeCount > 0 ? `${item.label} (${badgeCount})` : item.label}
+                      position="right"
+                      withArrow
+                    >
                       <div style={{ position: 'relative' }}>
                         <ActionIcon
                           variant={active === item.key ? 'filled' : 'subtle'}
@@ -334,8 +358,12 @@ function DevPage() {
                           <item.icon size={18} />
                         </ActionIcon>
                         {badgeCount > 0 && (
-                          <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled"
-                            style={{ position: 'absolute', top: -4, right: -4, pointerEvents: 'none' }}>
+                          <Badge
+                            size="xs"
+                            color={item.badgeColor ?? 'red'}
+                            variant="filled"
+                            style={{ position: 'absolute', top: -4, right: -4, pointerEvents: 'none' }}
+                          >
                             {badgeCount > 99 ? '99+' : badgeCount}
                           </Badge>
                         )}
@@ -400,6 +428,7 @@ function DevPage() {
               {active === 'user-logs' && <AuditLogsPanel />}
               {active === 'database' && <DatabasePanel />}
               {active === 'project' && <ProjectPanel />}
+              {active === 'file-health' && <FileHealthPanel />}
               {active === 'sync' && <SyncPanel />}
               {active === 'channel' && <ChannelSettingsPanel />}
               {active === 'ai' && <AiSettingsPanel />}
@@ -3293,12 +3322,24 @@ function LiveRequestsFlowInner() {
 const ENTITY_OPTIONS = [
   { key: 'users', label: 'Users', description: 'Semua user + role. Password tidak di-sync.' },
   { key: 'projects', label: 'Projects + Members', description: 'Project, anggota, dan deadline extensions.' },
-  { key: 'tasks', label: 'Tasks + Sub-data', description: 'Task, checklist, komentar, evidence, status changes, dependencies.' },
+  {
+    key: 'tasks',
+    label: 'Tasks + Sub-data',
+    description: 'Task, checklist, komentar, evidence, status changes, dependencies.',
+  },
   { key: 'tags', label: 'Tags', description: 'Tag per project.' },
   { key: 'milestones', label: 'Milestones', description: 'Milestone per project.' },
   { key: 'agents', label: 'Agents', description: 'Agent pm-watch (tanpa events).' },
-  { key: 'activityEvents', label: 'Activity Events (7 hari)', description: 'Events pm-watch 7 hari terakhir. Bisa besar.' },
-  { key: 'webhookTokens', label: 'Webhook Tokens', description: 'Token metadata saja. Hash tidak di-sync — token tidak bisa digunakan.' },
+  {
+    key: 'activityEvents',
+    label: 'Activity Events (7 hari)',
+    description: 'Events pm-watch 7 hari terakhir. Bisa besar.',
+  },
+  {
+    key: 'webhookTokens',
+    label: 'Webhook Tokens',
+    description: 'Token metadata saja. Hash tidak di-sync — token tidak bisa digunakan.',
+  },
 ] as const
 
 type EntityKey = (typeof ENTITY_OPTIONS)[number]['key']
@@ -3321,8 +3362,14 @@ function SyncPanel() {
   const [summary, setSummary] = useState<Record<string, number> | null>(null)
   const [generatedToken, setGeneratedToken] = useState('')
 
-  const persistUrl = (v: string) => { setUrl(v); localStorage.setItem(LS_URL, v) }
-  const persistEntities = (v: EntityKey[]) => { setEntities(v); localStorage.setItem(LS_ENTITIES, JSON.stringify(v)) }
+  const persistUrl = (v: string) => {
+    setUrl(v)
+    localStorage.setItem(LS_URL, v)
+  }
+  const persistEntities = (v: EntityKey[]) => {
+    setEntities(v)
+    localStorage.setItem(LS_ENTITIES, JSON.stringify(v))
+  }
 
   const toggleEntity = (key: EntityKey) => {
     persistEntities(entities.includes(key) ? entities.filter((e) => e !== key) : [...entities, key])
@@ -3358,12 +3405,14 @@ function SyncPanel() {
         <Stack gap="xs">
           <Alert color="red" variant="light">
             Data local akan <strong>dihapus</strong> dan diganti dengan data dari remote.
-            {entities.includes('users') && (
-              <> Password user tidak di-sync — login via Google atau reset password.</>
-            )}
+            {entities.includes('users') && <> Password user tidak di-sync — login via Google atau reset password.</>}
           </Alert>
-          <Text size="sm"><strong>Dari:</strong> {url}</Text>
-          <Text size="sm"><strong>Entities:</strong> {entities.join(', ')}</Text>
+          <Text size="sm">
+            <strong>Dari:</strong> {url}
+          </Text>
+          <Text size="sm">
+            <strong>Entities:</strong> {entities.join(', ')}
+          </Text>
         </Stack>
       ),
       labels: { confirm: 'Ya, Pull Sekarang', cancel: 'Batal' },
@@ -3382,7 +3431,9 @@ function SyncPanel() {
     <Stack gap="lg" maw={640}>
       <Card withBorder>
         <Stack gap="md">
-          <Text fw={600} size="sm">Sumber Remote</Text>
+          <Text fw={600} size="sm">
+            Sumber Remote
+          </Text>
 
           <Group gap="xs" align="flex-end">
             <TextInput
@@ -3405,7 +3456,9 @@ function SyncPanel() {
           />
 
           <Box>
-            <Text size="xs" c="dimmed" mb={4}>Generate token baru (untuk diset sebagai MCP_SECRET di remote)</Text>
+            <Text size="xs" c="dimmed" mb={4}>
+              Generate token baru (untuk diset sebagai MCP_SECRET di remote)
+            </Text>
             <Group gap="xs" align="center">
               <Button size="xs" variant="light" leftSection={<TbKey size={14} />} onClick={generateToken}>
                 Generate Token
@@ -3432,7 +3485,9 @@ function SyncPanel() {
 
       <Card withBorder>
         <Stack gap="sm">
-          <Text fw={600} size="sm">Entities yang di-sync</Text>
+          <Text fw={600} size="sm">
+            Entities yang di-sync
+          </Text>
           {ENTITY_OPTIONS.map((opt) => (
             <Checkbox
               key={opt.key}
@@ -3441,7 +3496,9 @@ function SyncPanel() {
               label={
                 <Box>
                   <Text size="sm">{opt.label}</Text>
-                  <Text size="xs" c="dimmed">{opt.description}</Text>
+                  <Text size="xs" c="dimmed">
+                    {opt.description}
+                  </Text>
                 </Box>
               }
             />
@@ -3452,7 +3509,8 @@ function SyncPanel() {
       <Alert color="orange" variant="light" icon={<TbShieldCheck size={16} />}>
         <Text size="sm">
           <strong>Peringatan:</strong> Data local akan dihapus dan diganti sepenuhnya.
-          {entities.includes('users') && ' Password user tidak di-sync — gunakan Google login atau reset password manual.'}
+          {entities.includes('users') &&
+            ' Password user tidak di-sync — gunakan Google login atau reset password manual.'}
         </Text>
       </Alert>
 
@@ -3466,7 +3524,9 @@ function SyncPanel() {
           Pull dari Remote
         </Button>
         {pull.isError && (
-          <Text size="sm" c="red">{(pull.error as Error).message}</Text>
+          <Text size="sm" c="red">
+            {(pull.error as Error).message}
+          </Text>
         )}
       </Group>
 
@@ -3474,15 +3534,27 @@ function SyncPanel() {
         <Card withBorder>
           <Stack gap="xs">
             <Group justify="space-between">
-              <Text fw={600} size="sm">Hasil Sync</Text>
-              <Badge color="green" variant="light">Berhasil</Badge>
+              <Text fw={600} size="sm">
+                Hasil Sync
+              </Text>
+              <Badge color="green" variant="light">
+                Berhasil
+              </Badge>
             </Group>
             <Divider />
             <SimpleGrid cols={3} spacing="xs">
               {Object.entries(summary).map(([key, count]) => (
-                <Box key={key} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 6 }}>
-                  <Text size="xs" c="dimmed" tt="capitalize">{key}</Text>
-                  <Text fw={700} size="lg">{count}</Text>
+                <Box
+                  key={key}
+                  p="xs"
+                  style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 6 }}
+                >
+                  <Text size="xs" c="dimmed" tt="capitalize">
+                    {key}
+                  </Text>
+                  <Text fw={700} size="lg">
+                    {count}
+                  </Text>
                 </Box>
               ))}
             </SimpleGrid>

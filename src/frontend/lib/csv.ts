@@ -262,35 +262,51 @@ export interface ExportTaskRow {
 }
 
 const EXPORT_HEADERS = [
-  'id', 'title', 'description', 'kind', 'status', 'priority',
-  'startsAt', 'dueAt', 'estimateHours', 'actualHours', 'progressPercent',
-  'assigneeEmail', 'assigneeName', 'reporterEmail', 'projectName', 'tags',
-  'createdAt', 'closedAt',
+  'id',
+  'title',
+  'description',
+  'kind',
+  'status',
+  'priority',
+  'startsAt',
+  'dueAt',
+  'estimateHours',
+  'actualHours',
+  'progressPercent',
+  'assigneeEmail',
+  'assigneeName',
+  'reporterEmail',
+  'projectName',
+  'tags',
+  'createdAt',
+  'closedAt',
 ] as const
 
 export function buildExportCsv(tasks: ExportTaskRow[]): string {
   const lines: string[] = [EXPORT_HEADERS.join(',')]
   for (const t of tasks) {
-    lines.push(csvRow([
-      t.id,
-      t.title,
-      t.description,
-      t.kind,
-      t.status,
-      t.priority,
-      t.startsAt ?? '',
-      t.dueAt ?? '',
-      t.estimateHours != null ? String(t.estimateHours) : '',
-      t.actualHours != null ? String(t.actualHours) : '',
-      t.progressPercent != null ? String(t.progressPercent) : '',
-      t.assigneeEmail ?? '',
-      t.assigneeName ?? '',
-      t.reporterEmail,
-      t.projectName,
-      t.tags.join(';'),
-      t.createdAt,
-      t.closedAt ?? '',
-    ]))
+    lines.push(
+      csvRow([
+        t.id,
+        t.title,
+        t.description,
+        t.kind,
+        t.status,
+        t.priority,
+        t.startsAt ?? '',
+        t.dueAt ?? '',
+        t.estimateHours != null ? String(t.estimateHours) : '',
+        t.actualHours != null ? String(t.actualHours) : '',
+        t.progressPercent != null ? String(t.progressPercent) : '',
+        t.assigneeEmail ?? '',
+        t.assigneeName ?? '',
+        t.reporterEmail,
+        t.projectName,
+        t.tags.join(';'),
+        t.createdAt,
+        t.closedAt ?? '',
+      ]),
+    )
   }
   return lines.join('\n') + '\n'
 }

@@ -14,24 +14,24 @@ interface EmptyStateProps {
 }
 
 const COLOR_MAP: Record<string, string> = {
-  blue:   'rgba(79,124,255,0.1)',
+  blue: 'rgba(79,124,255,0.1)',
   violet: 'rgba(155,89,245,0.1)',
-  teal:   'rgba(32,201,151,0.1)',
-  red:    'rgba(240,62,62,0.1)',
+  teal: 'rgba(32,201,151,0.1)',
+  red: 'rgba(240,62,62,0.1)',
   orange: 'rgba(255,146,43,0.1)',
-  cyan:   'rgba(21,170,191,0.1)',
-  gray:   'rgba(134,142,150,0.08)',
-  green:  'rgba(64,192,87,0.1)',
+  cyan: 'rgba(21,170,191,0.1)',
+  gray: 'rgba(134,142,150,0.08)',
+  green: 'rgba(64,192,87,0.1)',
 }
 const COLOR_ICON: Record<string, string> = {
-  blue:   '#4f7cff',
+  blue: '#4f7cff',
   violet: '#9b59f5',
-  teal:   '#20c997',
-  red:    '#f03e3e',
+  teal: '#20c997',
+  red: '#f03e3e',
   orange: '#ff922b',
-  cyan:   '#15aabf',
-  gray:   '#868e96',
-  green:  '#40c057',
+  cyan: '#15aabf',
+  gray: '#868e96',
+  green: '#40c057',
 }
 
 export function EmptyState({
@@ -62,7 +62,9 @@ export function EmptyState({
           flexShrink: 0,
         }}
       >
-        <Box style={{ color: iconColor, display: 'flex' }}><Icon size={isInline ? 18 : 24} /></Box>
+        <Box style={{ color: iconColor, display: 'flex' }}>
+          <Icon size={isInline ? 18 : 24} />
+        </Box>
       </Box>
       <Stack gap={4} align="center">
         <Text size={isInline ? 'sm' : 'md'} fw={600} style={{ letterSpacing: '-0.01em' }}>
@@ -75,14 +77,7 @@ export function EmptyState({
         )}
       </Stack>
       {ctaLabel && onCta && (
-        <Button
-          size="xs"
-          variant="light"
-          color={color}
-          onClick={onCta}
-          mt={4}
-          style={{ fontWeight: 600 }}
-        >
+        <Button size="xs" variant="light" color={color} onClick={onCta} mt={4} style={{ fontWeight: 600 }}>
           {ctaLabel}
         </Button>
       )}
@@ -143,7 +138,9 @@ export function EmptyRow({
           justifyContent: 'center',
         }}
       >
-        <Box style={{ color: COLOR_ICON.gray, display: 'flex' }}><Icon size={15} /></Box>
+        <Box style={{ color: COLOR_ICON.gray, display: 'flex' }}>
+          <Icon size={15} />
+        </Box>
       </Box>
       <Text size="sm" fw={600} style={{ letterSpacing: '-0.01em' }}>
         {title}

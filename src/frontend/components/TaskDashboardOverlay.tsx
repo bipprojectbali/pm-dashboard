@@ -1,8 +1,8 @@
 import { Card, SimpleGrid, Stack, Text } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { EChart } from './charts/EChart'
 import { toLocalDateStr } from '../lib/dates'
+import { EChart } from './charts/EChart'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 

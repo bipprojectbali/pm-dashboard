@@ -13,16 +13,7 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  TbArrowLeft,
-  TbCalendarEvent,
-  TbClock,
-  TbEdit,
-  TbMapPin,
-  TbTag,
-  TbTrash,
-  TbUser,
-} from 'react-icons/tb'
+import { TbArrowLeft, TbCalendarEvent, TbClock, TbEdit, TbMapPin, TbTag, TbTrash, TbUser } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useSession } from '@/frontend/hooks/useAuth'
 
@@ -67,12 +58,24 @@ function countdown(startsAt: string): { label: string; color: string } {
 
 function formatFull(iso: string): string {
   return new Date(iso).toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
-export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; onBack: () => void; onEdit?: () => void }) {
+export function EventDetailView({
+  eventId,
+  onBack,
+  onEdit,
+}: {
+  eventId: string
+  onBack: () => void
+  onEdit?: () => void
+}) {
   const { data: sessionData } = useSession()
   const user = sessionData?.user
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
@@ -158,14 +161,23 @@ export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; 
             </ThemeIcon>
             <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
               <Group gap={8} wrap="wrap" align="center">
-                <Text fw={700} size="xl" style={{ lineHeight: 1.2 }}>{event.title}</Text>
-                <Badge color={cd.color} variant="light">{cd.label}</Badge>
+                <Text fw={700} size="xl" style={{ lineHeight: 1.2 }}>
+                  {event.title}
+                </Text>
+                <Badge color={cd.color} variant="light">
+                  {cd.label}
+                </Badge>
               </Group>
               {event.tags.length > 0 && (
                 <Group gap={4} wrap="wrap">
                   {event.tags.map((t) => (
-                    <Badge key={t.tagId} size="sm" color={t.tag.color} variant="light"
-                      leftSection={<TbTag size={10} />}>
+                    <Badge
+                      key={t.tagId}
+                      size="sm"
+                      color={t.tag.color}
+                      variant="light"
+                      leftSection={<TbTag size={10} />}
+                    >
                       {t.tag.name}
                     </Badge>
                   ))}
@@ -195,9 +207,13 @@ export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; 
             <Group gap={8} wrap="nowrap">
               <TbClock size={16} style={{ color: 'var(--mantine-color-blue-5)', flexShrink: 0 }} />
               <Stack gap={0}>
-                <Text size="sm" fw={500}>{formatFull(event.startsAt)}</Text>
+                <Text size="sm" fw={500}>
+                  {formatFull(event.startsAt)}
+                </Text>
                 {event.endsAt && (
-                  <Text size="xs" c="dimmed">s.d. {formatFull(event.endsAt)}</Text>
+                  <Text size="xs" c="dimmed">
+                    s.d. {formatFull(event.endsAt)}
+                  </Text>
                 )}
               </Stack>
             </Group>
@@ -212,7 +228,9 @@ export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; 
             {event.project && (
               <Group gap={8} wrap="nowrap">
                 <TbCalendarEvent size={16} style={{ color: 'var(--mantine-color-teal-5)', flexShrink: 0 }} />
-                <Badge variant="outline" color="teal" size="sm">{event.project.name}</Badge>
+                <Badge variant="outline" color="teal" size="sm">
+                  {event.project.name}
+                </Badge>
               </Group>
             )}
           </Stack>
@@ -222,8 +240,12 @@ export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; 
             <>
               <Divider />
               <Stack gap={4}>
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase">Catatan</Text>
-                <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{event.description}</Text>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                  Catatan
+                </Text>
+                <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                  {event.description}
+                </Text>
               </Stack>
             </>
           )}
@@ -237,26 +259,39 @@ export function EventDetailView({ eventId, onBack, onEdit }: { eventId: string; 
               {event.createdBy ? (
                 <Group gap={6} wrap="nowrap">
                   <UserAvatar name={event.createdBy.name} image={event.createdBy.image} size={20} color="gray" />
-                  <Text size="xs" c="dimmed">{event.createdBy.name}</Text>
+                  <Text size="xs" c="dimmed">
+                    {event.createdBy.name}
+                  </Text>
                 </Group>
               ) : (
-                <Text size="xs" c="dimmed">Sistem</Text>
+                <Text size="xs" c="dimmed">
+                  Sistem
+                </Text>
               )}
             </Group>
             <Stack gap={0} align="flex-end">
               <Text size="xs" c="dimmed">
-                Dibuat {new Date(event.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Dibuat{' '}
+                {new Date(event.createdAt).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
               </Text>
               {event.updatedAt !== event.createdAt && (
                 <Text size="xs" c="dimmed">
-                  Diperbarui {new Date(event.updatedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  Diperbarui{' '}
+                  {new Date(event.updatedAt).toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
                 </Text>
               )}
             </Stack>
           </Group>
         </Stack>
       </Card>
-
     </Stack>
   )
 }

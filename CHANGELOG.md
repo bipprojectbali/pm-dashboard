@@ -5,6 +5,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [0.6.2] - 2026-06-05
+
+### Ditambahkan
+- **Riwayat Laporan di Admin** — menu baru "Riwayat Laporan" di sidebar /admin (grup Sistem); klik baris untuk preview konten laporan via Drawer
+- **Preview konten laporan** — laporan yang dikirim kini menyimpan markdown-nya di Redis history; klik baris atau ikon mata untuk melihat isi laporan, lengkap dengan tombol Copy
+
+### Diubah
+- Deskripsi riwayat pengiriman diperbarui: "klik baris untuk preview konten laporan"
+
+---
+
 ## [0.6.1] - 2026-06-04
 
 ### Ditambahkan

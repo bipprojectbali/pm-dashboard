@@ -204,6 +204,7 @@ export async function sendCustomReport(text: string): Promise<{ ok: boolean; mes
         ok: true,
         message: 'Laporan berhasil dikirim ke Telegram',
         trigger: 'custom',
+        markdown: text,
       })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {
@@ -269,6 +270,7 @@ export async function generateAndSendDailyReport(
         ok: true,
         message: 'Laporan berhasil dikirim ke Telegram',
         trigger,
+        markdown: report,
       })
       return { ok: true, message: 'Laporan berhasil dikirim ke Telegram' }
     } catch (e) {

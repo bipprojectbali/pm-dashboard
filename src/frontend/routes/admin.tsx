@@ -20,6 +20,7 @@ import {
   TbClipboardList,
   TbClockHour3,
   TbHeartbeat,
+  TbHistory,
   TbLayoutDashboard,
   TbListCheck,
   TbPlugConnected,
@@ -40,6 +41,7 @@ import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
+import { SendHistoryPanel } from '@/frontend/components/SendHistoryPanel'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 import { useNavBadges } from '@/frontend/hooks/useNavBadges'
@@ -54,6 +56,7 @@ const validTabs = [
   'analytics',
   'sessions',
   'health',
+  'report-history',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -111,7 +114,10 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Sistem',
-    items: [{ label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red' }],
+    items: [
+      { label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red' },
+      { label: 'Riwayat Laporan', icon: TbHistory, key: 'report-history' },
+    ],
   },
 ]
 
@@ -151,6 +157,10 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   health: {
     label: 'Kesehatan Sistem',
     description: 'Env vars, agents, webhook, dan retensi log.',
+  },
+  'report-history': {
+    label: 'Riwayat Laporan',
+    description: '20 pengiriman laporan terakhir — klik baris untuk preview konten laporan.',
   },
 }
 
@@ -324,6 +334,7 @@ function AdminPage() {
               {active === 'analytics' && <AnalyticsPanel />}
               {active === 'sessions' && <SessionsPanel />}
               {active === 'health' && <SystemHealthPanel />}
+              {active === 'report-history' && <SendHistoryPanel />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

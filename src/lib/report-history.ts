@@ -7,6 +7,7 @@ export interface SendHistoryEntry {
   ok: boolean
   message: string
   trigger: SendTrigger
+  markdown?: string
 }
 
 const KEY = 'report:send-history'

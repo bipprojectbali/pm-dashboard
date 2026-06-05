@@ -32,6 +32,13 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - `GET /api/admin/webhooks/stats` — aggregate stats (24h + 7d windows): total/success/fail/auth-fail/events, perToken, perAgent
 - `GET /api/admin/webhooks/logs?status=all|ok|fail|auth&limit=N` — recent webhook request logs with token/agent relations
 
+## Report History
+
+Riwayat pengiriman laporan harian disimpan di PostgreSQL (bukan Redis). Accessible oleh ADMIN + SUPER_ADMIN; delete hanya SUPER_ADMIN.
+
+- `GET /api/admin/report/send-history?page=1&limit=20&range=1m|3m|all` — paginated history. `range` default `1m`. Response: `{ history, entries, total, page, limit, range }`. Setiap entry: `{ id, sentAt, ok, message, trigger, markdown?, createdAt }`.
+- `DELETE /api/admin/report/history/:id` — hapus satu entri (SUPER_ADMIN only).
+
 ## Events (Team Reminders)
 
 Team-wide events/reminders. All authenticated users can read and create. Only creator or admin can edit/delete.

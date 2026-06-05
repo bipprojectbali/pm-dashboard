@@ -431,7 +431,7 @@ function DevPage() {
               {active === 'file-health' && <FileHealthPanel />}
               {active === 'sync' && <SyncPanel />}
               {active === 'channel' && <ChannelSettingsPanel />}
-              {active === 'ai' && <AiSettingsPanel />}
+              {active === 'ai' && <AiSettingsPanel showDeleteHistory />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { cleanupTestData, createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
 import { getSendHistory, recordSendHistory } from '../../src/lib/report-history'
-import { redis } from '../../src/lib/redis'
 
 const app = createTestApp()
 
@@ -159,11 +158,11 @@ describe('GET /api/admin/report/diagnose — response shape', () => {
 
 describe('GET /api/admin/report/send-history', () => {
   beforeAll(async () => {
-    await redis.del('report:send-history')
+    await prisma.reportHistory.deleteMany()
   })
 
   afterAll(async () => {
-    await redis.del('report:send-history')
+    await prisma.reportHistory.deleteMany()
   })
 
   test('returns empty list initially', async () => {
@@ -173,21 +172,22 @@ describe('GET /api/admin/report/send-history', () => {
       }),
     )
     expect(res.status).toBe(200)
-    const body = await res.json() as { history: unknown[] }
+    const body = await res.json() as { history: unknown[]; total: number }
     expect(Array.isArray(body.history)).toBe(true)
-    expect(body.history.length).toBe(0)
+    expect(body.total).toBe(0)
   })
 
   test('records and returns send history entries', async () => {
-    await recordSendHistory({ sentAt: new Date().toISOString(), ok: true, message: 'Test OK', trigger: 'cron' })
+    await recordSendHistory({ sentAt: new Date(Date.now() - 1000).toISOString(), ok: true, message: 'Test OK', trigger: 'cron' })
     await recordSendHistory({ sentAt: new Date().toISOString(), ok: false, message: 'Test fail', trigger: 'manual' })
 
-    const history = await getSendHistory()
-    expect(history.length).toBe(2)
-    expect(history[0].trigger).toBe('manual')
-    expect(history[0].ok).toBe(false)
-    expect(history[1].trigger).toBe('cron')
-    expect(history[1].ok).toBe(true)
+    const { entries } = await getSendHistory({ range: 'all' })
+    expect(entries.length).toBe(2)
+    // ordered descending by sentAt — manual (later) comes first
+    expect(entries[0].trigger).toBe('manual')
+    expect(entries[0].ok).toBe(false)
+    expect(entries[1].trigger).toBe('cron')
+    expect(entries[1].ok).toBe(true)
   })
 
   test('endpoint returns 403 for unauthenticated', async () => {

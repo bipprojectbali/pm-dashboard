@@ -23,7 +23,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TbCheck, TbCopy, TbEye, TbPlayerPlay, TbPlugConnected, TbRefresh, TbRobot, TbSend } from 'react-icons/tb'
-import { SendHistoryPanel } from './SendHistoryPanel'
+import { ReportHistoryPanel } from './ReportHistoryPanel'
 import { SnapshotHistoryPanel } from './SnapshotHistoryPanel'
 
 const DEFAULT_INSTRUCTION = `Tulis laporan manajemen harian dalam *bahasa Indonesia*. Format: Telegram Markdown (*bold*, _italic_). Padat, berbasis data, tanpa narasi berlebihan.
@@ -129,7 +129,7 @@ function fmtLocalTime(tz: string): string {
   }).format(new Date())
 }
 
-export function AiSettingsPanel() {
+export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boolean } = {}) {
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -779,7 +779,7 @@ export function AiSettingsPanel() {
           )}
         </Stack>
       </Card>
-      <SendHistoryPanel />
+      <ReportHistoryPanel showDelete={showDeleteHistory} />
       <SnapshotHistoryPanel />
     </Stack>
   )

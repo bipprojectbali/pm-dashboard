@@ -23,6 +23,7 @@ import {
   TbHistory,
   TbLayoutDashboard,
   TbListCheck,
+  TbMessageCircle,
   TbPlugConnected,
   TbReportAnalytics,
   TbShieldLock,
@@ -41,7 +42,8 @@ import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
-import { SendHistoryPanel } from '@/frontend/components/SendHistoryPanel'
+import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
+import { ReportHistoryPanel } from '@/frontend/components/ReportHistoryPanel'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 import { useNavBadges } from '@/frontend/hooks/useNavBadges'
@@ -57,6 +59,7 @@ const validTabs = [
   'sessions',
   'health',
   'report-history',
+  'chat',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -119,6 +122,12 @@ const navGroups: NavGroup[] = [
       { label: 'Riwayat Laporan', icon: TbHistory, key: 'report-history' },
     ],
   },
+  {
+    label: 'AI',
+    items: [
+      { label: 'Chat AI', icon: TbMessageCircle, key: 'chat' },
+    ],
+  },
 ]
 
 const TAB_META: Record<TabKey, { label: string; description: string }> = {
@@ -161,6 +170,10 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   'report-history': {
     label: 'Riwayat Laporan',
     description: '20 pengiriman laporan terakhir — klik baris untuk preview konten laporan.',
+  },
+  chat: {
+    label: 'Chat AI',
+    description: 'Tanya langsung ke AI tentang kondisi proyek, task, tim, dan risiko.',
   },
 }
 
@@ -334,7 +347,8 @@ function AdminPage() {
               {active === 'analytics' && <AnalyticsPanel />}
               {active === 'sessions' && <SessionsPanel />}
               {active === 'health' && <SystemHealthPanel />}
-              {active === 'report-history' && <SendHistoryPanel />}
+              {active === 'report-history' && <ReportHistoryPanel />}
+              {active === 'chat' && <AdminChatPanel />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

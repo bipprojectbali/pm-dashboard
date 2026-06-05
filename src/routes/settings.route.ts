@@ -10,7 +10,8 @@ import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { prisma } from '../lib/db'
 import { runCronNow } from '../lib/report-cron'
 import { getReportDiagnostic } from '../lib/report-diagnose'
-import { getSendHistory } from '../lib/report-history'
+import { buildChatContext, streamChatSSE, type ChatMessage } from '../lib/chat'
+import { deleteReportHistory, getSendHistory, type ReportHistoryRange } from '../lib/report-history'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 
 const SENSITIVE_KEYS = ['ai.anthropicApiKey', 'telegram.botToken']
@@ -390,6 +391,77 @@ export function settingsRoutes() {
         })
       })
 
+      // ─── AI Chat stream ───────────────────────────────────────────────────────
+      .post('/api/admin/chat/stream', async ({ request }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403, headers: { 'Content-Type': 'application/json' },
+          })
+        }
+
+        const enc = new TextEncoder()
+        const sse = (event: string, data: object) => enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+
+        const body = (await request.json()) as {
+          messages: ChatMessage[]
+          systemContext?: string | null
+        }
+        const { messages, systemContext: cachedContext } = body
+
+        const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
+          getSetting('ai.anthropicApiKey'),
+          getSetting('ai.model'),
+          getSetting('ai.baseUrl'),
+          getSetting('ai.timeoutSeconds'),
+        ])
+
+        const stream = new ReadableStream({
+          async start(ctrl) {
+            const send = (event: string, data: object) => {
+              try { ctrl.enqueue(sse(event, data)) } catch { /* disconnected */ }
+            }
+            try {
+              if (!apiKey) {
+                send('error', { message: 'Anthropic API key belum dikonfigurasi. Atur di tab AI & Laporan.' })
+                return
+              }
+
+              // Build context hanya jika tidak ada cached context (awal sesi)
+              let systemContext = cachedContext ?? null
+              if (!systemContext) {
+                send('phase', { label: 'Memuat konteks proyek...' })
+                systemContext = await buildChatContext()
+                send('system', { context: systemContext }) // frontend cache untuk pesan berikutnya
+              }
+
+              send('phase', { label: 'Menghubungi Claude AI...' })
+              await streamChatSSE({
+                apiKey: apiKey as string,
+                model: (model as string) ?? 'claude-opus-4-7',
+                baseUrl: baseUrl as string | undefined,
+                timeoutMs: (Number(timeoutRaw) || 120) * 1000,
+                systemContext,
+                messages,
+              }, ctrl)
+            } catch (e) {
+              try { ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) })) } catch { /* ignore */ }
+            } finally {
+              try { ctrl.close() } catch { /* ignore */ }
+            }
+          },
+        })
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          },
+        })
+      })
+
       // Diagnostic: accepts admin session OR Bearer MCP_SECRET (so ops can curl from anywhere).
       // Never returns secret values — only set/unset flags. Safe to expose to any holder of MCP_SECRET.
       .get('/api/admin/report/diagnose', async ({ request, set }) => {
@@ -401,14 +473,26 @@ export function settingsRoutes() {
         return getReportDiagnostic()
       })
 
-      .get('/api/admin/report/send-history', async ({ request, set }) => {
+      .get('/api/admin/report/send-history', async ({ request, query, set }) => {
         const user = await getAdminUser(request)
-        if (!user) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const history = await getSendHistory()
-        return { history }
+        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        const page = Number(query.page) || 1
+        const limit = Number(query.limit) || 20
+        const validRanges: ReportHistoryRange[] = ['1m', '3m', 'all']
+        const range: ReportHistoryRange = validRanges.includes(query.range as ReportHistoryRange)
+          ? (query.range as ReportHistoryRange)
+          : '1m'
+        const { entries, total } = await getSendHistory({ page, limit, range })
+        // backward compat: `history` alias untuk entries
+        return { history: entries, entries, total, page, limit, range }
+      })
+
+      .delete('/api/admin/report/history/:id', async ({ request, params, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        if (user.role !== 'SUPER_ADMIN') { set.status = 403; return { error: 'Hanya SUPER_ADMIN yang bisa menghapus riwayat' } }
+        await deleteReportHistory(params.id)
+        return { ok: true }
       })
 
       // Jalankan cron sekarang tanpa menunggu waktu jadwal — untuk testing & debugging.

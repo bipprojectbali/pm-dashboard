@@ -634,3 +634,17 @@ model EventTagLink {
   @@index([tagId])
   @@map("event_tag_link")
 }
+
+model ReportHistory {
+  id        String   @id @default(uuid())
+  sentAt    DateTime
+  ok        Boolean
+  message   String
+  trigger   String
+  markdown  String?
+  createdAt DateTime @default(now())
+
+  @@index([sentAt])
+  @@index([trigger])
+  @@map("report_history")
+}

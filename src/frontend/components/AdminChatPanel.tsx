@@ -36,6 +36,7 @@ import {
   TbUser,
 } from 'react-icons/tb'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface ChatSource {
   ref: string
@@ -281,7 +282,7 @@ function AssistantBubble({
           </Group>
           {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
           <TypographyStylesProvider style={{ fontSize: 13 }}>
-            <ReactMarkdown>{msg.content + (streaming ? '▋' : '')}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content + (streaming ? '▋' : '')}</ReactMarkdown>
           </TypographyStylesProvider>
           {!streaming && msg.sources && msg.sources.length > 0 && <SourcesFooter sources={msg.sources} />}
         </Card>

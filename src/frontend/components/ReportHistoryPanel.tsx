@@ -22,6 +22,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { TbCheck, TbCopy, TbEye, TbRefresh, TbSend, TbTrash } from 'react-icons/tb'
 import type { ReportHistoryRange } from '../../lib/report-history'
 
@@ -137,7 +138,7 @@ function PreviewDrawer({ entry, onClose }: PreviewDrawerProps) {
           {mode === 'normal' ? (
             <ScrollArea style={{ flex: 1 }} type="auto">
               <TypographyStylesProvider>
-                <ReactMarkdown>{entry.markdown}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.markdown}</ReactMarkdown>
               </TypographyStylesProvider>
             </ScrollArea>
           ) : (

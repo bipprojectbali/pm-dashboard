@@ -10,7 +10,7 @@ Local MCP server lets Claude drive the app remotely. `.mcp.json` registers 4 ser
 Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
-- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `code`, `db`, `dev`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `qc`, `redis`, `report`, `tags`, `tasks`, `tickets`, `webhooks` (20 modules, 107 tools). `shared.ts` is a helper, not a tool module.
+- Tool modules (`scripts/mcp/tools/`): `admin`, `agents`, `chat`, `code`, `db`, `dev`, `events`, `github`, `health`, `logs`, `milestones`, `overview`, `presence`, `project`, `projects`, `qc`, `redis`, `report`, `tags`, `tasks`, `tickets`, `webhooks` (22 modules, 110 tools). `shared.ts` is a helper, not a tool module.
 - HTTP fallback: `POST /mcp` — Bearer `MCP_SECRET`. Response `x-mcp-scope` reflects the effective scope (readonly in prod, admin otherwise).
 
 ## Tools by module
@@ -29,6 +29,10 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
   - QA/QC flow: tag a ticket with `ai-queue` → Claude runs `ticket_pick` → fix locally → open PR → `ticket_submit`.
   - Matches any project with an `ai-queue` tag regardless of self-project; in practice only the self-project has the tag, so hits are always QC tickets.
 - **Events** (in `events` module): `event_list` (readonly — filter upcoming/past, limit); `event_create`, `event_update`, `event_delete` (admin)
+- **Chat AI** (in `chat` module):
+  - Readonly: `chat_doc_search` (pgvector + FTS + trigram search over `chat_document`, optional `type` filter, return hits with metadata); `chat_doc_stats` (total docs, breakdown per type, lastSync)
+  - Admin: `chat_sync_run` (`full=false` incremental, `full=true` aggregate refresh + retro + orphan prune; returns `{ synced, pruned, failedEmbeddings, durationMs }`)
+  - See `@docs/CHAT-AI.md` for doc-type catalog and search algorithm.
 - **QC** (in `qc` module):
   - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list`, `qc_ticket_get`
   - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`

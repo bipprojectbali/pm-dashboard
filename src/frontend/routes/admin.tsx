@@ -327,7 +327,7 @@ function AdminPage() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container fluid px={0}>
+        <Container size={"xl"} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>

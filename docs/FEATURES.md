@@ -49,3 +49,15 @@ Automated per-project retrospective generator. Given a project and a time window
   - `GET /api/projects/:id/retro` — JSON result. `since`/`until` query params (ISO); defaults to last 14 days. 400 on invalid dates. 404 on unknown project. 403 for non-member non-admin.
   - `GET /api/projects/:id/retro?format=md` — renders markdown with `text/markdown` content-type.
 - **Frontend**: Project detail **Retro tab** (`ProjectDetailView.tsx` → `RetroTab.tsx`). SegmentedControl over 7d/14d/30d/90d windows. 6 summary cards (Shipped / Slipped / Still blocked / New tasks / Extensions / Commits) + GitHub activity card (conditional) + sections for each list + Top contributors card. "Copy markdown" via `<CopyButton>`, "Download .md" via Blob URL. Markdown fetched lazily via separate `useQuery` (`enabled: !!data`).
+
+## Chat AI Knowledge Base
+
+Admin Chat AI di `/admin?tab=chat` menjawab pertanyaan operasional dari DB. Dua lapisan pengetahuan: **live context** (snapshot KPI/roster/effort/github 7h yang dibangun saat pesan pertama, di-cache di state FE) dan **RAG knowledge base** (`chat_document` table, di-sync periodik). Jawaban menyertakan citation `[#n]` yang merujuk dokumen sumber. Detail lengkap di `@docs/CHAT-AI.md`.
+
+- **Helpers**: `src/lib/chat.ts` (`buildChatContext`, `retrieveRelevantDocs`, `streamChatSSE`), `src/lib/chat-documents.ts` (`syncChatDocuments`, `searchDocuments`, `extractKeywords`, `pruneOrphanDocs`), `src/lib/github-summary.ts` (`computeProjectGithubSummary`).
+- **Doc types** (`chat_document.type`): `user`, `task`, `project`, `event`, `comment`, `github_project`, `effort_user`, `effort_task`, `ghost_task`, `milestone`, `extension`, `dependency`, `evidence`, `audit_recent`, `agent_status`, `report_history`, `project_retro`. Unique per `(type, entityId)`. `project_retro` hanya di full-sync (mahal).
+- **Sync schedule**: startup full-sync (include prune); cron `*/10 * * * *` incremental; tombol "Perbarui Pengetahuan" di FE → full-sync via `POST /api/admin/chat/sync`.
+- **Search**: pgvector semantic (cosine threshold 0.35) → FTS fallback (`extractKeywords` + `to_tsvector('simple')`) → trigram fuzzy untuk proper noun. Merge unik by id, return `{ hits, formatted }` dengan ref `[#1]…[#N]`.
+- **Citation flow**: system prompt menginstruksikan AI gunakan tag `[#N]`; SSE event `sources` (`[{ ref, type, entityId, title }]`) dikirim sebelum `token` pertama dan diulang di `done`. FE render footer badge per assistant bubble.
+- **API** (ADMIN + SUPER_ADMIN): lihat `@docs/API.md` § Chat AI.
+- **Frontend**: `AdminChatPanel.tsx` — header dengan badge "Konteks {age}" + "{n} dok" + "+synced/−pruned" pasca sync. Tombol "Refresh Konteks" (kosongkan systemContext tanpa hapus history), "Perbarui Pengetahuan" (full sync), "Sesi Baru" (reset). Quick prompts: top-risk, top-committer, overbudget, overloaded, overdue, events.

@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Badge,
   Button,
   Card,
@@ -141,6 +142,9 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('claude-opus-4-7')
+  const [embApiKey, setEmbApiKey] = useState('')
+  const [embBaseUrl, setEmbBaseUrl] = useState('')
+  const [embModel, setEmbModel] = useState('')
   const [timeoutSeconds, setTimeoutSeconds] = useState(120)
   const [scheduleTime, setScheduleTime] = useState('18:00')
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
@@ -154,6 +158,9 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
     setApiKey(settings['ai.anthropicApiKey'] ?? '')
     setBaseUrl(settings['ai.baseUrl'] ?? '')
     setModel(settings['ai.model'] ?? 'claude-opus-4-7')
+    setEmbApiKey(settings['embedding.apiKey'] ?? '')
+    setEmbBaseUrl(settings['embedding.baseUrl'] ?? '')
+    setEmbModel(settings['embedding.model'] ?? '')
     setTimeoutSeconds(Number(settings['ai.timeoutSeconds'] ?? 120))
     const h = (settings['report.scheduleHour'] ?? '18').padStart(2, '0')
     const m = (settings['report.scheduleMinute'] ?? '0').padStart(2, '0')
@@ -171,6 +178,9 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
         saveSetting('ai.baseUrl', baseUrl),
         saveSetting('ai.model', model),
         saveSetting('ai.timeoutSeconds', String(timeoutSeconds)),
+        saveSetting('embedding.apiKey', embApiKey),
+        saveSetting('embedding.baseUrl', embBaseUrl),
+        saveSetting('embedding.model', embModel),
         saveSetting('report.scheduleHour', String(parseInt(scheduleTime.split(':')[0], 10))),
         saveSetting('report.scheduleMinute', String(parseInt(scheduleTime.split(':')[1], 10))),
         saveSetting('report.timezone', timezone),
@@ -453,6 +463,33 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
             step={30}
             suffix=" detik"
             w={220}
+          />
+
+          <Divider label="Embedding untuk Chat AI Knowledge Base (opsional)" labelPosition="center" my="xs" />
+          <Alert color="blue" variant="light" title="Semantic Search (pgvector)" icon={<TbRobot size={14} />}>
+            Jika dikonfigurasi, Chat AI akan menggunakan vector similarity search yang memahami makna semantik — bukan hanya keyword matching. Gunakan API OpenAI-compatible seperti OpenRouter. Kosongkan untuk tetap pakai full-text search bawaan.
+          </Alert>
+
+          <PasswordInput
+            label="Embedding API Key"
+            placeholder="sk-or-... atau sk-..."
+            description="API key untuk embedding model. Bisa pakai OpenRouter (openrouter.ai/keys) atau OpenAI."
+            value={embApiKey}
+            onChange={(e) => { setEmbApiKey(e.currentTarget.value); setDirty(true) }}
+          />
+          <TextInput
+            label="Embedding Base URL"
+            placeholder="https://openrouter.ai/api/v1"
+            description="Default: https://openrouter.ai/api/v1. Bisa diubah ke OpenAI atau provider lain yang kompatibel."
+            value={embBaseUrl}
+            onChange={(e) => { setEmbBaseUrl(e.currentTarget.value); setDirty(true) }}
+          />
+          <TextInput
+            label="Embedding Model"
+            placeholder="openai/text-embedding-3-small"
+            description="Model harus menghasilkan 1536 dimensi. Contoh: openai/text-embedding-3-small (OpenRouter), text-embedding-3-small (OpenAI)."
+            value={embModel}
+            onChange={(e) => { setEmbModel(e.currentTarget.value); setDirty(true) }}
           />
 
           <Group justify="space-between">

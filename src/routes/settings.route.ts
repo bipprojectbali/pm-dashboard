@@ -10,7 +10,8 @@ import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { prisma } from '../lib/db'
 import { runCronNow } from '../lib/report-cron'
 import { getReportDiagnostic } from '../lib/report-diagnose'
-import { buildChatContext, streamChatSSE, type ChatMessage } from '../lib/chat'
+import { buildChatContext, retrieveRelevantDocs, streamChatSSE, type ChatMessage } from '../lib/chat'
+import { getChatSyncStatus, syncChatDocuments } from '../lib/chat-documents'
 import { deleteReportHistory, getSendHistory, type ReportHistoryRange } from '../lib/report-history'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 
@@ -432,8 +433,14 @@ export function settingsRoutes() {
               if (!systemContext) {
                 send('phase', { label: 'Memuat konteks proyek...' })
                 systemContext = await buildChatContext()
-                send('system', { context: systemContext }) // frontend cache untuk pesan berikutnya
+                send('system', { context: systemContext })
               }
+
+              // RAG: cari dokumen relevan dari knowledge base per-pesan
+              const lastMsg = messages[messages.length - 1]
+              send('phase', { label: 'Mencari dokumen relevan...' })
+              const { text: relevantDocs, count: docsCount, sources } = await retrieveRelevantDocs(lastMsg?.content ?? '')
+              if (docsCount > 0) send('docs', { count: docsCount })
 
               send('phase', { label: 'Menghubungi Claude AI...' })
               await streamChatSSE({
@@ -443,6 +450,8 @@ export function settingsRoutes() {
                 timeoutMs: (Number(timeoutRaw) || 120) * 1000,
                 systemContext,
                 messages,
+                relevantDocs: relevantDocs || undefined,
+                sources,
               }, ctrl)
             } catch (e) {
               try { ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) })) } catch { /* ignore */ }
@@ -460,6 +469,21 @@ export function settingsRoutes() {
             'X-Accel-Buffering': 'no',
           },
         })
+      })
+
+      // ─── Chat knowledge base sync ─────────────────────────────────────────────
+      .get('/api/admin/chat/sync/status', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        return getChatSyncStatus()
+      })
+
+      .post('/api/admin/chat/sync', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        const start = Date.now()
+        const result = await syncChatDocuments({ full: true })
+        return { ok: true, ...result, duration: Date.now() - start }
       })
 
       // Diagnostic: accepts admin session OR Bearer MCP_SECRET (so ops can curl from anywhere).

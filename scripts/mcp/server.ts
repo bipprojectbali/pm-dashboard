@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { adminTools } from './tools/admin'
 import { agentsTools, agentsReadonly } from './tools/agents'
+import { chatAdmin, chatReadonly } from './tools/chat'
 import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
 import { devTools } from './tools/dev'
@@ -44,6 +45,7 @@ const READONLY_MODULES: ToolModule[] = [
   qcReadonly,
   reportReadonly,
   eventsReadonly,
+  chatReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -62,6 +64,7 @@ const ADMIN_MODULES: ToolModule[] = [
   qcTools,
   reportAdmin,
   eventsTools,
+  chatAdmin,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {

@@ -2,6 +2,7 @@ import Elysia from 'elysia'
 import { appLog } from '../lib/applog'
 import { prisma } from '../lib/db'
 import { normalizeGithubRepo } from '../lib/github'
+import { computeProjectGithubSummary } from '../lib/github-summary'
 import { emitInvalidate } from '../lib/presence'
 import { computeRetro, renderRetroMarkdown } from '../lib/retro'
 import {
@@ -335,77 +336,12 @@ export function projectsRoutes() {
         set.status = access.status!
         return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
       }
-      const project = await prisma.project.findUnique({
-        where: { id: params.id },
-        select: { id: true, githubRepo: true },
-      })
-      if (!project) {
+      const summary = await computeProjectGithubSummary(params.id)
+      if (!summary) {
         set.status = 404
         return { error: 'Project not found' }
       }
-      if (!project.githubRepo) {
-        return { linked: false, repo: null }
-      }
-      const now = Date.now()
-      const day = 24 * 3600 * 1000
-      const last7 = new Date(now - 7 * day)
-      const last30 = new Date(now - 30 * day)
-
-      const [commits7, commits30, contributors, openPrs, lastEvent, recentEvents, allPushes] = await Promise.all([
-        prisma.projectGithubEvent.count({
-          where: { projectId: params.id, kind: 'PUSH_COMMIT', createdAt: { gte: last7 } },
-        }),
-        prisma.projectGithubEvent.count({
-          where: { projectId: params.id, kind: 'PUSH_COMMIT', createdAt: { gte: last30 } },
-        }),
-        prisma.projectGithubEvent.groupBy({
-          by: ['actorLogin'],
-          where: { projectId: params.id, kind: 'PUSH_COMMIT', createdAt: { gte: last30 } },
-          _count: { _all: true },
-          orderBy: { _count: { actorLogin: 'desc' } },
-          take: 8,
-        }),
-        prisma.projectGithubEvent.findMany({
-          where: { projectId: params.id, kind: 'PR_OPENED' },
-          select: { prNumber: true, title: true, url: true, actorLogin: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 30,
-        }),
-        prisma.projectGithubEvent.findFirst({
-          where: { projectId: params.id, kind: 'PUSH_COMMIT' },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true, actorLogin: true },
-        }),
-        prisma.projectGithubEvent.findMany({
-          where: { projectId: params.id },
-          orderBy: { createdAt: 'desc' },
-          take: 15,
-          include: { matchedUser: { select: { id: true, name: true, email: true, image: true } } },
-        }),
-        prisma.projectGithubEvent.findMany({
-          where: { projectId: params.id, kind: { in: ['PR_CLOSED', 'PR_MERGED'] } },
-          select: { prNumber: true },
-        }),
-      ])
-
-      const closedPrNums = new Set(allPushes.map((p) => p.prNumber).filter((n): n is number => n != null))
-      const openPrList = openPrs.filter((p) => p.prNumber != null && !closedPrNums.has(p.prNumber))
-
-      return {
-        linked: true,
-        repo: project.githubRepo,
-        stats: {
-          commits7d: commits7,
-          commits30d: commits30,
-          contributors30d: contributors.length,
-          openPrs: openPrList.length,
-          lastPushAt: lastEvent?.createdAt ?? null,
-          lastPushBy: lastEvent?.actorLogin ?? null,
-        },
-        contributors: contributors.map((c) => ({ login: c.actorLogin, commits: c._count._all })),
-        openPrs: openPrList.slice(0, 5),
-        recent: recentEvents,
-      }
+      return summary
     })
 
     .get('/api/projects/:id/github/feed', async ({ request, params, query, set }) => {

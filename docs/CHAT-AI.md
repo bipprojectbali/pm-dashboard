@@ -7,11 +7,14 @@ Admin Chat AI di `/admin?tab=chat` menjawab pertanyaan operasional dari data DB.
 ```
 User prompt
    ├─→ buildChatContext()       (system prompt, snapshot KPI/roster/effort/github 7h)
-   └─→ retrieveRelevantDocs()   (top-6 hits dari chat_document via pgvector → FTS → trigram)
-                                  ↓
-                           streamChatSSE() → Anthropic API
-                                  ↓
-              SSE events: phase | system | docs | sources | token | done | error
+   ├─→ retrieveRelevantDocs()   (top-6 hits dari chat_document via pgvector → FTS → trigram)
+   └─→ streamChatSSE() → Anthropic API (tool_use loop, max 5 iter)
+                ↓
+        CHAT_TOOLS (5 read-only): query_users | query_tasks | query_project_detail
+                                  query_github_activity | query_effort
+                ↓
+        SSE events: phase | system | docs | sources | tool_use | tool_result
+                    token | done | error
 ```
 
 - **Live context** (`src/lib/chat.ts:buildChatContext`) — di-cache di state frontend setelah pertama kali dimuat; tombol "Refresh Konteks" membatalkan cache tanpa menghapus history.
@@ -66,6 +69,29 @@ Hasil di-merge unik berdasarkan `id`, return `{ hits: DocHit[], formatted: strin
 ## Orphan prune (full-sync only)
 
 `pruneOrphanDocs()` dijalankan di akhir `syncChatDocuments({ full: true })`. Per type, query `valid entityIds` dari source table, hapus row di `chat_document` yang `entityId`-nya tidak ada di set valid. Window: user/blocked, task/(open atau closed<180d), project/(active dan archived<90d), event/startsAt≥-7d, comment/<30d, audit/report/<30d. Return count `pruned`.
+
+## Tool-calling layer
+
+Sumber: `src/lib/chat-tools.ts`. 5 tool read-only, semua validasi input via Zod, hasil cap 50 row. Tools wajib dipakai untuk pertanyaan numerik/agregat — snapshot live context bisa stale beberapa menit, tool langsung hit DB.
+
+| Tool | Mode / path | Output |
+|---|---|---|
+| `query_users` | filter `query` (substring nama/email), `role`, `includeBlocked` | per user: `openTasks`, `overdueTasks`, `sumEstimateHours`, `projectCount` |
+| `query_tasks` | `mode=list` atau `mode=aggregate` dengan `groupBy: status\|priority\|kind\|assignee\|project`. Filter: project (id/name), assignee (email/name), `status[]`, `priority[]`, `kind[]`, `overdueOnly`, `createdSinceDays`, `closedSinceDays` | list: detail task + flag `overdue`. aggregate: `[{ key, count, sumEstimateHours }]` |
+| `query_project_detail` | resolve by id atau name (substring) | members, milestones (+flag `overdue`), extensions, `taskBreakdown` per status, `overdueTasks` |
+| `query_github_activity` | 3 path: project-scoped (delegate `computeProjectGithubSummary`), actor-scoped (`actorLogin` filter), global top contributors. Window default 7 hari, maks 90 | recent events + top contributors + `commits7d/30d`, `openPrs` |
+| `query_effort` | `mode=user` (phantom work, reuse `computePhantomWork`), `mode=task` (`computeTaskEffort`), `mode=overbudget` (`effortReport` filter verdict) | rows + summary count over/under |
+
+Loop kerja di `streamChatSSE`:
+1. Build conversation history (last user message di-augment dengan `relevantDocs`).
+2. Tiap iterasi: non-streaming POST ke Anthropic `messages` API dengan `tools: CHAT_TOOLS`. Text block → emit SSE `token`.
+3. `stop_reason === 'tool_use'`: execute setiap `tool_use` block via `executeChatTool`, emit `tool_use` + `tool_result` SSE, append `tool_result` ke conversation, loop.
+4. Iterasi terakhir (ke-5) di-call tanpa `tools` agar AI dipaksa jawab tanpa tool baru.
+5. Final `done` event bawa `full` text + `sources` + `toolCalls` trace.
+
+Frontend (`AdminChatPanel.tsx`):
+- `ToolCallCard` collapsible per call dengan badge status: gray "menjalankan…" → red "error" / yellow "kosong" / teal "N row{+ kalau truncated}".
+- `ToolCallsSection` header "DIVERIFIKASI DARI N TOOL CALL" di atas markdown content. Tool calls ter-persist ke `ChatMessage.toolCalls`.
 
 ## Embedding settings
 

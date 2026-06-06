@@ -4,6 +4,8 @@ import {
   Box,
   Button,
   Card,
+  Code,
+  Collapse,
   CopyButton,
   Group,
   Loader,
@@ -15,13 +17,18 @@ import {
   Tooltip,
   TypographyStylesProvider,
 } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  TbAlertTriangle,
   TbBrain,
   TbCheck,
+  TbChevronDown,
+  TbChevronRight,
   TbClockBolt,
   TbCopy,
+  TbDatabase,
   TbMessageCircle,
   TbRefresh,
   TbRobot,
@@ -37,11 +44,28 @@ interface ChatSource {
   title: string
 }
 
+interface ToolCall {
+  id: string
+  name: string
+  input: unknown
+  result?: { ok: boolean; error?: string; rows?: unknown[]; summary?: Record<string, unknown>; truncated?: boolean }
+  pending?: boolean
+}
+
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   sources?: ChatSource[]
+  toolCalls?: ToolCall[]
+}
+
+const TOOL_LABEL: Record<string, string> = {
+  query_users: 'Cari User',
+  query_tasks: 'Query Task',
+  query_project_detail: 'Detail Proyek',
+  query_github_activity: 'Aktivitas GitHub',
+  query_effort: 'Effort Tracking',
 }
 
 const QUICK_PROMPTS = [
@@ -144,12 +168,96 @@ function SourcesFooter({ sources }: { sources: ChatSource[] }) {
   )
 }
 
+function ToolCallCard({ call }: { call: ToolCall }) {
+  const [opened, { toggle }] = useDisclosure(false)
+  const ok = call.result?.ok
+  const summary = call.result?.summary
+  const rowCount = call.result?.rows?.length ?? 0
+  const truncated = call.result?.truncated
+
+  let statusBadge: { color: string; text: string }
+  if (call.pending) statusBadge = { color: 'gray', text: 'menjalankan…' }
+  else if (ok === false) statusBadge = { color: 'red', text: 'error' }
+  else if (rowCount === 0) statusBadge = { color: 'yellow', text: 'kosong' }
+  else statusBadge = { color: 'teal', text: `${rowCount} row${truncated ? '+' : ''}` }
+
+  return (
+    <Card withBorder radius="sm" p={6} mb={6} style={{ background: 'var(--mantine-color-gray-light)' }}>
+      <Group gap={6} wrap="nowrap" onClick={toggle} style={{ cursor: 'pointer' }}>
+        <ThemeIcon size={18} radius="sm" variant="light" color={ok === false ? 'red' : 'cyan'}>
+          {ok === false ? <TbAlertTriangle size={11} /> : <TbDatabase size={11} />}
+        </ThemeIcon>
+        <Text size="xs" fw={600} style={{ flex: 1 }}>
+          {TOOL_LABEL[call.name] ?? call.name}
+        </Text>
+        <Badge size="xs" color={statusBadge.color} variant="light">
+          {statusBadge.text}
+        </Badge>
+        {opened ? <TbChevronDown size={12} /> : <TbChevronRight size={12} />}
+      </Group>
+      <Collapse in={opened}>
+        <Stack gap={6} mt={6}>
+          <Box>
+            <Text size="10px" c="dimmed" fw={600}>
+              INPUT
+            </Text>
+            <Code block style={{ fontSize: 10 }}>
+              {JSON.stringify(call.input, null, 2)}
+            </Code>
+          </Box>
+          {call.result && (
+            <Box>
+              <Text size="10px" c="dimmed" fw={600}>
+                HASIL
+              </Text>
+              {call.result.error ? (
+                <Text size="xs" c="red">
+                  {call.result.error}
+                </Text>
+              ) : (
+                <>
+                  {summary && (
+                    <Code block style={{ fontSize: 10 }}>
+                      {JSON.stringify(summary, null, 2)}
+                    </Code>
+                  )}
+                  {rowCount > 0 && (
+                    <Text size="10px" c="dimmed" mt={4}>
+                      {rowCount} row {truncated ? '(terpotong)' : ''}
+                    </Text>
+                  )}
+                </>
+              )}
+            </Box>
+          )}
+        </Stack>
+      </Collapse>
+    </Card>
+  )
+}
+
+function ToolCallsSection({ calls }: { calls: ToolCall[] }) {
+  if (!calls.length) return null
+  return (
+    <Box mb={6}>
+      <Text size="10px" c="dimmed" fw={600} mb={4}>
+        DIVERIFIKASI DARI {calls.length} TOOL CALL
+      </Text>
+      {calls.map((c) => (
+        <ToolCallCard key={c.id} call={c} />
+      ))}
+    </Box>
+  )
+}
+
 function AssistantBubble({
   msg,
   streaming,
+  toolCalls,
 }: {
   msg: { content: string; sources?: ChatSource[] }
   streaming?: boolean
+  toolCalls?: ToolCall[]
 }) {
   return (
     <Group justify="flex-start" align="flex-start" gap="xs">
@@ -171,6 +279,7 @@ function AssistantBubble({
               </CopyButton>
             )}
           </Group>
+          {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
           <TypographyStylesProvider style={{ fontSize: 13 }}>
             <ReactMarkdown>{msg.content + (streaming ? '▋' : '')}</ReactMarkdown>
           </TypographyStylesProvider>
@@ -190,6 +299,7 @@ export function AdminChatPanel() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentStream, setCurrentStream] = useState('')
   const [currentSources, setCurrentSources] = useState<ChatSource[]>([])
+  const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([])
   const [phase, setPhase] = useState('')
   const [docsCount, setDocsCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -237,6 +347,7 @@ export function AdminChatPanel() {
       setIsStreaming(true)
       setCurrentStream('')
       setCurrentSources([])
+      setCurrentToolCalls([])
       setPhase('')
       setDocsCount(0)
       setError(null)
@@ -262,6 +373,7 @@ export function AdminChatPanel() {
         let accumulated = ''
         let newContext: string | null = null
         let collectedSources: ChatSource[] = []
+        let collectedToolCalls: ToolCall[] = []
 
         while (true) {
           const { done, value } = await reader.read()
@@ -287,6 +399,15 @@ export function AdminChatPanel() {
               else if (eventName === 'sources') {
                 collectedSources = data.sources ?? []
                 setCurrentSources(collectedSources)
+              } else if (eventName === 'tool_use') {
+                const newCall: ToolCall = { id: data.id, name: data.name, input: data.input, pending: true }
+                collectedToolCalls = [...collectedToolCalls, newCall]
+                setCurrentToolCalls(collectedToolCalls)
+              } else if (eventName === 'tool_result') {
+                collectedToolCalls = collectedToolCalls.map((c) =>
+                  c.id === data.id ? { ...c, pending: false, result: data.result } : c,
+                )
+                setCurrentToolCalls(collectedToolCalls)
               } else if (eventName === 'token') {
                 accumulated += data.text
                 setCurrentStream(accumulated)
@@ -295,10 +416,17 @@ export function AdminChatPanel() {
                 const finalSources = (data.sources as ChatSource[] | undefined) ?? collectedSources
                 setMessages((prev) => [
                   ...prev,
-                  { id: crypto.randomUUID(), role: 'assistant', content: final, sources: finalSources },
+                  {
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content: final,
+                    sources: finalSources,
+                    toolCalls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+                  },
                 ])
                 setCurrentStream('')
                 setCurrentSources([])
+                setCurrentToolCalls([])
                 if (newContext) {
                   setSystemContext(newContext)
                   setContextLoadedAt(new Date())
@@ -315,6 +443,7 @@ export function AdminChatPanel() {
         setIsStreaming(false)
         setCurrentStream('')
         setCurrentSources([])
+        setCurrentToolCalls([])
         setPhase('')
       }
     },
@@ -334,6 +463,7 @@ export function AdminChatPanel() {
     setContextLoadedAt(null)
     setCurrentStream('')
     setCurrentSources([])
+    setCurrentToolCalls([])
     setError(null)
     setPhase('')
     setTimeout(() => textareaRef.current?.focus(), 0)
@@ -488,11 +618,15 @@ export function AdminChatPanel() {
                 msg.role === 'user' ? (
                   <UserBubble key={msg.id} msg={msg} />
                 ) : (
-                  <AssistantBubble key={msg.id} msg={msg} />
+                  <AssistantBubble key={msg.id} msg={msg} toolCalls={msg.toolCalls} />
                 ),
               )}
               {isStreaming && currentStream && (
-                <AssistantBubble msg={{ content: currentStream, sources: currentSources }} streaming />
+                <AssistantBubble
+                  msg={{ content: currentStream, sources: currentSources }}
+                  toolCalls={currentToolCalls}
+                  streaming
+                />
               )}
               {isStreaming && !currentStream && (
                 <Group justify="flex-start" align="flex-start" gap="xs">
@@ -509,9 +643,10 @@ export function AdminChatPanel() {
                     withBorder
                     radius="md"
                     p="sm"
-                    style={{ background: 'var(--mantine-color-violet-light)', minWidth: 80 }}
+                    style={{ background: 'var(--mantine-color-violet-light)', minWidth: 80, flex: 1 }}
                   >
-                    <Stack gap={4} align="flex-start">
+                    <Stack gap={4} align="stretch">
+                      {currentToolCalls.length > 0 && <ToolCallsSection calls={currentToolCalls} />}
                       <Loader type="dots" size="sm" color="violet" />
                       {phase && (
                         <Text size="xs" c="dimmed">

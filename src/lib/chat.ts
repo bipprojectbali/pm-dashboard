@@ -1,4 +1,5 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
+import { CHAT_TOOLS, executeChatTool } from './chat-tools'
 import { searchDocuments, type DocHit } from './chat-documents'
 import { prisma } from './db'
 import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
@@ -244,9 +245,16 @@ export async function buildChatContext(): Promise<string> {
   return `Kamu adalah asisten AI untuk project management dashboard. Kamu memiliki pengetahuan lengkap tentang tim dan proyek. Jawab dengan ringkas, akurat, dan helpful. Data di bawah adalah kondisi real-time.
 
 ATURAN JAWABAN:
-- Jangan halusinasi entitas (user/task/project) yang tidak ada di "ROSTER TIM", "PROYEK AKTIF", atau "DOKUMEN RELEVAN".
+- Jangan halusinasi entitas (user/task/project) yang tidak ada di "ROSTER TIM", "PROYEK AKTIF", "DOKUMEN RELEVAN", atau hasil tool calls.
 - Bila merujuk fakta dari "DOKUMEN RELEVAN", sertakan tag sumber dalam format [#1], [#2], dst persis seperti label di dokumen tersebut.
 - Bila pertanyaan menyangkut data yang tidak tersedia di konteks dan tidak ada di dokumen, jawab terus terang "data ini belum tercatat" alih-alih menebak.
+
+PEMAKAIAN TOOLS (WAJIB):
+- Tersedia 5 tool query read-only: query_users, query_tasks, query_project_detail, query_github_activity, query_effort. Hasilnya = data DB akurat real-time.
+- WAJIB pakai tool untuk pertanyaan numerik/agregat (berapa, total, jumlah, top, rata-rata). Jangan tebak dari snapshot di atas — snapshot bisa tertinggal beberapa menit.
+- WAJIB pakai tool kalau pertanyaan menyebut entitas spesifik yang belum kelihatan di konteks (mis. "task X", "proyek Y", "siapa Z").
+- Boleh chain beberapa tool dalam satu jawaban (mis. resolve user lewat query_users dulu, lalu query_tasks pakai assigneeEmail).
+- Tool error / hasil kosong → jawab "data tidak ditemukan", jangan halusinasi.
 
 WAKTU SEKARANG: ${now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB
 
@@ -326,6 +334,29 @@ export async function retrieveRelevantDocs(
 
 type SSEController = ReadableStreamDefaultController<Uint8Array>
 
+const MAX_TOOL_ITERATIONS = 5
+
+type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+
+type AnthropicAssistantMessage = {
+  role: 'assistant'
+  content: AnthropicContentBlock[]
+}
+
+type AnthropicUserMessage = {
+  role: 'user'
+  content:
+    | string
+    | Array<
+        | { type: 'text'; text: string }
+        | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+      >
+}
+
+type AnthropicMessage = AnthropicAssistantMessage | AnthropicUserMessage
+
 export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEController): Promise<void> {
   const { apiKey, model, baseUrl, timeoutMs = 120_000, systemContext, messages, relevantDocs, sources } = params
 
@@ -342,65 +373,100 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
     ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
     : 'https://api.anthropic.com/v1/messages'
 
-  const augmentedMessages: ChatMessage[] = relevantDocs
-    ? [
-        ...messages.slice(0, -1),
-        {
-          role: 'user',
-          content: `${relevantDocs}\n\n---\n\nPertanyaan: ${messages[messages.length - 1].content}`,
-        },
-      ]
-    : messages
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: model ?? 'claude-opus-4-7',
-      max_tokens: 2048,
-      stream: true,
-      system: systemContext,
-      messages: augmentedMessages,
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
+  // Build initial conversation history. Last user message gets RAG augmentation.
+  const conversation: AnthropicMessage[] = messages.map((m, idx) => {
+    const isLast = idx === messages.length - 1
+    if (isLast && m.role === 'user' && relevantDocs) {
+      return { role: 'user', content: `${relevantDocs}\n\n---\n\nPertanyaan: ${m.content}` }
+    }
+    return m.role === 'user'
+      ? { role: 'user', content: m.content }
+      : { role: 'assistant', content: [{ type: 'text', text: m.content }] }
   })
 
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
-    send('error', { message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` })
-    return
-  }
-
-  const reader = res.body!.getReader()
-  const dec = new TextDecoder()
-  let buf = ''
   let full = ''
+  const toolCallsTrace: Array<{ name: string; input: unknown; result: unknown }> = []
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += dec.decode(value, { stream: true })
-    const parts = buf.split('\n\n')
-    buf = parts.pop() ?? ''
-    for (const part of parts) {
-      let data = ''
-      for (const line of part.split('\n')) {
-        if (line.startsWith('data: ')) data = line.slice(6)
-      }
-      if (!data || data === '[DONE]') continue
-      try {
-        const parsed = JSON.parse(data) as { type: string; delta?: { type: string; text: string } }
-        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && parsed.delta.text) {
-          full += parsed.delta.text
-          send('token', { text: parsed.delta.text })
-        }
-      } catch { /* ignore */ }
+  for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
+    const isFinalIter = iter === MAX_TOOL_ITERATIONS - 1
+    // Non-streaming for tool-use turns; stream only the final text turn.
+    // We try streaming each call: if it returns tool_use, we re-fetch non-stream to get full structured content.
+    // Simpler: always non-stream the call, then emit tokens manually from the text block(s).
+    send('phase', { phase: 'thinking', iter })
+
+    const body = {
+      model: model ?? 'claude-opus-4-7',
+      max_tokens: 2048,
+      system: systemContext,
+      messages: conversation,
+      tools: isFinalIter ? undefined : CHAT_TOOLS,
     }
+
+    let res: Response
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+    } catch (e) {
+      send('error', { message: `Network error: ${e instanceof Error ? e.message : String(e)}` })
+      return
+    }
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
+      send('error', { message: `Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}` })
+      return
+    }
+
+    const payload = (await res.json()) as {
+      stop_reason: string
+      content: AnthropicContentBlock[]
+    }
+
+    // Persist assistant turn into conversation as-is.
+    conversation.push({ role: 'assistant', content: payload.content })
+
+    // Stream text blocks token-ish (sent as one chunk each — granular streaming requires SSE-mode).
+    for (const block of payload.content) {
+      if (block.type === 'text' && block.text) {
+        full += block.text
+        send('token', { text: block.text })
+      }
+    }
+
+    if (payload.stop_reason !== 'tool_use') break
+
+    // Execute every tool_use block, collect tool_result blocks for next user turn.
+    const toolResults: Array<{
+      type: 'tool_result'
+      tool_use_id: string
+      content: string
+      is_error?: boolean
+    }> = []
+    for (const block of payload.content) {
+      if (block.type !== 'tool_use') continue
+      send('tool_use', { id: block.id, name: block.name, input: block.input })
+      const result = await executeChatTool(block.name, block.input)
+      toolCallsTrace.push({ name: block.name, input: block.input, result })
+      const resultStr = JSON.stringify(result)
+      send('tool_result', { id: block.id, name: block.name, ok: result.ok, result })
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: block.id,
+        content: resultStr,
+        is_error: !result.ok,
+      })
+    }
+
+    conversation.push({ role: 'user', content: toolResults })
   }
 
-  send('done', { full, sources: sources ?? [] })
+  send('done', { full, sources: sources ?? [], toolCalls: toolCallsTrace })
 }

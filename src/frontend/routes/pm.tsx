@@ -427,7 +427,7 @@ function PmPage() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container fluid px={0}>
+        <Container size={"xl"} px={0}>
           <Stack gap="md">
             {!activeProjectId && !activeTaskId && !activeEventId && !eventMode && <PmPageHeader tabKey={active} />}
             <Box key={active}>

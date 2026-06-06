@@ -43,6 +43,7 @@ import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
 import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
+import { useIsExtensionEnabled } from '@/frontend/hooks/useExtensions'
 import { ReportHistoryPanel } from '@/frontend/components/ReportHistoryPanel'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
@@ -185,6 +186,12 @@ function AdminPage() {
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
+  const chatEnabled = useIsExtensionEnabled('chat')
+  const filteredNavGroups = chatEnabled
+    ? navGroups
+    : navGroups
+        .map((g) => ({ ...g, items: g.items.filter((it) => it.key !== 'chat') }))
+        .filter((g) => g.items.length > 0)
   const scrollPositions = useRef<Partial<Record<TabKey, number>>>({})
   const previousTab = useRef<TabKey>(active)
   const setActive = (key: TabKey) => {
@@ -251,7 +258,7 @@ function AdminPage() {
 
       <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'}>
         <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto' }}>
-          {navGroups.map((group) => (
+          {filteredNavGroups.map((group) => (
             <Stack key={group.label} gap={4}>
               {!(collapsed && !isMobile) && (
                 <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.6 }} px="xs" pt={4}>
@@ -327,7 +334,7 @@ function AdminPage() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container fluid px={0}>
+        <Container size={"xl"} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>
@@ -348,7 +355,12 @@ function AdminPage() {
               {active === 'sessions' && <SessionsPanel />}
               {active === 'health' && <SystemHealthPanel />}
               {active === 'report-history' && <ReportHistoryPanel />}
-              {active === 'chat' && <AdminChatPanel />}
+              {active === 'chat' && chatEnabled && <AdminChatPanel />}
+              {active === 'chat' && !chatEnabled && (
+                <Text size="sm" c="dimmed">
+                  Chat AI extension nonaktif. Aktifkan di /dev → Extensions → Chat AI.
+                </Text>
+              )}
             </SectionErrorBoundary>
           </Stack>
         </Container>

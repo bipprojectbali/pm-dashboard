@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import { appLog } from '../lib/applog'
 import { prisma } from '../lib/db'
 import { env } from '../lib/env'
+import { isExtensionEnabled } from '../lib/extensions'
 import { normalizeGithubRepo, verifyGithubSignature } from '../lib/github'
 import { getIp } from '../lib/route-helpers'
 import { verifyWebhookToken } from '../lib/webhook-tokens'
@@ -160,6 +161,11 @@ export function webhooksRoutes() {
           prisma.githubWebhookLog
             .create({ data: { statusCode, reason, projectId, deliveryId, event, ip, eventsIn } })
             .catch(() => null)
+        }
+
+        if (!(await isExtensionEnabled('github'))) {
+          logRequest(200, 'extension_disabled', null, 0)
+          return { ok: true, skipped: true, reason: 'extension_disabled' }
         }
 
         if (!env.GITHUB_WEBHOOK_SECRET) {

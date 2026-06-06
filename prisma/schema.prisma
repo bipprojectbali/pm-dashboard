@@ -635,6 +635,25 @@ model EventTagLink {
   @@map("event_tag_link")
 }
 
+model ChatDocument {
+  id        String                   @id @default(uuid())
+  type      String                   // 'task' | 'project' | 'user' | 'event' | 'comment' | 'github_project' | 'effort_user' | 'effort_task' | 'ghost_task' | 'milestone' | 'extension' | 'dependency' | 'evidence' | 'audit_recent' | 'agent_status' | 'report_history' | 'project_retro'
+  entityId  String
+  projectId String?
+  title     String
+  content   String
+  tags      String                   @default("")
+  embedding Unsupported("vector(1536)")?
+  syncedAt  DateTime                 @default(now())
+
+  @@unique([type, entityId])
+  @@index([type])
+  @@index([syncedAt])
+  @@index([projectId])
+  @@index([type, syncedAt])
+  @@map("chat_document")
+}
+
 model ReportHistory {
   id        String   @id @default(uuid())
   sentAt    DateTime

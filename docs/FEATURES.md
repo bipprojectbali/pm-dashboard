@@ -49,3 +49,40 @@ Automated per-project retrospective generator. Given a project and a time window
   - `GET /api/projects/:id/retro` — JSON result. `since`/`until` query params (ISO); defaults to last 14 days. 400 on invalid dates. 404 on unknown project. 403 for non-member non-admin.
   - `GET /api/projects/:id/retro?format=md` — renders markdown with `text/markdown` content-type.
 - **Frontend**: Project detail **Retro tab** (`ProjectDetailView.tsx` → `RetroTab.tsx`). SegmentedControl over 7d/14d/30d/90d windows. 6 summary cards (Shipped / Slipped / Still blocked / New tasks / Extensions / Commits) + GitHub activity card (conditional) + sections for each list + Top contributors card. "Copy markdown" via `<CopyButton>`, "Download .md" via Blob URL. Markdown fetched lazily via separate `useQuery` (`enabled: !!data`).
+
+## Chat AI Knowledge Base
+
+Admin Chat AI di `/admin?tab=chat` menjawab pertanyaan operasional dari DB. Dua lapisan pengetahuan: **live context** (snapshot KPI/roster/effort/github 7h yang dibangun saat pesan pertama, di-cache di state FE) dan **RAG knowledge base** (`chat_document` table, di-sync periodik). Jawaban menyertakan citation `[#n]` yang merujuk dokumen sumber. Detail lengkap di `@docs/CHAT-AI.md`.
+
+- **Helpers**: `src/lib/chat.ts` (`buildChatContext`, `retrieveRelevantDocs`, `streamChatSSE`), `src/lib/chat-documents.ts` (`syncChatDocuments`, `searchDocuments`, `extractKeywords`, `pruneOrphanDocs`), `src/lib/chat-tools.ts` (`CHAT_TOOLS`, `executeChatTool` — 5 read-only tool query), `src/lib/github-summary.ts` (`computeProjectGithubSummary`).
+- **Tool-calling layer**: Anthropic native tool_use loop (max 5 iterasi). 5 tool: `query_users`, `query_tasks` (list/aggregate), `query_project_detail`, `query_github_activity`, `query_effort`. Hasil cap 50 row, validasi Zod. System prompt mewajibkan tool untuk pertanyaan numerik/agregat dan entitas spesifik. SSE event `tool_use` + `tool_result` di-render FE sebagai `ToolCallCard` collapsible. Lihat `@docs/CHAT-AI.md` § Tool-calling layer.
+- **Doc types** (`chat_document.type`): `user`, `task`, `project`, `event`, `comment`, `github_project`, `effort_user`, `effort_task`, `ghost_task`, `milestone`, `extension`, `dependency`, `evidence`, `audit_recent`, `agent_status`, `report_history`, `project_retro`. Unique per `(type, entityId)`. `project_retro` hanya di full-sync (mahal).
+- **Sync schedule**: startup full-sync (include prune); cron `*/10 * * * *` incremental; tombol "Perbarui Pengetahuan" di FE → full-sync via `POST /api/admin/chat/sync`.
+- **Search**: pgvector semantic (cosine threshold 0.35) → FTS fallback (`extractKeywords` + `to_tsvector('simple')`) → trigram fuzzy untuk proper noun. Merge unik by id, return `{ hits, formatted }` dengan ref `[#1]…[#N]`.
+- **Citation flow**: system prompt menginstruksikan AI gunakan tag `[#N]`; SSE event `sources` (`[{ ref, type, entityId, title }]`) dikirim sebelum `token` pertama dan diulang di `done`. FE render footer badge per assistant bubble.
+- **API** (ADMIN + SUPER_ADMIN): lihat `@docs/API.md` § Chat AI.
+- **Frontend**: `AdminChatPanel.tsx` — header dengan badge "Konteks {age}" + "{n} dok" + "+synced/−pruned" pasca sync. Tombol "Refresh Konteks" (kosongkan systemContext tanpa hapus history), "Perbarui Pengetahuan" (full sync), "Sesi Baru" (reset). Quick prompts: top-risk, top-committer, overbudget, overloaded, overdue, events.
+
+## Extensions (opt-in features)
+
+Beberapa fitur diperlakukan sebagai **extension** — bagian dari aplikasi tapi bisa di-toggle off tanpa kehilangan data, untuk deployment yang tidak butuh fitur tersebut. Saat ini ada dua: **GitHub Integration** dan **Chat AI**. Default keduanya **aktif**.
+
+- **Setting key**: `extensions.<name>.enabled` di tabel `app_settings`. Hanya nilai literal `'false'` yang menonaktifkan; tidak ada row / nilai apa pun lain = aktif (default-on).
+- **Helper**: `src/lib/extensions.ts`
+  - `EXTENSION_KEYS = ['github', 'chat'] as const` — registry type-safe.
+  - `EXTENSION_META[key] = { label, description }` — untuk UI.
+  - `isExtensionEnabled(key)` — cached 60s (modul-level Map).
+  - `isExtensionEnabledFresh(key)` — bypass cache (untuk test / verifikasi).
+  - `getAllExtensions()` — `{ github: boolean, chat: boolean }`.
+  - `invalidateExtensionCache()` — dipanggil otomatis oleh `setSetting('extensions.*', ...)` lewat hook di `src/lib/app-settings.ts`.
+  - `isValidExtensionKey(s)` — type guard.
+- **Gating 4-lapis** saat extension OFF:
+  1. **API** — endpoint terkait balas error/skip. Chat: `/api/admin/chat/stream` & `/api/admin/chat/sync` → 503 `{ error: 'Extension disabled', extension: 'chat' }`. GitHub webhook: `/webhooks/github` → **200** `{ ok: true, skipped: true, reason: 'extension_disabled' }` (200 sengaja agar GitHub tidak auto-disable webhook setelah 100× failure; log `WebhookGithubLog` tetap dengan reason `extension_disabled`).
+  2. **Background work** — `syncChatDocuments` skip di startup boot (`src/index.tsx`) dan cron `*/10 * * * *` saat Chat OFF. Doc type `github_project` di `syncChatDocuments` skip query saat GitHub OFF.
+  3. **Cross-extension awareness** — Chat AI tool `query_github_activity` di-filter keluar dari `CHAT_TOOLS` di `streamChatSSE` saat GitHub OFF (anti halusinasi).
+  4. **UI** — tab "Chat AI" di `/admin` disembunyikan, `GithubActivityCard` di project overview dan `GithubIntegrationCard` di project settings disembunyikan. Hook FE `useIsExtensionEnabled(key)` default `true` saat data masih loading agar tidak flicker hidden → visible.
+- **Toggle UI**: `/dev?tab=ext-github` & `/dev?tab=ext-chat` (grup "Extensions" di sidebar) → `ExtensionTogglePanel`. SUPER_ADMIN only.
+- **Audit**: setiap toggle tulis `AuditLog` action `EXTENSION_TOGGLED` detail `{ name, enabled, source }` (source: `'api'` dari HTTP, `'mcp'` dari MCP tool).
+- **Data preservation**: OFF tidak menghapus apa pun — `chat_document` & `ProjectGithubEvent` rows tetap; saat di-ON lagi data lama bisa langsung diakses (sync cron akan rotate).
+- **API**: lihat `@docs/API.md` § Extensions.
+- **MCP**: lihat `@docs/MCP.md` § Extensions.

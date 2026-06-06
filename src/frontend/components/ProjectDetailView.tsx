@@ -38,6 +38,7 @@ import {
   TbUsers,
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
+import { useIsExtensionEnabled } from '../hooks/useExtensions'
 import { ExtensionsSection } from './ExtensionsSection'
 import { GithubActivityCard } from './GithubActivityCard'
 import { MembersSection } from './MembersSection'
@@ -492,6 +493,7 @@ function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; onOpenT
   const { overdue } = computeOverdue(project)
   const ts = project.taskStats
   const ms = project.milestoneStats
+  const githubEnabled = useIsExtensionEnabled('github')
 
   return (
     <Stack gap="md">
@@ -640,7 +642,7 @@ function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; onOpenT
         </Stack>
       </Card>
 
-      <GithubActivityCard project={project} />
+      {githubEnabled && <GithubActivityCard project={project} />}
     </Stack>
   )
 }

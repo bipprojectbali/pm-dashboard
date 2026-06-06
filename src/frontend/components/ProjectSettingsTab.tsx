@@ -4,6 +4,7 @@ import { modals } from '@mantine/modals'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TbCalendarEvent, TbClock, TbTrash } from 'react-icons/tb'
+import { useIsExtensionEnabled } from '../hooks/useExtensions'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { GithubIntegrationCard } from './GithubIntegrationCard'
 import type { ProjectDetail, ProjectPriority, ProjectStatus, ProjectVisibility } from './ProjectsPanel'
@@ -64,6 +65,7 @@ export function ProjectSettingsTab({
   const [startsAt, setStartsAt] = useState<Date | null>(project.startsAt ? new Date(project.startsAt) : null)
   const [endsAt, setEndsAt] = useState<Date | null>(project.endsAt ? new Date(project.endsAt) : null)
   const [githubRepoInput, setGithubRepoInput] = useState(project.githubRepo ?? '')
+  const githubExtensionEnabled = useIsExtensionEnabled('github')
 
   const update = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -238,16 +240,18 @@ export function ProjectSettingsTab({
         </Stack>
       </Card>
 
-      <GithubIntegrationCard
-        project={project}
-        canManage={canManage}
-        value={githubRepoInput}
-        onChange={setGithubRepoInput}
-        onSave={(repo) => update.mutate({ githubRepo: repo })}
-        onUnlink={() => update.mutate({ githubRepo: null })}
-        saving={update.isPending}
-        error={update.error as Error | null}
-      />
+      {githubExtensionEnabled && (
+        <GithubIntegrationCard
+          project={project}
+          canManage={canManage}
+          value={githubRepoInput}
+          onChange={setGithubRepoInput}
+          onSave={(repo) => update.mutate({ githubRepo: repo })}
+          onUnlink={() => update.mutate({ githubRepo: null })}
+          saving={update.isPending}
+          error={update.error as Error | null}
+        />
+      )}
 
       {canDelete && (
         <Card withBorder padding="md" radius="md" style={{ borderColor: 'var(--mantine-color-red-4)' }}>

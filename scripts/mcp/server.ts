@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { adminTools } from './tools/admin'
 import { agentsTools, agentsReadonly } from './tools/agents'
+import { chatAdmin, chatReadonly } from './tools/chat'
 import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
 import { devTools } from './tools/dev'
@@ -18,6 +19,7 @@ import { redisTools } from './tools/redis'
 import { reportAdmin, reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { eventsReadonly, eventsTools } from './tools/events'
+import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import { webhooksTools, webhooksReadonly } from './tools/webhooks'
@@ -44,6 +46,8 @@ const READONLY_MODULES: ToolModule[] = [
   qcReadonly,
   reportReadonly,
   eventsReadonly,
+  chatReadonly,
+  extensionsReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -62,6 +66,8 @@ const ADMIN_MODULES: ToolModule[] = [
   qcTools,
   reportAdmin,
   eventsTools,
+  chatAdmin,
+  extensionsAdmin,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {

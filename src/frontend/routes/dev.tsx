@@ -46,6 +46,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@xyflow/react/dist/style.css'
 import { modals } from '@mantine/modals'
 import {
+  TbBrandGithub,
   TbBrandTelegram,
   TbChartBar,
   TbChevronRight,
@@ -60,6 +61,8 @@ import {
   TbKey,
   TbLayoutDashboard,
   TbLock,
+  TbMessageChatbot,
+  TbPuzzle,
   TbRefresh,
   TbRobot,
   TbServer,
@@ -75,6 +78,7 @@ import { AiSettingsPanel } from '@/frontend/components/AiSettingsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
+import { ExtensionTogglePanel } from '@/frontend/components/ExtensionTogglePanel'
 import { FileHealthPanel } from '@/frontend/components/FileHealthPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
@@ -102,6 +106,8 @@ const validTabs = [
   'sync',
   'channel',
   'ai',
+  'ext-github',
+  'ext-chat',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -157,6 +163,14 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   ai: {
     label: 'AI & Laporan',
     description: 'Konfigurasi Claude AI, model, jadwal kirim, dan preview laporan.',
+  },
+  'ext-github': {
+    label: 'GitHub Integration',
+    description: 'Toggle extension: webhook /webhooks/github + card aktivitas + dokumen RAG github_project.',
+  },
+  'ext-chat': {
+    label: 'Chat AI',
+    description: 'Toggle extension: tab Chat AI di /admin, sync chat_document, embedding & Anthropic call.',
   },
 }
 
@@ -246,6 +260,13 @@ const navGroups: DevNavGroup[] = [
     items: [
       { label: 'Saluran', icon: TbBrandTelegram, key: 'channel' },
       { label: 'AI & Laporan', icon: TbRobot, key: 'ai' },
+    ],
+  },
+  {
+    label: 'Extensions',
+    items: [
+      { label: 'GitHub Integration', icon: TbBrandGithub, key: 'ext-github' },
+      { label: 'Chat AI', icon: TbMessageChatbot, key: 'ext-chat' },
     ],
   },
 ]
@@ -408,7 +429,7 @@ function DevPage() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container fluid px={0}>
+        <Container size={"xl"} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>
@@ -432,6 +453,8 @@ function DevPage() {
               {active === 'sync' && <SyncPanel />}
               {active === 'channel' && <ChannelSettingsPanel />}
               {active === 'ai' && <AiSettingsPanel showDeleteHistory />}
+              {active === 'ext-github' && <ExtensionTogglePanel only="github" />}
+              {active === 'ext-chat' && <ExtensionTogglePanel only="chat" />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

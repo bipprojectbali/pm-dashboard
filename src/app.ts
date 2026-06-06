@@ -8,6 +8,7 @@ import { activityRoutes } from './routes/activity.route'
 import { adminRoutes } from './routes/admin.route'
 import { authRoutes } from './routes/auth.route'
 import { eventsRoutes } from './routes/events.route'
+import { extensionsRoutes } from './routes/extensions.route'
 import { meRoutes } from './routes/me.route'
 import { projectsRoutes } from './routes/projects.route'
 import { qcRoutes } from './routes/qc.route'
@@ -82,4 +83,5 @@ export function createApp() {
     .use(webhooksRoutes())
     .use(settingsRoutes())
     .use(eventsRoutes())
+    .use(extensionsRoutes())
 }

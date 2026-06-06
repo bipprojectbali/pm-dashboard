@@ -69,7 +69,7 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
 }
 const OVERDUE_COLOR = '#a84444' // muted red
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
+const _STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN: 'Open',
   IN_PROGRESS: 'In Progress',
   READY_FOR_QC: 'Ready for QC',
@@ -216,7 +216,7 @@ export function TasksGanttView({ tasks, onSelect }: { tasks: TaskListItem[]; onS
         addDependency.mutate({ taskId: toTaskId, blockedById: fromTaskId })
       }
     },
-    [addDependency, removeDependency, withDates, ganttWrapperRef],
+    [addDependency, removeDependency, withDates],
   )
 
   const flushPending = useCallback(() => {
@@ -331,7 +331,7 @@ export function TasksGanttView({ tasks, onSelect }: { tasks: TaskListItem[]; onS
       body.scrollLeft = saved
     }
     requestAnimationFrame(tryRestore)
-  }, [ganttTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to today saat mount pertama atau viewMode berubah
   useEffect(() => {
@@ -349,7 +349,7 @@ export function TasksGanttView({ tasks, onSelect }: { tasks: TaskListItem[]; onS
       scrollToToday('instant')
     }
     setTimeout(tryScroll, 80)
-  }, [timelineStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timelineStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Empty state ────────────────────────────────────────────────────────────
   if (withDates.length === 0) {

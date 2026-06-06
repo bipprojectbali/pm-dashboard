@@ -10,18 +10,60 @@
 
 import { getSetting } from './app-settings'
 import { prisma } from './db'
+import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
 import { isExtensionEnabled } from './extensions'
 import { computeProjectGithubSummary } from './github-summary'
-import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
 import { computeRetro, renderRetroMarkdown } from './retro'
 
 const STOPWORDS_ID = new Set([
-  'dan', 'yang', 'di', 'ke', 'dari', 'untuk', 'adalah', 'ada', 'dengan',
-  'ini', 'itu', 'atau', 'juga', 'sudah', 'belum', 'tidak', 'bisa', 'mana',
-  'siapa', 'apa', 'berapa', 'bagaimana', 'kapan', 'apakah', 'tolong',
-  'mohon', 'beri', 'tampilkan', 'tunjukkan', 'lihat', 'cari', 'semua',
-  'saya', 'kamu', 'dia', 'kami', 'kita', 'mereka', 'tentang', 'pada',
-  'akan', 'dapat', 'perlu', 'harus', 'sedang', 'telah', 'lagi', 'paling',
+  'dan',
+  'yang',
+  'di',
+  'ke',
+  'dari',
+  'untuk',
+  'adalah',
+  'ada',
+  'dengan',
+  'ini',
+  'itu',
+  'atau',
+  'juga',
+  'sudah',
+  'belum',
+  'tidak',
+  'bisa',
+  'mana',
+  'siapa',
+  'apa',
+  'berapa',
+  'bagaimana',
+  'kapan',
+  'apakah',
+  'tolong',
+  'mohon',
+  'beri',
+  'tampilkan',
+  'tunjukkan',
+  'lihat',
+  'cari',
+  'semua',
+  'saya',
+  'kamu',
+  'dia',
+  'kami',
+  'kita',
+  'mereka',
+  'tentang',
+  'pada',
+  'akan',
+  'dapat',
+  'perlu',
+  'harus',
+  'sedang',
+  'telah',
+  'lagi',
+  'paling',
 ])
 
 // Cosine similarity threshold: dokumen di bawah ini dianggap tidak relevan.
@@ -38,9 +80,7 @@ export function extractKeywords(text: string): string {
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !STOPWORDS_ID.has(w))
 
-  const capitalWords = text
-    .split(/\s+/)
-    .filter((w) => w.length >= 2 && /^[A-Z]/.test(w))
+  const capitalWords = text.split(/\s+/).filter((w) => w.length >= 2 && /^[A-Z]/.test(w))
 
   const unique = [...new Set([...words, ...capitalWords.map((w) => w.toLowerCase())])]
   return unique.join(' | ')
@@ -72,7 +112,10 @@ export async function getEmbeddingSettings(): Promise<{ apiKey: string; baseUrl:
   return resolved
 }
 
-async function generateEmbedding(text: string, settings: { apiKey: string; baseUrl: string; model: string }): Promise<number[] | null> {
+async function generateEmbedding(
+  text: string,
+  settings: { apiKey: string; baseUrl: string; model: string },
+): Promise<number[] | null> {
   try {
     const endpoint = `${settings.baseUrl.replace(/\/$/, '')}/embeddings`
     const res = await fetch(endpoint, {
@@ -125,17 +168,11 @@ function renderHits(rows: DocResult[]): SearchResult {
     title: r.title,
     content: r.content,
   }))
-  const formatted = hits
-    .map((h) => `[${h.ref}] ${h.type}: ${h.title}\n${h.content}`)
-    .join('\n\n---\n\n')
+  const formatted = hits.map((h) => `[${h.ref}] ${h.type}: ${h.title}\n${h.content}`).join('\n\n---\n\n')
   return { hits, formatted }
 }
 
-export async function searchDocuments(
-  userMessage: string,
-  limit = 6,
-  typeFilter?: string,
-): Promise<SearchResult> {
+export async function searchDocuments(userMessage: string, limit = 6, typeFilter?: string): Promise<SearchResult> {
   const collected = new Map<string, DocResult>()
 
   // ── 1) Semantic via pgvector ────────────────────────────────────────────
@@ -169,7 +206,9 @@ export async function searchDocuments(
         if (collected.size >= MIN_SEMANTIC_HITS) {
           return renderHits([...collected.values()].slice(0, limit))
         }
-      } catch { /* fallback to FTS */ }
+      } catch {
+        /* fallback to FTS */
+      }
     }
   }
 
@@ -221,7 +260,9 @@ export async function searchDocuments(
               ORDER BY rank DESC
               LIMIT ${limit}
             `
-      } catch { /* nothing */ }
+      } catch {
+        /* nothing */
+      }
     }
     for (const r of results) if (!collected.has(r.id)) collected.set(r.id, r)
   }
@@ -239,7 +280,9 @@ export async function searchDocuments(
           ORDER BY rank DESC LIMIT 3
         `
         for (const r of trgm) if (!collected.has(r.id)) collected.set(r.id, r)
-      } catch { /* pg_trgm not installed */ }
+      } catch {
+        /* pg_trgm not installed */
+      }
     }
   }
 
@@ -340,7 +383,8 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
 
   const since = opts.full
     ? null
-    : await prisma.chatDocument.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } })
+    : await prisma.chatDocument
+        .findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } })
         .then((r) => r?.syncedAt ?? null)
 
   const counters: SyncCounters = { synced: 0, failedEmbeddings: 0 }
@@ -367,7 +411,10 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
     const openTasks = u.assignedTasks
     const overdueTasks = openTasks.filter((t) => t.dueAt && new Date(t.dueAt) < now)
     const projects = u.projectMemberships.map((m) => `${m.project.name} (${m.role})`).join(', ')
-    const overdueList = overdueTasks.slice(0, 5).map((t) => `    - ${t.title} [${t.priority}]`).join('\n')
+    const overdueList = overdueTasks
+      .slice(0, 5)
+      .map((t) => `    - ${t.title} [${t.priority}]`)
+      .join('\n')
 
     const content = [
       `[USER] ${u.name} — ${u.role} | ${u.email}`,
@@ -375,7 +422,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       `Task aktif: ${openTasks.length} open, ${overdueTasks.length} overdue`,
       projects ? `Proyek: ${projects}` : null,
       overdueTasks.length > 0 ? `Task overdue:\n${overdueList}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     await upsertDoc(
       { type: 'user', entityId: u.id, title: `${u.name} (${u.email})`, content, tags: u.role.toLowerCase() },
@@ -388,10 +437,7 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
   const tasks = await prisma.task.findMany({
     where: {
       deletedAt: null,
-      OR: [
-        { status: { notIn: ['CLOSED'] } },
-        { closedAt: { gte: cutoff30d } },
-      ],
+      OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: cutoff30d } }],
       ...(since ? { updatedAt: { gte: since } } : {}),
     },
     include: {
@@ -416,7 +462,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
     const isOverdue = t.dueAt && new Date(t.dueAt) < now && t.status !== 'CLOSED'
     const overdueDays = t.dueAt && isOverdue ? daysAgo(t.dueAt) : 0
     const commentLines = t.comments.map((c) => `  - ${c.author?.name ?? 'Unknown'}: ${c.body.slice(0, 200)}`).join('\n')
-    const historyLines = t.statusChanges.map((s) => `  - ${s.author?.name ?? '?'}: ${s.fromStatus}→${s.toStatus} (${fmtDate(s.createdAt)})`).join('\n')
+    const historyLines = t.statusChanges
+      .map((s) => `  - ${s.author?.name ?? '?'}: ${s.fromStatus}→${s.toStatus} (${fmtDate(s.createdAt)})`)
+      .join('\n')
     const tagList = t.tags.map((tg) => tg.tag.name).join(', ')
 
     const content = [
@@ -429,9 +477,13 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       t.comments.length > 0 ? `Komentar terbaru:\n${commentLines}` : null,
       t.statusChanges.length > 0 ? `History status:\n${historyLines}` : null,
       tagList ? `Tags: ${tagList}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
 
-    const docTags = [t.status.toLowerCase(), t.priority.toLowerCase(), t.kind.toLowerCase(), tagList].filter(Boolean).join(',')
+    const docTags = [t.status.toLowerCase(), t.priority.toLowerCase(), t.kind.toLowerCase(), tagList]
+      .filter(Boolean)
+      .join(',')
     await upsertDoc(
       { type: 'task', entityId: t.id, title: t.title, content, tags: docTags, projectId: t.projectId },
       embSettings ?? undefined,
@@ -455,7 +507,10 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
   })
 
   for (const p of projects) {
-    const memberLines = p.members.slice(0, 10).map((m) => `${m.user.name} (${m.role})`).join(', ')
+    const memberLines = p.members
+      .slice(0, 10)
+      .map((m) => `${m.user.name} (${m.role})`)
+      .join(', ')
     const milestoneLines = p.milestones.map((m) => `  - ${m.title}: ${fmtDate(m.dueAt ?? null)}`).join('\n')
     const isPastDue = p.endsAt && new Date(p.endsAt) < now
 
@@ -468,7 +523,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       p.description ? `Deskripsi: ${p.description.slice(0, 300)}` : null,
       p.milestones.length > 0 ? `Milestone mendatang:\n${milestoneLines}` : null,
       p.githubRepo ? `GitHub: ${p.githubRepo}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     await upsertDoc(
       { type: 'project', entityId: p.id, title: p.name, content, tags: p.status.toLowerCase(), projectId: p.id },
@@ -500,7 +557,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       e.createdBy ? `Dibuat oleh: ${e.createdBy.name}` : null,
       e.description ? `Catatan: ${e.description.slice(0, 300)}` : null,
       tagList ? `Tags: ${tagList}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     await upsertDoc(
       { type: 'event', entityId: e.id, title: e.title, content, tags: tagList, projectId: e.projectId ?? null },
@@ -554,21 +613,34 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
 
   for (const p of projectsWithRepo) {
     const summary = await computeProjectGithubSummary(p.id)
-    if (!summary || !summary.linked) continue
-    const top = summary.contributors.slice(0, 5).map((c) => `${c.login} (${c.commits})`).join(', ')
-    const openLines = summary.openPrs.slice(0, 5).map((pr) => `  - #${pr.prNumber} ${pr.title} (${pr.actorLogin})`).join('\n')
-    const recent = summary.recent.slice(0, 8).map((e) => `  - ${e.kind} oleh ${e.matchedUser?.name ?? e.actorLogin}: ${e.title.slice(0, 80)}`).join('\n')
+    if (!summary?.linked) continue
+    const top = summary.contributors
+      .slice(0, 5)
+      .map((c) => `${c.login} (${c.commits})`)
+      .join(', ')
+    const openLines = summary.openPrs
+      .slice(0, 5)
+      .map((pr) => `  - #${pr.prNumber} ${pr.title} (${pr.actorLogin})`)
+      .join('\n')
+    const recent = summary.recent
+      .slice(0, 8)
+      .map((e) => `  - ${e.kind} oleh ${e.matchedUser?.name ?? e.actorLogin}: ${e.title.slice(0, 80)}`)
+      .join('\n')
 
     const content = [
       `[GITHUB] ${p.name} — repo: ${summary.repo}`,
       `Stats 30h: ${summary.stats.commits30d} commit, ${summary.stats.contributors30d} kontributor`,
       `Stats 7h: ${summary.stats.commits7d} commit`,
       `Open PR: ${summary.stats.openPrs}`,
-      summary.stats.lastPushAt ? `Push terakhir: ${fmtDate(summary.stats.lastPushAt)} oleh ${summary.stats.lastPushBy}` : null,
+      summary.stats.lastPushAt
+        ? `Push terakhir: ${fmtDate(summary.stats.lastPushAt)} oleh ${summary.stats.lastPushBy}`
+        : null,
       top ? `Top kontributor: ${top}` : null,
       openLines ? `PR open:\n${openLines}` : null,
       recent ? `Aktivitas terkini:\n${recent}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     await upsertDoc(
       { type: 'github_project', entityId: p.id, title: `GitHub: ${p.name}`, content, tags: 'github', projectId: p.id },
@@ -661,7 +733,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       m.dueAt ? `Due: ${fmtDate(m.dueAt)}${isOverdue ? ' (LEWAT)' : ''}` : 'Due: tidak ada',
       m.completedAt ? `Selesai: ${fmtDate(m.completedAt)}` : 'Belum selesai',
       m.description ? `Catatan: ${m.description.slice(0, 300)}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
     await upsertDoc(
       {
         type: 'milestone',
@@ -693,7 +767,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       ext.extendedBy ? `Diajukan oleh: ${ext.extendedBy.name} (${ext.extendedBy.email})` : null,
       `Tanggal: ${fmtDate(ext.createdAt)}`,
       ext.reason ? `Alasan: ${ext.reason}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
     await upsertDoc(
       {
         type: 'extension',
@@ -760,7 +836,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       `URL: ${ev.url}`,
       ev.note ? `Catatan: ${ev.note}` : null,
       `Ditambahkan: ${fmtDate(ev.createdAt)}`,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
     await upsertDoc(
       {
         type: 'evidence',
@@ -791,7 +869,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       a.user ? `Target user: ${a.user.name} (${a.user.email})` : null,
       `Waktu: ${fmtDate(a.createdAt)}`,
       a.detail ? `Detail: ${a.detail}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
     await upsertDoc(
       {
         type: 'audit_recent',
@@ -850,7 +930,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
       `Status: ${r.ok ? 'sukses' : 'gagal'}`,
       `Pesan: ${r.message.slice(0, 200)}`,
       r.markdown ? `\nIsi:\n${r.markdown.slice(0, 2000)}` : null,
-    ].filter(Boolean).join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
     await upsertDoc(
       {
         type: 'report_history',
@@ -893,7 +975,9 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
               embSettings ?? undefined,
               counters,
             )
-          } catch { /* skip failed retro */ }
+          } catch {
+            /* skip failed retro */
+          }
         }),
       )
     }
@@ -929,54 +1013,64 @@ async function pruneOrphanDocs(): Promise<number> {
 
   // task: prune deletedAt not null OR (CLOSED & closedAt < 180d)
   total += await pruneByType('task', async () => {
-    const ids = (await prisma.task.findMany({
-      where: {
-        deletedAt: null,
-        OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: closed180d } }],
-      },
-      select: { id: true },
-    })).map((t) => t.id)
+    const ids = (
+      await prisma.task.findMany({
+        where: {
+          deletedAt: null,
+          OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: closed180d } }],
+        },
+        select: { id: true },
+      })
+    ).map((t) => t.id)
     return ids
   })
 
   // project: prune archived > 90d atau status CANCELLED/COMPLETED
   total += await pruneByType('project', async () => {
-    const ids = (await prisma.project.findMany({
-      where: {
-        AND: [
-          { status: { notIn: ['CANCELLED', 'COMPLETED'] } },
-          { OR: [{ archivedAt: null }, { archivedAt: { gte: archived90d } }] },
-        ],
-      },
-      select: { id: true },
-    })).map((p) => p.id)
+    const ids = (
+      await prisma.project.findMany({
+        where: {
+          AND: [
+            { status: { notIn: ['CANCELLED', 'COMPLETED'] } },
+            { OR: [{ archivedAt: null }, { archivedAt: { gte: archived90d } }] },
+          ],
+        },
+        select: { id: true },
+      })
+    ).map((p) => p.id)
     return ids
   })
 
   // event: prune yg startsAt < now - 7d
   total += await pruneByType('event', async () => {
-    const ids = (await prisma.event.findMany({
-      where: { startsAt: { gte: eventCutoff } },
-      select: { id: true },
-    })).map((e) => e.id)
+    const ids = (
+      await prisma.event.findMany({
+        where: { startsAt: { gte: eventCutoff } },
+        select: { id: true },
+      })
+    ).map((e) => e.id)
     return ids
   })
 
   // comment: prune > 30d
   total += await pruneByType('comment', async () => {
-    const ids = (await prisma.taskComment.findMany({
-      where: { createdAt: { gte: commentCutoff } },
-      select: { id: true },
-    })).map((c) => c.id)
+    const ids = (
+      await prisma.taskComment.findMany({
+        where: { createdAt: { gte: commentCutoff } },
+        select: { id: true },
+      })
+    ).map((c) => c.id)
     return ids
   })
 
   // github_project: prune project hilang/archived
   total += await pruneByType('github_project', async () => {
-    const ids = (await prisma.project.findMany({
-      where: { archivedAt: null, githubRepo: { not: null } },
-      select: { id: true },
-    })).map((p) => p.id)
+    const ids = (
+      await prisma.project.findMany({
+        where: { archivedAt: null, githubRepo: { not: null } },
+        select: { id: true },
+      })
+    ).map((p) => p.id)
     return ids
   })
 
@@ -988,22 +1082,26 @@ async function pruneOrphanDocs(): Promise<number> {
 
   // effort_task: prune kalau task tidak ada / sudah CLOSED lama
   total += await pruneByType('effort_task', async () => {
-    const ids = (await prisma.task.findMany({
-      where: {
-        deletedAt: null,
-        OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: closed180d } }],
-      },
-      select: { id: true },
-    })).map((t) => t.id)
+    const ids = (
+      await prisma.task.findMany({
+        where: {
+          deletedAt: null,
+          OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: closed180d } }],
+        },
+        select: { id: true },
+      })
+    ).map((t) => t.id)
     return ids
   })
 
   // ghost_task: prune kalau task tidak ada lagi
   total += await pruneByType('ghost_task', async () => {
-    const ids = (await prisma.task.findMany({
-      where: { deletedAt: null, status: { notIn: ['CLOSED'] } },
-      select: { id: true },
-    })).map((t) => t.id)
+    const ids = (
+      await prisma.task.findMany({
+        where: { deletedAt: null, status: { notIn: ['CLOSED'] } },
+        select: { id: true },
+      })
+    ).map((t) => t.id)
     return ids
   })
 
@@ -1021,7 +1119,9 @@ async function pruneOrphanDocs(): Promise<number> {
 
   // dependency: prune kalau task tidak punya blocker lagi
   total += await pruneByType('dependency', async () => {
-    const ids = (await prisma.taskDependency.findMany({ select: { taskId: true }, distinct: ['taskId'] })).map((d) => d.taskId)
+    const ids = (await prisma.taskDependency.findMany({ select: { taskId: true }, distinct: ['taskId'] })).map(
+      (d) => d.taskId,
+    )
     return ids
   })
 
@@ -1033,10 +1133,12 @@ async function pruneOrphanDocs(): Promise<number> {
 
   // audit_recent: prune > 30d
   total += await pruneByType('audit_recent', async () => {
-    const ids = (await prisma.auditLog.findMany({
-      where: { action: { in: ['ROLE_CHANGED', 'BLOCKED', 'UNBLOCKED'] }, createdAt: { gte: auditCutoff } },
-      select: { id: true },
-    })).map((a) => a.id)
+    const ids = (
+      await prisma.auditLog.findMany({
+        where: { action: { in: ['ROLE_CHANGED', 'BLOCKED', 'UNBLOCKED'] }, createdAt: { gte: auditCutoff } },
+        select: { id: true },
+      })
+    ).map((a) => a.id)
     return ids
   })
 
@@ -1048,19 +1150,23 @@ async function pruneOrphanDocs(): Promise<number> {
 
   // report_history: prune > 30d
   total += await pruneByType('report_history', async () => {
-    const ids = (await prisma.reportHistory.findMany({
-      where: { sentAt: { gte: reportCutoff } },
-      select: { id: true },
-    })).map((r) => r.id)
+    const ids = (
+      await prisma.reportHistory.findMany({
+        where: { sentAt: { gte: reportCutoff } },
+        select: { id: true },
+      })
+    ).map((r) => r.id)
     return ids
   })
 
   // project_retro: prune kalau project archived/hilang
   total += await pruneByType('project_retro', async () => {
-    const ids = (await prisma.project.findMany({
-      where: { archivedAt: null, status: { notIn: ['CANCELLED', 'COMPLETED'] } },
-      select: { id: true },
-    })).map((p) => p.id)
+    const ids = (
+      await prisma.project.findMany({
+        where: { archivedAt: null, status: { notIn: ['CANCELLED', 'COMPLETED'] } },
+        select: { id: true },
+      })
+    ).map((p) => p.id)
     return ids
   })
 

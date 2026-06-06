@@ -221,7 +221,6 @@ function SettingsPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="blue"
         />
       </AppShell.Navbar>
 

@@ -422,12 +422,11 @@ function PmPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="blue"
         />
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container size={"xl"} px={0}>
+        <Container size={'xl'} px={0}>
           <Stack gap="md">
             {!activeProjectId && !activeTaskId && !activeEventId && !eventMode && <PmPageHeader tabKey={active} />}
             <Box key={active}>

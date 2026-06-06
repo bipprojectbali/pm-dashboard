@@ -1,9 +1,9 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
+import { type DocHit, searchDocuments } from './chat-documents'
 import { CHAT_TOOLS, executeChatTool } from './chat-tools'
-import { isExtensionEnabled } from './extensions'
-import { searchDocuments, type DocHit } from './chat-documents'
 import { prisma } from './db'
 import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
+import { isExtensionEnabled } from './extensions'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -182,7 +182,10 @@ export async function buildChatContext(): Promise<string> {
   const projectLines = activeProjects
     .map((p) => {
       const memList = membersByProject.get(p.id) ?? []
-      const memberNames = memList.slice(0, 5).map((m) => `${m.name}(${m.role})`).join(', ')
+      const memberNames = memList
+        .slice(0, 5)
+        .map((m) => `${m.name}(${m.role})`)
+        .join(', ')
       return `- ${p.name} (Grade ${p.grade}, ${p.score}/100): ${p.openTasks} open, ${p.overdueTasks} overdue${p.pastDue ? ' ⚠️ LEWAT' : ''}${memberNames ? ` | Tim: ${memberNames}` : ''}`
     })
     .join('\n')
@@ -197,7 +200,8 @@ export async function buildChatContext(): Promise<string> {
   const [statusChanges, comments] = recentActivity
   const activityLines = [
     ...statusChanges.map(
-      (s) => `- ${s.author?.name ?? '?'}: "${s.task?.title}" ${s.fromStatus}→${s.toStatus} | ${s.task?.project?.name ?? '?'}`,
+      (s) =>
+        `- ${s.author?.name ?? '?'}: "${s.task?.title}" ${s.fromStatus}→${s.toStatus} | ${s.task?.project?.name ?? '?'}`,
     ),
     ...comments.map((c) => `- ${c.author?.name ?? '?'} komentar di "${c.task?.title}": ${c.body.slice(0, 100)}`),
   ]
@@ -223,16 +227,21 @@ export async function buildChatContext(): Promise<string> {
     : '- Tidak ada event mendatang'
 
   const githubProjectLines = githubByProject.length
-    ? githubByProject
-        .map((g) => `- ${ghNameMap.get(g.projectId) ?? '?'}: ${g._count._all} commit`)
-        .join('\n')
+    ? githubByProject.map((g) => `- ${ghNameMap.get(g.projectId) ?? '?'}: ${g._count._all} commit`).join('\n')
     : '- Tidak ada commit'
   const githubContribLines = topContributors7d.length
     ? topContributors7d.map((c) => `${c.actorLogin}(${c._count._all})`).join(', ')
     : 'tidak ada'
 
   const effortLines = [
-    `- Phantom workers 7h: ${phantom7d.length ? phantom7d.slice(0, 5).map((p) => `${p.email}(${p.phantomHours}h)`).join(', ') : 'tidak ada'}`,
+    `- Phantom workers 7h: ${
+      phantom7d.length
+        ? phantom7d
+            .slice(0, 5)
+            .map((p) => `${p.email}(${p.phantomHours}h)`)
+            .join(', ')
+        : 'tidak ada'
+    }`,
     `- Ghost tasks (stale >5h tidak ada update): ${ghosts.length}`,
     `- Task overbudget: ${overbudgetCount} | underbudget: ${underbudgetCount}`,
   ].join('\n')
@@ -375,14 +384,14 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
   const send = (event: string, data: object) => {
     try {
       ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
-    } catch { /* disconnected */ }
+    } catch {
+      /* disconnected */
+    }
   }
 
   if (sources && sources.length > 0) send('sources', { sources })
 
-  const endpoint = baseUrl
-    ? `${baseUrl.replace(/\/$/, '')}/v1/messages`
-    : 'https://api.anthropic.com/v1/messages'
+  const endpoint = baseUrl ? `${baseUrl.replace(/\/$/, '')}/v1/messages` : 'https://api.anthropic.com/v1/messages'
 
   // Build initial conversation history. Last user message gets RAG augmentation.
   const conversation: AnthropicMessage[] = messages.map((m, idx) => {
@@ -401,9 +410,7 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
   // Auto-hide tool yang depend on extension yang OFF. query_github_activity butuh data
   // ProjectGithubEvent yang hanya terisi saat GitHub extension aktif.
   const githubEnabled = await isExtensionEnabled('github')
-  const availableTools = githubEnabled
-    ? CHAT_TOOLS
-    : CHAT_TOOLS.filter((t) => t.name !== 'query_github_activity')
+  const availableTools = githubEnabled ? CHAT_TOOLS : CHAT_TOOLS.filter((t) => t.name !== 'query_github_activity')
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
     const isFinalIter = iter === MAX_TOOL_ITERATIONS - 1

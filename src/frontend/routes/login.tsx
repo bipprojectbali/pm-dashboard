@@ -5,7 +5,6 @@ import {
   Button,
   Divider,
   Group,
-  Paper,
   PasswordInput,
   Stack,
   Text,

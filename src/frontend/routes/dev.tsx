@@ -62,7 +62,6 @@ import {
   TbLayoutDashboard,
   TbLock,
   TbMessageChatbot,
-  TbPuzzle,
   TbRefresh,
   TbRobot,
   TbServer,
@@ -424,12 +423,11 @@ function DevPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="red"
         />
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container size={"xl"} px={0}>
+        <Container size={'xl'} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>

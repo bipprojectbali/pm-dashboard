@@ -22,14 +22,12 @@ export function SidebarUserFooter({
   onToggleCollapse,
   onLogout,
   isLoggingOut,
-  accentColor = 'blue',
 }: {
   user: User
   collapsed: boolean
   onToggleCollapse: () => void
   onLogout: () => void
   isLoggingOut?: boolean
-  accentColor?: string
 }) {
   const navigate = useNavigate()
   const roleKey = user?.role ?? 'USER'
@@ -68,7 +66,7 @@ export function SidebarUserFooter({
           position="right"
           withArrow
         >
-          <div onClick={goProfile} style={{ cursor: 'pointer', flexShrink: 0 }}>
+          <UnstyledButton onClick={goProfile} style={{ flexShrink: 0 }}>
             <UserAvatar
               name={user?.name}
               image={user?.image}
@@ -76,7 +74,7 @@ export function SidebarUserFooter({
               color="blue"
               style={{ border: `2px solid ${config.color}` }}
             />
-          </div>
+          </UnstyledButton>
         </Tooltip>
         <ThemeToggle size="sm" />
         <Tooltip label="Yang Baru" position="right" withArrow>

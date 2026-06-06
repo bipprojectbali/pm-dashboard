@@ -45,7 +45,6 @@ import {
   TbRefresh,
   TbSearch,
   TbTarget,
-  TbUser,
   TbUsers,
   TbX,
 } from 'react-icons/tb'
@@ -111,19 +110,7 @@ export interface ProjectListItem {
 
 export type ProjectDetail = ProjectListItem
 
-interface ProjectMilestone {
-  id: string
-  projectId: string
-  title: string
-  description: string | null
-  dueAt: string | null
-  completedAt: string | null
-  order: number
-  createdAt: string
-  updatedAt: string
-}
-
-const ROLE_COLOR: Record<MemberRole, string> = {
+const _ROLE_COLOR: Record<MemberRole, string> = {
   OWNER: 'red',
   PM: 'violet',
   MEMBER: 'blue',
@@ -145,7 +132,7 @@ const STATUS_ACCENT: Record<ProjectStatus, string> = {
   COMPLETED: 'rgba(64,192,87,0.45)',
   CANCELLED: 'rgba(73,80,87,0.35)',
 }
-const OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
+const _OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
 
 const STATUS_BG: Record<ProjectStatus, string> = {
   DRAFT: 'rgba(134,142,150,0.05)',
@@ -244,7 +231,7 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: 'name', label: 'Name (A→Z)' },
 ]
 
-const ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
+const _ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
   { value: 'OWNER', label: 'Owner' },
   { value: 'PM', label: 'PM' },
   { value: 'MEMBER', label: 'Member' },
@@ -410,7 +397,7 @@ export function ProjectsPanel() {
     return sortProjects(list, sort)
   }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, userFilter, derivedFilter, search, sort])
 
-  const ownerOptions = useMemo(() => {
+  const _ownerOptions = useMemo(() => {
     const seen = new Map<string, string>()
     for (const p of projects) {
       if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
@@ -804,7 +791,7 @@ function ProjectListRow({
   const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
   const taskDone =
     p.taskStats && p.taskStats.total > 0 ? Math.round((p.taskStats.closed / p.taskStats.total) * 100) : null
-  const [hover, setHover] = useState(false)
+  const [_hover, setHover] = useState(false)
 
   return (
     <Card
@@ -892,7 +879,7 @@ function ProjectListRow({
   )
 }
 
-const STATUS_DOT: Record<string, string> = {
+const _STATUS_DOT: Record<string, string> = {
   ACTIVE: 'var(--mantine-color-blue-5)',
   DRAFT: 'var(--mantine-color-gray-5)',
   ON_HOLD: 'var(--mantine-color-yellow-5)',
@@ -1694,7 +1681,7 @@ export function ProjectsGanttView({
       scrollToToday('instant')
     }
     setTimeout(tryScroll, 80)
-  }, [tlStart, viewMode, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync vertical scroll: list ↔ gantt body
   const syncFromGantt = useCallback(() => {
@@ -1855,23 +1842,30 @@ export function ProjectsGanttView({
                     withArrow
                     position="right"
                   >
-                    <div
+                    <button
+                      type="button"
                       onClick={() => onSelect(p)}
                       style={{
                         height: ROW_H,
+                        width: '100%',
                         display: 'flex',
                         alignItems: 'center',
                         padding: '0 10px',
                         gap: 8,
+                        border: 'none',
                         borderBottom: '1px solid var(--mantine-color-default-border)',
+                        background: 'transparent',
                         cursor: 'pointer',
                         overflow: 'hidden',
+                        textAlign: 'left',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                       onMouseEnter={(e) => {
-                        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--mantine-color-default-hover)'
+                        e.currentTarget.style.background = 'var(--mantine-color-default-hover)'
                       }}
                       onMouseLeave={(e) => {
-                        ;(e.currentTarget as HTMLDivElement).style.background = ''
+                        e.currentTarget.style.background = 'transparent'
                       }}
                     >
                       <div
@@ -1891,7 +1885,7 @@ export function ProjectsGanttView({
                           {fmtGanttDate(p.startsAt)} → {fmtGanttDate(p.endsAt)}
                         </Text>
                       </Stack>
-                    </div>
+                    </button>
                   </Tooltip>
                 )
               })}

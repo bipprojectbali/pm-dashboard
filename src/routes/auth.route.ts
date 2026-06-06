@@ -7,7 +7,6 @@ import { redis } from '../lib/redis'
 import {
   extractSessionToken,
   getIp,
-  requireAuth,
   SESSION_REFRESH_THRESHOLD_SEC,
   SESSION_TTL_SEC,
   sessionCookie,

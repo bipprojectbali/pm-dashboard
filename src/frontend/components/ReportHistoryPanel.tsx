@@ -21,9 +21,9 @@ import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { TbCheck, TbCopy, TbEye, TbRefresh, TbSend, TbTrash } from 'react-icons/tb'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { TbCheck, TbCopy, TbEye, TbRefresh, TbSend, TbTrash } from 'react-icons/tb'
 import type { ReportHistoryRange } from '../../lib/report-history'
 
 type SendTrigger = 'cron' | 'manual' | 'custom'
@@ -91,9 +91,13 @@ function PreviewDrawer({ entry, onClose }: PreviewDrawerProps) {
       title={
         entry ? (
           <Stack gap={2}>
-            <Text fw={600} size="sm">Preview Laporan</Text>
+            <Text fw={600} size="sm">
+              Preview Laporan
+            </Text>
             <Group gap={6}>
-              <Text size="xs" c="dimmed">{entry ? fmtTs(entry.sentAt) : ''}</Text>
+              <Text size="xs" c="dimmed">
+                {entry ? fmtTs(entry.sentAt) : ''}
+              </Text>
               <Badge size="xs" variant="light" color={TRIGGER_COLOR[entry.trigger] ?? 'gray'}>
                 {TRIGGER_LABEL[entry.trigger] ?? entry.trigger}
               </Badge>
@@ -165,8 +169,7 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
 
   const q = useQuery<HistoryResponse>({
     queryKey: ['admin', 'report-send-history', range, page],
-    queryFn: () =>
-      apiFetch<HistoryResponse>(`/api/admin/report/send-history?page=${page}&limit=20&range=${range}`),
+    queryFn: () => apiFetch<HistoryResponse>(`/api/admin/report/send-history?page=${page}&limit=20&range=${range}`),
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
@@ -181,8 +184,7 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
   })
 
   const deleteEntry = useMutation({
-    mutationFn: (id: string) =>
-      apiFetch<{ ok: boolean }>(`/api/admin/report/history/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/admin/report/history/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'report-send-history'] })
       notifications.show({ color: 'teal', title: 'Dihapus', message: 'Entri riwayat dihapus.' })
@@ -193,11 +195,7 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
   const confirmDelete = (entry: HistoryEntry) =>
     modals.openConfirmModal({
       title: 'Hapus riwayat ini?',
-      children: (
-        <Text size="sm">
-          Laporan {fmtTs(entry.sentAt)} akan dihapus permanen dari database.
-        </Text>
-      ),
+      children: <Text size="sm">Laporan {fmtTs(entry.sentAt)} akan dihapus permanen dari database.</Text>,
       labels: { confirm: 'Hapus', cancel: 'Batal' },
       confirmProps: { color: 'red' },
       onConfirm: () => deleteEntry.mutate(entry.id),
@@ -218,7 +216,9 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
         <Stack gap="md">
           <Group justify="space-between" align="flex-start">
             <Stack gap={0}>
-              <Text fw={500} size="sm">Riwayat Pengiriman Laporan</Text>
+              <Text fw={500} size="sm">
+                Riwayat Pengiriman Laporan
+              </Text>
               <Text size="xs" c="dimmed">
                 Klik baris untuk preview. {total > 0 && `${total} entri total.`}
               </Text>
@@ -269,7 +269,9 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
                       style={{ cursor: entry.markdown ? 'pointer' : 'default' }}
                       onClick={() => entry.markdown && setPreview(entry)}
                     >
-                      <Table.Td><Text size="xs">{fmtTs(entry.sentAt)}</Text></Table.Td>
+                      <Table.Td>
+                        <Text size="xs">{fmtTs(entry.sentAt)}</Text>
+                      </Table.Td>
                       <Table.Td>
                         <Badge size="xs" variant="light" color={TRIGGER_COLOR[entry.trigger] ?? 'gray'}>
                           {TRIGGER_LABEL[entry.trigger] ?? entry.trigger}
@@ -281,30 +283,39 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
                         </Badge>
                       </Table.Td>
                       <Table.Td>
-                        <Text size="xs" c="dimmed" lineClamp={1}>{entry.message}</Text>
+                        <Text size="xs" c="dimmed" lineClamp={1}>
+                          {entry.message}
+                        </Text>
                       </Table.Td>
                       <Table.Td>
                         <Group gap={4} wrap="nowrap" onClick={(e) => e.stopPropagation()}>
                           {entry.markdown && (
                             <Tooltip label="Preview laporan" withArrow>
-                              <ActionIcon size="sm" variant="subtle" color="gray"
-                                onClick={() => setPreview(entry)}>
+                              <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setPreview(entry)}>
                                 <TbEye size={13} />
                               </ActionIcon>
                             </Tooltip>
                           )}
                           <Tooltip label="Kirim ulang laporan" withArrow>
-                            <ActionIcon size="sm" variant="subtle" color="blue"
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="blue"
                               loading={sendNow.isPending}
-                              onClick={() => sendNow.mutate()}>
+                              onClick={() => sendNow.mutate()}
+                            >
                               <TbSend size={13} />
                             </ActionIcon>
                           </Tooltip>
                           {showDelete && (
                             <Tooltip label="Hapus entri ini" withArrow>
-                              <ActionIcon size="sm" variant="subtle" color="red"
+                              <ActionIcon
+                                size="sm"
+                                variant="subtle"
+                                color="red"
                                 loading={deleteEntry.isPending && deleteEntry.variables === entry.id}
-                                onClick={() => confirmDelete(entry)}>
+                                onClick={() => confirmDelete(entry)}
+                              >
                                 <TbTrash size={13} />
                               </ActionIcon>
                             </Tooltip>
@@ -323,13 +334,7 @@ export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
               <Text size="xs" c="dimmed">
                 {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} dari {total} entri
               </Text>
-              <Pagination
-                size="xs"
-                total={totalPages}
-                value={page}
-                onChange={setPage}
-                withEdges
-              />
+              <Pagination size="xs" total={totalPages} value={page} onChange={setPage} withEdges />
             </Group>
           )}
         </Stack>

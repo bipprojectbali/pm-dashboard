@@ -58,10 +58,10 @@ export function WhatsNewModal({
               </Text>
             )}
             <Stack gap={8}>
-              {v.entries.map((entry, i) => {
+              {v.entries.map((entry) => {
                 const cfg = KIND_CONFIG[entry.kind]
                 return (
-                  <Group key={i} gap="sm" wrap="nowrap" align="flex-start">
+                  <Group key={`${entry.kind}:${entry.text}`} gap="sm" wrap="nowrap" align="flex-start">
                     <ThemeIcon size="sm" color={cfg.color} variant="light" style={{ flexShrink: 0, marginTop: 1 }}>
                       {cfg.icon}
                     </ThemeIcon>

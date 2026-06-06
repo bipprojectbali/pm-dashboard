@@ -12,7 +12,6 @@ import {
   TbChevronLeft,
   TbChevronRight,
   TbTrash,
-  TbX,
 } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 
@@ -144,7 +143,7 @@ export function TasksKanbanView({
   // Di-init dan di-sync dari tasks prop (server data sudah terurut by kanbanOrder).
   // Tidak perlu optimistic state — setelah drop kita langsung update DB,
   // lalu refetch mengembalikan urutan yang sudah tersimpan.
-  const buildCols = (src: TaskListItem[]): Record<TaskStatus, TaskListItem[]> => {
+  const buildCols = useCallback((src: TaskListItem[]): Record<TaskStatus, TaskListItem[]> => {
     const m: Record<TaskStatus, TaskListItem[]> = {
       OPEN: [],
       IN_PROGRESS: [],
@@ -154,7 +153,7 @@ export function TasksKanbanView({
     }
     for (const t of src) m[t.status].push(t)
     return m
-  }
+  }, [])
   const [cols, setCols] = useState<Record<TaskStatus, TaskListItem[]>>(() => buildCols(tasks))
 
   // Sync cols from server whenever tasks prop changes (after refetch)
@@ -163,7 +162,7 @@ export function TasksKanbanView({
     if (prevTasksRef.current === tasks) return
     prevTasksRef.current = tasks
     setCols(buildCols(tasks))
-  }, [tasks])
+  }, [tasks, buildCols])
 
   // Per-column current page (0-indexed).
   // Reset hanya saat filterKey berubah (project/status/search ganti),
@@ -187,10 +186,10 @@ export function TasksKanbanView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
 
-  const exitSelect = () => {
+  const exitSelect = useCallback(() => {
     setSelectedIds(new Set())
     setSelectMode(false)
-  }
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -198,7 +197,7 @@ export function TasksKanbanView({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [exitSelect])
 
   const isMaybeTruncated = (totalFetched ?? 0) >= API_CEIL
 
@@ -481,8 +480,11 @@ export function TasksKanbanView({
                                 onClick={() =>
                                   setSelectedIds((prev) => {
                                     const next = new Set(prev)
-                                    if (colAllSelected) colIds.forEach((id) => next.delete(id))
-                                    else colIds.forEach((id) => next.add(id))
+                                    if (colAllSelected) {
+                                      for (const id of colIds) next.delete(id)
+                                    } else {
+                                      for (const id of colIds) next.add(id)
+                                    }
                                     return next
                                   })
                                 }

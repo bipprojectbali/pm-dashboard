@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { prisma } from './db'
 
 export function generateWebhookToken(): { raw: string; hash: string; prefix: string } {
-  const raw = 'pmw_' + crypto.randomBytes(32).toString('base64url')
+  const raw = `pmw_${crypto.randomBytes(32).toString('base64url')}`
   const hash = hashToken(raw)
   const prefix = raw.slice(0, 12)
   return { raw, hash, prefix }

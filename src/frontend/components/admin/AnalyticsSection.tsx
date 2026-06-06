@@ -53,7 +53,7 @@ interface DeadlinePast {
   daysOverdue: number | null
 }
 
-const PRIORITY_COLOR: Record<Priority, string> = {
+const _PRIORITY_COLOR: Record<Priority, string> = {
   LOW: '#868e96',
   MEDIUM: '#228be6',
   HIGH: '#fd7e14',
@@ -185,7 +185,7 @@ function TimelineBlock({ timeline }: { timeline: AnalyticsData['timeline'] }) {
       scrollToToday()
     }
     setTimeout(tryScroll, 80)
-  }, [tlStart, ganttTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card withBorder padding="md" radius="md">

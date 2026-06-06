@@ -68,6 +68,22 @@ const WINDOW_OPTIONS = [
   { label: '90 hari', value: '90' },
 ]
 
+const AP_PROJ_COLOR: Record<string, string> = {
+  ACTIVE: 'blue',
+  ON_HOLD: 'yellow',
+  DRAFT: 'gray',
+  COMPLETED: 'green',
+  CANCELLED: 'dark',
+}
+
+const AP_PROJ_LABEL: Record<string, string> = {
+  ACTIVE: 'Active',
+  ON_HOLD: 'On Hold',
+  DRAFT: 'Draft',
+  COMPLETED: 'Done',
+  CANCELLED: 'Cancelled',
+}
+
 function startOfDay(d: Date): Date {
   const x = new Date(d)
   x.setHours(0, 0, 0, 0)
@@ -426,21 +442,6 @@ export function AnalyticsPanel() {
     }
   }, [overviewData])
 
-  const AP_PROJ_COLOR: Record<string, string> = {
-    ACTIVE: 'blue',
-    ON_HOLD: 'yellow',
-    DRAFT: 'gray',
-    COMPLETED: 'green',
-    CANCELLED: 'dark',
-  }
-  const AP_PROJ_LABEL: Record<string, string> = {
-    ACTIVE: 'Active',
-    ON_HOLD: 'On Hold',
-    DRAFT: 'Draft',
-    COMPLETED: 'Done',
-    CANCELLED: 'Cancelled',
-  }
-
   const timelineTasks = useMemo<GanttTask[]>(() => {
     const rows = overviewData?.timeline ?? []
     const now = new Date()
@@ -506,7 +507,7 @@ export function AnalyticsPanel() {
       scrollToToday()
     }
     setTimeout(tryScroll, 80)
-  }, [tlStart, timelineTasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // rows dari overviewData untuk sidebar (sebelum transform ke GanttTask)
   const timelineRows = useMemo(() => {

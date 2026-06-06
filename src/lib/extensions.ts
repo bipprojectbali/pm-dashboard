@@ -38,9 +38,10 @@ function settingKey(name: ExtensionKey): string {
 async function loadAll(): Promise<Record<ExtensionKey, boolean>> {
   const keys = EXTENSION_KEYS.map(settingKey)
   const map = await getSettings(keys)
-  return Object.fromEntries(
-    EXTENSION_KEYS.map((k) => [k, map[settingKey(k)] !== 'false']),
-  ) as Record<ExtensionKey, boolean>
+  return Object.fromEntries(EXTENSION_KEYS.map((k) => [k, map[settingKey(k)] !== 'false'])) as Record<
+    ExtensionKey,
+    boolean
+  >
 }
 
 export async function getAllExtensions(): Promise<Record<ExtensionKey, boolean>> {

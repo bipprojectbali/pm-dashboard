@@ -22,7 +22,7 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -347,11 +347,14 @@ export function TasksPanel({
     for (const p of projects) if (p.myRole === 'OWNER' || p.myRole === 'PM') set.add(p.id)
     return set
   }, [projects])
-  const canDeleteTask = (t: TaskListItem) => {
-    if (isAdmin) return true
-    if (currentUserId && t.reporter.id === currentUserId) return true
-    return leadProjectIds.has(t.projectId)
-  }
+  const canDeleteTask = useCallback(
+    (t: TaskListItem) => {
+      if (isAdmin) return true
+      if (currentUserId && t.reporter.id === currentUserId) return true
+      return leadProjectIds.has(t.projectId)
+    },
+    [isAdmin, currentUserId, leadProjectIds],
+  )
   const rawTasks = tasksQ.data?.tasks ?? []
   const tasks = useMemo(() => {
     const now = Date.now()

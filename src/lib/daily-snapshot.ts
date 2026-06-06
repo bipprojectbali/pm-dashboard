@@ -74,10 +74,10 @@ export async function captureSnapshot(): Promise<DailySnapshotData> {
   const kpi: SnapshotKpi = {
     totalTasks: overview.tasks.total,
     openTasks:
-      (overview.tasks.byStatus['OPEN'] ?? 0) +
-      (overview.tasks.byStatus['IN_PROGRESS'] ?? 0) +
-      (overview.tasks.byStatus['READY_FOR_QC'] ?? 0) +
-      (overview.tasks.byStatus['REOPENED'] ?? 0),
+      (overview.tasks.byStatus.OPEN ?? 0) +
+      (overview.tasks.byStatus.IN_PROGRESS ?? 0) +
+      (overview.tasks.byStatus.READY_FOR_QC ?? 0) +
+      (overview.tasks.byStatus.REOPENED ?? 0),
     closedToday: overview.tasks.closed7d,
     overdueCount: overview.tasks.overdueOpen,
     staleCount: overview.tasks.staleInProgress,
@@ -200,7 +200,7 @@ export async function buildSnapshotContext(): Promise<string> {
       ]
         .filter(Boolean)
         .join(', ')
-      return `- *${tp.name}*: ${tp.grade} (${tp.score}/100, ${scoreDelta} vs kemarin${weekDelta})${flags ? ' — ' + flags : ''}`
+      return `- *${tp.name}*: ${tp.grade} (${tp.score}/100, ${scoreDelta} vs kemarin${weekDelta})${flags ? ` — ${flags}` : ''}`
     })
     .join('\n')
 
@@ -220,7 +220,7 @@ export async function buildSnapshotContext(): Promise<string> {
         .filter(Boolean)
         .join(', ')
       const weekNote = wu ? ` | 7h: open ${delta(tu.open, wu.open)}, closed ${delta(tu.closed7d, wu.closed7d)}` : ''
-      return `- *${tu.name}*: ${tu.open} open, ${tu.overdue} overdue, ${tu.closed7d} closed/7h${weekNote}${flags ? ' — ' + flags : ''}`
+      return `- *${tu.name}*: ${tu.open} open, ${tu.overdue} overdue, ${tu.closed7d} closed/7h${weekNote}${flags ? ` — ${flags}` : ''}`
     })
     .join('\n')
 

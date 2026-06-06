@@ -228,7 +228,7 @@ export function buildSampleCsv(): string {
       '',
     ]),
   )
-  return lines.join('\n') + '\n'
+  return `${lines.join('\n')}\n`
 }
 
 function csvRow(cells: string[]): string {
@@ -308,7 +308,7 @@ export function buildExportCsv(tasks: ExportTaskRow[]): string {
       ]),
     )
   }
-  return lines.join('\n') + '\n'
+  return `${lines.join('\n')}\n`
 }
 
 export function downloadTasksCsv(tasks: ExportTaskRow[], filename: string) {

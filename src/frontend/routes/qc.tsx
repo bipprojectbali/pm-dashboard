@@ -217,7 +217,6 @@ function QcPage() {
             onToggleCollapse={() => {}}
             onLogout={handleLogout}
             isLoggingOut={logout.isPending}
-            accentColor="red"
           />
         </Stack>
       </AppShell.Navbar>

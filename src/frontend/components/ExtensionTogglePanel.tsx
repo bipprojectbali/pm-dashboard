@@ -131,12 +131,12 @@ function GithubExplain() {
         <code>200 ok-but-skipped</code> (mencegah GitHub auto-disable webhook setelah 100 kegagalan beruntun).
       </Text>
       <Text size="sm">
-        • Doc <code>github_project</code> tidak di-refresh di sync; tool <code>query_github_activity</code>{' '}
-        otomatis disembunyikan dari Chat AI.
+        • Doc <code>github_project</code> tidak di-refresh di sync; tool <code>query_github_activity</code> otomatis
+        disembunyikan dari Chat AI.
       </Text>
       <Text size="sm">
-        • UI <i>GithubIntegrationCard</i> (tab Settings) dan <i>GithubActivityCard</i> (tab Overview) di project
-        detail disembunyikan.
+        • UI <i>GithubIntegrationCard</i> (tab Settings) dan <i>GithubActivityCard</i> (tab Overview) di project detail
+        disembunyikan.
       </Text>
       <Text size="sm" c="dimmed">
         Data lama (event, PR, commit) tidak dihapus — toggle hanya membekukan ingest & tampilan.
@@ -149,12 +149,12 @@ function ChatExplain() {
   return (
     <Stack gap={4}>
       <Text size="sm">
-        • <b>OFF</b>: endpoint <code>/api/admin/chat/stream</code> &amp; <code>/api/admin/chat/sync</code>{' '}
-        balas <code>503</code>. Tab Chat AI di /admin disembunyikan.
+        • <b>OFF</b>: endpoint <code>/api/admin/chat/stream</code> &amp; <code>/api/admin/chat/sync</code> balas{' '}
+        <code>503</code>. Tab Chat AI di /admin disembunyikan.
       </Text>
       <Text size="sm">
-        • Startup full-sync &amp; cron <code>*/10m</code> incremental sync di-skip — embedding API &amp; Anthropic
-        call tidak akan dipanggil.
+        • Startup full-sync &amp; cron <code>*/10m</code> incremental sync di-skip — embedding API &amp; Anthropic call
+        tidak akan dipanggil.
       </Text>
       <Text size="sm" c="dimmed">
         Tabel <code>chat_document</code> tidak di-drop — hidupkan kembali untuk lanjutkan dari snapshot terakhir

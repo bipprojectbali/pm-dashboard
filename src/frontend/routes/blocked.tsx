@@ -109,7 +109,7 @@ function BlockedPage() {
               'Jelaskan situasi dan minta pembukaan blokir',
               'Tunggu konfirmasi dari tim admin',
             ].map((item, i) => (
-              <Group key={i} gap="sm" align="flex-start">
+              <Group key={item} gap="sm" align="flex-start">
                 <Box
                   style={{
                     width: 20,

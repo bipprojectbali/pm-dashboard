@@ -43,9 +43,11 @@ export async function getSendHistory(opts?: {
   const range = opts?.range ?? 'all'
 
   const since =
-    range === '1m' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    : range === '3m' ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-    : null
+    range === '1m'
+      ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      : range === '3m'
+        ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+        : null
 
   const where = since ? { sentAt: { gte: since } } : {}
 

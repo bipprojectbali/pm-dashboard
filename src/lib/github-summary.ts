@@ -32,7 +32,8 @@ export async function computeProjectGithubSummary(projectId: string): Promise<Gi
     select: { id: true, githubRepo: true },
   })
   if (!project) return null
-  if (!project.githubRepo) return { linked: false, repo: null, stats: emptyStats(), contributors: [], openPrs: [], recent: [] }
+  if (!project.githubRepo)
+    return { linked: false, repo: null, stats: emptyStats(), contributors: [], openPrs: [], recent: [] }
 
   const now = Date.now()
   const day = 24 * 3600 * 1000

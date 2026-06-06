@@ -60,7 +60,13 @@ export function ChannelSettingsPanel() {
     setEnabled(settings['telegram.enabled'] === 'true')
     setTgTimeout(Number(settings['telegram.timeoutSeconds'] ?? 30))
     setDirty(false)
-  }, [data])
+  }, [
+    data,
+    settings['telegram.timeoutSeconds'],
+    settings['telegram.enabled'],
+    settings['telegram.chatId'],
+    settings['telegram.botToken'],
+  ])
 
   const save = useMutation({
     mutationFn: async () => {

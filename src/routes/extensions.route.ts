@@ -40,62 +40,64 @@ async function getAuthedUser(request: Request) {
 }
 
 export function extensionsRoutes() {
-  return new Elysia()
-    .get('/api/admin/extensions', async ({ request, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) {
-        set.status = 403
-        return { error: 'Forbidden' }
-      }
-      const enabled = await getAllExtensions()
-      const extensions = EXTENSION_KEYS.map((k) => ({
-        key: k,
-        label: EXTENSION_META[k].label,
-        description: EXTENSION_META[k].description,
-        enabled: enabled[k],
-      }))
-      return { extensions }
-    })
+  return (
+    new Elysia()
+      .get('/api/admin/extensions', async ({ request, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const enabled = await getAllExtensions()
+        const extensions = EXTENSION_KEYS.map((k) => ({
+          key: k,
+          label: EXTENSION_META[k].label,
+          description: EXTENSION_META[k].description,
+          enabled: enabled[k],
+        }))
+        return { extensions }
+      })
 
-    .put('/api/admin/extensions/:name', async ({ request, params, body, set }) => {
-      const user = await getAdminUser(request)
-      if (!user) {
-        set.status = 403
-        return { error: 'Forbidden' }
-      }
-      const name = params.name
-      if (!isValidExtensionKey(name)) {
-        set.status = 400
-        return { error: `Unknown extension: ${name}` }
-      }
-      const { enabled } = (body ?? {}) as { enabled?: boolean }
-      if (typeof enabled !== 'boolean') {
-        set.status = 400
-        return { error: 'enabled (boolean) required' }
-      }
-      await setSetting(`extensions.${name}.enabled`, enabled ? 'true' : 'false', user.id)
-      await prisma.auditLog
-        .create({
-          data: {
-            userId: user.id,
-            action: 'EXTENSION_TOGGLED',
-            detail: JSON.stringify({ name, enabled }),
-            ip: request.headers.get('x-forwarded-for') ?? null,
-          },
-        })
-        .catch(() => {})
-      return { ok: true, name, enabled }
-    })
+      .put('/api/admin/extensions/:name', async ({ request, params, body, set }) => {
+        const user = await getAdminUser(request)
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const name = params.name
+        if (!isValidExtensionKey(name)) {
+          set.status = 400
+          return { error: `Unknown extension: ${name}` }
+        }
+        const { enabled } = (body ?? {}) as { enabled?: boolean }
+        if (typeof enabled !== 'boolean') {
+          set.status = 400
+          return { error: 'enabled (boolean) required' }
+        }
+        await setSetting(`extensions.${name}.enabled`, enabled ? 'true' : 'false', user.id)
+        await prisma.auditLog
+          .create({
+            data: {
+              userId: user.id,
+              action: 'EXTENSION_TOGGLED',
+              detail: JSON.stringify({ name, enabled }),
+              ip: request.headers.get('x-forwarded-for') ?? null,
+            },
+          })
+          .catch(() => {})
+        return { ok: true, name, enabled }
+      })
 
-    // Public-ish: any authenticated user can read which extensions are on
-    // (used by FE to hide tabs/cards). Doesn't expose any secrets.
-    .get('/api/extensions/status', async ({ request, set }) => {
-      const user = await getAuthedUser(request)
-      if (!user) {
-        set.status = 401
-        return { error: 'Unauthorized' }
-      }
-      const enabled = await getAllExtensions()
-      return { enabled: enabled as Record<ExtensionKey, boolean> }
-    })
+      // Public-ish: any authenticated user can read which extensions are on
+      // (used by FE to hide tabs/cards). Doesn't expose any secrets.
+      .get('/api/extensions/status', async ({ request, set }) => {
+        const user = await getAuthedUser(request)
+        if (!user) {
+          set.status = 401
+          return { error: 'Unauthorized' }
+        }
+        const enabled = await getAllExtensions()
+        return { enabled: enabled as Record<ExtensionKey, boolean> }
+      })
+  )
 }

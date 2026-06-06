@@ -756,7 +756,7 @@ export function tasksRoutes() {
         return { error: 'Unauthorized' }
       }
       const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current || !current.deletedAt) {
+      if (!current?.deletedAt) {
         set.status = 404
         return { error: 'Task not found in trash' }
       }
@@ -789,7 +789,7 @@ export function tasksRoutes() {
         return { error: 'ADMIN atau SUPER_ADMIN only' }
       }
       const current = await prisma.task.findUnique({ where: { id: params.id, deletedAt: null } })
-      if (!current || !current.deletedAt) {
+      if (!current?.deletedAt) {
         set.status = 404
         return { error: 'Task not found in trash' }
       }

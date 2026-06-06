@@ -19,7 +19,7 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { useHotkeys } from '@mantine/hooks'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   TbAlertTriangle,
   TbArrowLeft,
@@ -44,7 +44,7 @@ import { GithubActivityCard } from './GithubActivityCard'
 import { MembersSection } from './MembersSection'
 import { MilestonesSection } from './MilestonesSection'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
-import type { ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus, ProjectVisibility } from './ProjectsPanel'
+import type { ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus } from './ProjectsPanel'
 import { RetroTab } from './RetroTab'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 import { UserAvatar } from './shared/UserAvatar'

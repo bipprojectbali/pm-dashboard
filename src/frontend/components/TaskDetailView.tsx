@@ -21,7 +21,6 @@ import {
   Textarea,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
@@ -532,8 +531,8 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             </Stack>
           </Group>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            {[80, 80, 120, 120].map((h, i) => (
-              <Skeleton key={i} height={h} radius="md" />
+            {(['sk-a', 'sk-b', 'sk-c', 'sk-d'] as const).map((id, i) => (
+              <Skeleton key={id} height={[80, 80, 120, 120][i]} radius="md" />
             ))}
           </SimpleGrid>
         </Stack>

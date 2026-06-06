@@ -317,8 +317,8 @@ export function CreateTaskModal({
                 {headerErrors.length > 0 && (
                   <Alert color="red" icon={<TbAlertTriangle size={14} />} title="Header invalid">
                     <Stack gap={2}>
-                      {headerErrors.map((e, i) => (
-                        <Text key={i} size="xs">
+                      {headerErrors.map((e) => (
+                        <Text key={`${e.field}:${e.message}`} size="xs">
                           {e.message}
                         </Text>
                       ))}
@@ -358,7 +358,8 @@ export function CreateTaskModal({
                             const hasError = errs.length > 0 || unknownTags.length > 0
                             return (
                               <Table.Tr
-                                key={i}
+                                // biome-ignore lint/suspicious/noArrayIndexKey: CSV preview rows have no stable ID; index pairs with errorsByRow Map keyed by index
+                                key={`row-${i}-${row.title}`}
                                 style={{
                                   backgroundColor: hasError ? 'var(--mantine-color-red-light)' : undefined,
                                 }}
@@ -383,8 +384,8 @@ export function CreateTaskModal({
                                 <Table.Td>
                                   {hasError ? (
                                     <Stack gap={2}>
-                                      {errs.map((e, j) => (
-                                        <Text key={j} size="xs" c="red">
+                                      {errs.map((e) => (
+                                        <Text key={`${e.field}:${e.message}`} size="xs" c="red">
                                           {e.field}: {e.message}
                                         </Text>
                                       ))}

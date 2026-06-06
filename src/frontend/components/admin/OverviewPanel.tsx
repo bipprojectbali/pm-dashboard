@@ -362,6 +362,7 @@ export function OverviewPanel() {
     healthQ.dataUpdatedAt,
     loadQ.dataUpdatedAt,
     analyticsQ.dataUpdatedAt,
+    eventsQ.dataUpdatedAt,
   ])
 
   const freshness = useFreshness(lastFetchedAt)

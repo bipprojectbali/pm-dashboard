@@ -169,7 +169,20 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
     setPromptInstruction(settings['report.promptInstruction'] ?? DEFAULT_INSTRUCTION)
     setDirty(false)
     setPromptDirty(false)
-  }, [data])
+  }, [
+    data,
+    settings['report.timezone'],
+    settings['report.scheduleMinute'],
+    settings['report.scheduleHour'],
+    settings['embedding.baseUrl'],
+    settings['report.promptInstruction'],
+    settings['embedding.apiKey'],
+    settings['ai.baseUrl'],
+    settings['embedding.model'],
+    settings['ai.timeoutSeconds'],
+    settings['ai.model'],
+    settings['ai.anthropicApiKey'],
+  ])
 
   const save = useMutation({
     mutationFn: async () => {
@@ -351,7 +364,7 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
   useEffect(() => {
     function tick() {
       const [h, m] = scheduleTime.split(':').map(Number)
-      if (isNaN(h) || isNaN(m)) return
+      if (Number.isNaN(h) || Number.isNaN(m)) return
       setCountdown(fmtCountdown(getSecondsUntil(h, m, timezone)))
       setLocalTime(fmtLocalTime(timezone))
     }
@@ -467,7 +480,9 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
 
           <Divider label="Embedding untuk Chat AI Knowledge Base (opsional)" labelPosition="center" my="xs" />
           <Alert color="blue" variant="light" title="Semantic Search (pgvector)" icon={<TbRobot size={14} />}>
-            Jika dikonfigurasi, Chat AI akan menggunakan vector similarity search yang memahami makna semantik — bukan hanya keyword matching. Gunakan API OpenAI-compatible seperti OpenRouter. Kosongkan untuk tetap pakai full-text search bawaan.
+            Jika dikonfigurasi, Chat AI akan menggunakan vector similarity search yang memahami makna semantik — bukan
+            hanya keyword matching. Gunakan API OpenAI-compatible seperti OpenRouter. Kosongkan untuk tetap pakai
+            full-text search bawaan.
           </Alert>
 
           <PasswordInput
@@ -475,21 +490,30 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
             placeholder="sk-or-... atau sk-..."
             description="API key untuk embedding model. Bisa pakai OpenRouter (openrouter.ai/keys) atau OpenAI."
             value={embApiKey}
-            onChange={(e) => { setEmbApiKey(e.currentTarget.value); setDirty(true) }}
+            onChange={(e) => {
+              setEmbApiKey(e.currentTarget.value)
+              setDirty(true)
+            }}
           />
           <TextInput
             label="Embedding Base URL"
             placeholder="https://openrouter.ai/api/v1"
             description="Default: https://openrouter.ai/api/v1. Bisa diubah ke OpenAI atau provider lain yang kompatibel."
             value={embBaseUrl}
-            onChange={(e) => { setEmbBaseUrl(e.currentTarget.value); setDirty(true) }}
+            onChange={(e) => {
+              setEmbBaseUrl(e.currentTarget.value)
+              setDirty(true)
+            }}
           />
           <TextInput
             label="Embedding Model"
             placeholder="openai/text-embedding-3-small"
             description="Model harus menghasilkan 1536 dimensi. Contoh: openai/text-embedding-3-small (OpenRouter), text-embedding-3-small (OpenAI)."
             value={embModel}
-            onChange={(e) => { setEmbModel(e.currentTarget.value); setDirty(true) }}
+            onChange={(e) => {
+              setEmbModel(e.currentTarget.value)
+              setDirty(true)
+            }}
           />
 
           <Group justify="space-between">
@@ -781,7 +805,7 @@ export function AiSettingsPanel({ showDeleteHistory }: { showDeleteHistory?: boo
                     </Group>
                   </Group>
                   <Textarea
-                    value={streamingText ? streamingText + '▋' : (editedReport ?? preview ?? '')}
+                    value={streamingText ? `${streamingText}▋` : (editedReport ?? preview ?? '')}
                     onChange={(e) => !isStreaming && setEditedReport(e.currentTarget.value)}
                     readOnly={isStreaming}
                     autosize

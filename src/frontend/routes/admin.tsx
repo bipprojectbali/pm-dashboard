@@ -30,6 +30,7 @@ import {
   TbTarget,
   TbUsers,
 } from 'react-icons/tb'
+import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
 import { AnalyticsPanel } from '@/frontend/components/admin/AnalyticsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { EffortPanel } from '@/frontend/components/admin/EffortPanel'
@@ -40,13 +41,12 @@ import { SystemHealthPanel } from '@/frontend/components/admin/SystemHealthPanel
 import { TaskTriagePanel } from '@/frontend/components/admin/TaskTriagePanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
+import { ReportHistoryPanel } from '@/frontend/components/ReportHistoryPanel'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
-import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
-import { useIsExtensionEnabled } from '@/frontend/hooks/useExtensions'
-import { ReportHistoryPanel } from '@/frontend/components/ReportHistoryPanel'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
+import { useIsExtensionEnabled } from '@/frontend/hooks/useExtensions'
 import { useNavBadges } from '@/frontend/hooks/useNavBadges'
 
 const validTabs = [
@@ -125,9 +125,7 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'AI',
-    items: [
-      { label: 'Chat AI', icon: TbMessageCircle, key: 'chat' },
-    ],
+    items: [{ label: 'Chat AI', icon: TbMessageCircle, key: 'chat' }],
   },
 ]
 
@@ -329,12 +327,11 @@ function AdminPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="violet"
         />
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Container size={"xl"} px={0}>
+        <Container size={'xl'} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>

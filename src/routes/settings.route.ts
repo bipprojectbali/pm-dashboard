@@ -1,5 +1,7 @@
 import { Elysia } from 'elysia'
 import { getAllSettings, getSetting, setSetting } from '../lib/app-settings'
+import { buildChatContext, type ChatMessage, retrieveRelevantDocs, streamChatSSE } from '../lib/chat'
+import { getChatSyncStatus, syncChatDocuments } from '../lib/chat-documents'
 import {
   buildPromptOnly,
   generateAndSendDailyReport,
@@ -8,11 +10,9 @@ import {
 } from '../lib/daily-report'
 import { captureSnapshot, getRecentSnapshots } from '../lib/daily-snapshot'
 import { prisma } from '../lib/db'
+import { isExtensionEnabled } from '../lib/extensions'
 import { runCronNow } from '../lib/report-cron'
 import { getReportDiagnostic } from '../lib/report-diagnose'
-import { buildChatContext, retrieveRelevantDocs, streamChatSSE, type ChatMessage } from '../lib/chat'
-import { getChatSyncStatus, syncChatDocuments } from '../lib/chat-documents'
-import { isExtensionEnabled } from '../lib/extensions'
 import { deleteReportHistory, getSendHistory, type ReportHistoryRange } from '../lib/report-history'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 
@@ -398,12 +398,14 @@ export function settingsRoutes() {
         const user = await getAdminUser(request)
         if (!user) {
           return new Response(JSON.stringify({ error: 'Forbidden' }), {
-            status: 403, headers: { 'Content-Type': 'application/json' },
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
           })
         }
         if (!(await isExtensionEnabled('chat'))) {
           return new Response(JSON.stringify({ error: 'Extension disabled', extension: 'chat' }), {
-            status: 503, headers: { 'Content-Type': 'application/json' },
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
           })
         }
 
@@ -426,7 +428,11 @@ export function settingsRoutes() {
         const stream = new ReadableStream({
           async start(ctrl) {
             const send = (event: string, data: object) => {
-              try { ctrl.enqueue(sse(event, data)) } catch { /* disconnected */ }
+              try {
+                ctrl.enqueue(sse(event, data))
+              } catch {
+                /* disconnected */
+              }
             }
             try {
               if (!apiKey) {
@@ -445,24 +451,39 @@ export function settingsRoutes() {
               // RAG: cari dokumen relevan dari knowledge base per-pesan
               const lastMsg = messages[messages.length - 1]
               send('phase', { label: 'Mencari dokumen relevan...' })
-              const { text: relevantDocs, count: docsCount, sources } = await retrieveRelevantDocs(lastMsg?.content ?? '')
+              const {
+                text: relevantDocs,
+                count: docsCount,
+                sources,
+              } = await retrieveRelevantDocs(lastMsg?.content ?? '')
               if (docsCount > 0) send('docs', { count: docsCount })
 
               send('phase', { label: 'Menghubungi Claude AI...' })
-              await streamChatSSE({
-                apiKey: apiKey as string,
-                model: (model as string) ?? 'claude-opus-4-7',
-                baseUrl: baseUrl as string | undefined,
-                timeoutMs: (Number(timeoutRaw) || 120) * 1000,
-                systemContext,
-                messages,
-                relevantDocs: relevantDocs || undefined,
-                sources,
-              }, ctrl)
+              await streamChatSSE(
+                {
+                  apiKey: apiKey as string,
+                  model: (model as string) ?? 'claude-opus-4-7',
+                  baseUrl: baseUrl as string | undefined,
+                  timeoutMs: (Number(timeoutRaw) || 120) * 1000,
+                  systemContext,
+                  messages,
+                  relevantDocs: relevantDocs || undefined,
+                  sources,
+                },
+                ctrl,
+              )
             } catch (e) {
-              try { ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) })) } catch { /* ignore */ }
+              try {
+                ctrl.enqueue(sse('error', { message: e instanceof Error ? e.message : String(e) }))
+              } catch {
+                /* ignore */
+              }
             } finally {
-              try { ctrl.close() } catch { /* ignore */ }
+              try {
+                ctrl.close()
+              } catch {
+                /* ignore */
+              }
             }
           },
         })
@@ -480,13 +501,19 @@ export function settingsRoutes() {
       // ─── Chat knowledge base sync ─────────────────────────────────────────────
       .get('/api/admin/chat/sync/status', async ({ request, set }) => {
         const user = await getAdminUser(request)
-        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
         return getChatSyncStatus()
       })
 
       .post('/api/admin/chat/sync', async ({ request, set }) => {
         const user = await getAdminUser(request)
-        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
         if (!(await isExtensionEnabled('chat'))) {
           set.status = 503
           return { error: 'Extension disabled', extension: 'chat' }
@@ -509,7 +536,10 @@ export function settingsRoutes() {
 
       .get('/api/admin/report/send-history', async ({ request, query, set }) => {
         const user = await getAdminUser(request)
-        if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
         const page = Number(query.page) || 1
         const limit = Number(query.limit) || 20
         const validRanges: ReportHistoryRange[] = ['1m', '3m', 'all']
@@ -523,8 +553,14 @@ export function settingsRoutes() {
 
       .delete('/api/admin/report/history/:id', async ({ request, params, set }) => {
         const user = await getAdminUser(request)
-        if (!user) { set.status = 403; return { error: 'Forbidden' } }
-        if (user.role !== 'SUPER_ADMIN') { set.status = 403; return { error: 'Hanya SUPER_ADMIN yang bisa menghapus riwayat' } }
+        if (!user) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        if (user.role !== 'SUPER_ADMIN') {
+          set.status = 403
+          return { error: 'Hanya SUPER_ADMIN yang bisa menghapus riwayat' }
+        }
         await deleteReportHistory(params.id)
         return { ok: true }
       })

@@ -4,8 +4,8 @@
 
 import { z } from 'zod'
 import { prisma } from './db'
+import { computePhantomWork, computeTaskEffort, effortReport } from './effort'
 import { computeProjectGithubSummary } from './github-summary'
-import { effortReport, computePhantomWork, computeTaskEffort } from './effort'
 
 const MAX_ROWS = 50
 const MAX_WINDOW_DAYS = 90
@@ -33,7 +33,10 @@ export const CHAT_TOOLS: AnthropicTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Substring nama atau email (case-insensitive). Kosongkan untuk semua user.' },
+        query: {
+          type: 'string',
+          description: 'Substring nama atau email (case-insensitive). Kosongkan untuk semua user.',
+        },
         role: { type: 'string', enum: ['USER', 'QC', 'ADMIN', 'SUPER_ADMIN'], description: 'Filter role.' },
         includeBlocked: { type: 'boolean', description: 'Default false.' },
         limit: { type: 'number', description: '1-50, default 20.' },
@@ -49,7 +52,11 @@ export const CHAT_TOOLS: AnthropicTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        mode: { type: 'string', enum: ['list', 'aggregate'], description: 'list = detail rows; aggregate = count + sumEstimateHours + groupBy.' },
+        mode: {
+          type: 'string',
+          enum: ['list', 'aggregate'],
+          description: 'list = detail rows; aggregate = count + sumEstimateHours + groupBy.',
+        },
         projectId: { type: 'string' },
         projectName: { type: 'string', description: 'Nama persis atau substring proyek (kalau projectId tidak tahu).' },
         assigneeEmail: { type: 'string' },
@@ -66,7 +73,11 @@ export const CHAT_TOOLS: AnthropicTool[] = [
         overdueOnly: { type: 'boolean', description: 'Hanya task lewat dueAt & belum CLOSED.' },
         createdSinceDays: { type: 'number', description: 'Hanya task createdAt dalam N hari terakhir.' },
         closedSinceDays: { type: 'number', description: 'Hanya task closedAt dalam N hari terakhir.' },
-        groupBy: { type: 'string', enum: ['status', 'priority', 'kind', 'assignee', 'project'], description: 'Hanya untuk mode=aggregate.' },
+        groupBy: {
+          type: 'string',
+          enum: ['status', 'priority', 'kind', 'assignee', 'project'],
+          description: 'Hanya untuk mode=aggregate.',
+        },
         limit: { type: 'number', description: '1-50, default 20.' },
       },
       required: ['mode'],
@@ -115,7 +126,11 @@ export const CHAT_TOOLS: AnthropicTool[] = [
         taskId: { type: 'string', description: 'Untuk mode=task.' },
         projectId: { type: 'string', description: 'Untuk mode=overbudget filter ke satu proyek.' },
         sinceDays: { type: 'number', description: 'Window hari, default 7 (mode=user), maks 90.' },
-        verdict: { type: 'string', enum: ['over', 'under', 'both'], description: 'Untuk mode=overbudget. Default both.' },
+        verdict: {
+          type: 'string',
+          enum: ['over', 'under', 'both'],
+          description: 'Untuk mode=overbudget. Default both.',
+        },
         limit: { type: 'number', description: '1-50, default 20.' },
       },
       required: ['mode'],
@@ -199,7 +214,10 @@ export async function executeChatTool(name: string, rawInput: unknown): Promise<
     }
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return { ok: false, error: `Invalid input: ${e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}` }
+      return {
+        ok: false,
+        error: `Invalid input: ${e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      }
     }
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
@@ -273,7 +291,8 @@ async function runQueryTasks(input: z.infer<typeof QueryTasksInput>): Promise<To
       select: { id: true },
     })
     projectId = p?.id
-    if (!projectId) return { ok: true, rows: [], summary: { total: 0, note: `Proyek "${input.projectName}" tidak ditemukan` } }
+    if (!projectId)
+      return { ok: true, rows: [], summary: { total: 0, note: `Proyek "${input.projectName}" tidak ditemukan` } }
   }
 
   // Resolve assigneeId
@@ -286,7 +305,12 @@ async function runQueryTasks(input: z.infer<typeof QueryTasksInput>): Promise<To
       select: { id: true },
     })
     assigneeId = a?.id
-    if (!assigneeId) return { ok: true, rows: [], summary: { total: 0, note: `User "${input.assigneeEmail ?? input.assigneeName}" tidak ditemukan` } }
+    if (!assigneeId)
+      return {
+        ok: true,
+        rows: [],
+        summary: { total: 0, note: `User "${input.assigneeEmail ?? input.assigneeName}" tidak ditemukan` },
+      }
   }
 
   const where: Record<string, unknown> = { deletedAt: null }
@@ -322,14 +346,20 @@ async function runQueryTasks(input: z.infer<typeof QueryTasksInput>): Promise<To
     })
     const sumEstimate = all.reduce((s, t) => s + (t.estimateHours ?? 0), 0)
     const counts: Record<string, { count: number; sumEstimateHours: number }> = {}
-    const groupKey = (t: typeof all[number]): string => {
+    const groupKey = (t: (typeof all)[number]): string => {
       switch (input.groupBy) {
-        case 'status': return t.status
-        case 'priority': return t.priority
-        case 'kind': return t.kind
-        case 'assignee': return t.assignee?.email ?? '(unassigned)'
-        case 'project': return t.project?.name ?? '?'
-        default: return '_total'
+        case 'status':
+          return t.status
+        case 'priority':
+          return t.priority
+        case 'kind':
+          return t.kind
+        case 'assignee':
+          return t.assignee?.email ?? '(unassigned)'
+        case 'project':
+          return t.project?.name ?? '?'
+        default:
+          return '_total'
       }
     }
     for (const t of all) {
@@ -390,9 +420,7 @@ async function runQueryProjectDetail(input: z.infer<typeof QueryProjectDetailInp
   }
 
   const project = await prisma.project.findFirst({
-    where: input.projectId
-      ? { id: input.projectId }
-      : { name: { contains: input.projectName!, mode: 'insensitive' } },
+    where: input.projectId ? { id: input.projectId } : { name: { contains: input.projectName!, mode: 'insensitive' } },
     include: {
       owner: { select: { name: true, email: true } },
       members: { include: { user: { select: { name: true, email: true, role: true } } } },
@@ -472,7 +500,7 @@ async function runQueryGithub(input: z.infer<typeof QueryGithubInput>): Promise<
       if (!projectId) return { ok: true, rows: [], summary: { note: 'Proyek tidak ditemukan' } }
     }
     const summary = await computeProjectGithubSummary(projectId!)
-    if (!summary || !summary.linked) {
+    if (!summary?.linked) {
       return { ok: true, rows: [], summary: { note: 'Proyek belum terhubung ke GitHub repo' } }
     }
     return {

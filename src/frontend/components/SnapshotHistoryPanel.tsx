@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TbCamera, TbChevronDown, TbChevronUp, TbRefresh, TbTrendingDown, TbTrendingUp } from 'react-icons/tb'
-import type { DailySnapshotData, SnapshotProject, SnapshotTeamMember } from '../../lib/daily-snapshot'
+import type { DailySnapshotData } from '../../lib/daily-snapshot'
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })

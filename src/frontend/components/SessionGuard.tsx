@@ -11,7 +11,7 @@ const AUTH_PATHS = new Set(['/', '/login', '/blocked'])
 //   2. Session query resolves with user: null (session deleted server-side)
 // In both cases: clear query cache, redirect to /login.
 export function SessionGuard() {
-  const { error, data } = useSession()
+  const { error } = useSession()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
@@ -31,7 +31,7 @@ export function SessionGuard() {
     navigate({ to: '/login' }).finally(() => {
       redirecting.current = false
     })
-  }, [error, data, pathname, navigate, qc])
+  }, [error, pathname, navigate, qc])
 
   return null
 }

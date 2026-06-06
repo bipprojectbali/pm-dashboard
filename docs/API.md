@@ -32,6 +32,18 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - `GET /api/admin/webhooks/stats` — aggregate stats (24h + 7d windows): total/success/fail/auth-fail/events, perToken, perAgent
 - `GET /api/admin/webhooks/logs?status=all|ok|fail|auth&limit=N` — recent webhook request logs with token/agent relations
 
+## Extensions
+
+Toggle untuk fitur opt-in (GitHub Integration, Chat AI). Default semuanya aktif. Lihat `@docs/FEATURES.md` § Extensions.
+
+- `GET /api/admin/extensions` (ADMIN + SUPER_ADMIN) — list extension + status. Response: `{ extensions: [{ key, label, description, enabled }] }`.
+- `PUT /api/admin/extensions/:name` (ADMIN + SUPER_ADMIN) — body `{ enabled: boolean }`. Tulis `AuditLog` action `EXTENSION_TOGGLED` detail `{ name, enabled, source: 'api' }`. 400 untuk nama tak dikenal atau body non-boolean.
+- `GET /api/extensions/status` (semua user authed) — `{ enabled: { github: boolean, chat: boolean } }`. Dipakai FE untuk gating UI.
+
+Saat extension OFF:
+- `/api/admin/chat/stream` & `/api/admin/chat/sync` → 503 `{ error: 'Extension disabled', extension: 'chat' }`.
+- `/webhooks/github` → 200 `{ ok: true, skipped: true, reason: 'extension_disabled' }` (200 sengaja agar GitHub tidak auto-disable webhook).
+
 ## Chat AI
 
 Admin Chat AI dengan live-context + RAG knowledge base. Lihat `@docs/CHAT-AI.md` untuk arsitektur, doc types, dan sync schedule.

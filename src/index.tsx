@@ -210,16 +210,31 @@ runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Er
 
 // ─── Chat Knowledge Base Sync ─────────────────────────
 import { syncChatDocuments } from './lib/chat-documents'
+import { isExtensionEnabled } from './lib/extensions'
 
-// Startup: full sync saat server start (background, tidak block)
-syncChatDocuments({ full: true }).catch((e) =>
-  appLog('error', `Chat sync startup: ${e instanceof Error ? e.message : String(e)}`),
-)
+// Startup: full sync saat server start (background, tidak block).
+// Skip kalau extension chat OFF — data tidak ke-prune, hanya tidak refresh.
+;(async () => {
+  if (!(await isExtensionEnabled('chat'))) {
+    appLog('info', 'Chat sync startup: skipped (extension disabled)')
+    return
+  }
+  try {
+    await syncChatDocuments({ full: true })
+  } catch (e) {
+    appLog('error', `Chat sync startup: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})()
 
 // Incremental sync setiap 10 menit
-;(Bun as any).cron('*/10 * * * *', () =>
-  syncChatDocuments({}).catch((e) => appLog('error', `Chat sync: ${e instanceof Error ? e.message : String(e)}`)),
-)
+;(Bun as any).cron('*/10 * * * *', async () => {
+  if (!(await isExtensionEnabled('chat'))) return
+  try {
+    await syncChatDocuments({})
+  } catch (e) {
+    appLog('error', `Chat sync: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})
 
 // ─── Auto-purge Trash ─────────────────────────────────
 // Setiap hari jam 03:00 UTC, hapus permanen task yang sudah di-trash > 30 hari

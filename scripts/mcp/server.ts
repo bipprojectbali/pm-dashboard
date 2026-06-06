@@ -19,6 +19,7 @@ import { redisTools } from './tools/redis'
 import { reportAdmin, reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { eventsReadonly, eventsTools } from './tools/events'
+import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import { webhooksTools, webhooksReadonly } from './tools/webhooks'
@@ -46,6 +47,7 @@ const READONLY_MODULES: ToolModule[] = [
   reportReadonly,
   eventsReadonly,
   chatReadonly,
+  extensionsReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -65,6 +67,7 @@ const ADMIN_MODULES: ToolModule[] = [
   reportAdmin,
   eventsTools,
   chatAdmin,
+  extensionsAdmin,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {

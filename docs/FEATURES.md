@@ -62,3 +62,27 @@ Admin Chat AI di `/admin?tab=chat` menjawab pertanyaan operasional dari DB. Dua 
 - **Citation flow**: system prompt menginstruksikan AI gunakan tag `[#N]`; SSE event `sources` (`[{ ref, type, entityId, title }]`) dikirim sebelum `token` pertama dan diulang di `done`. FE render footer badge per assistant bubble.
 - **API** (ADMIN + SUPER_ADMIN): lihat `@docs/API.md` § Chat AI.
 - **Frontend**: `AdminChatPanel.tsx` — header dengan badge "Konteks {age}" + "{n} dok" + "+synced/−pruned" pasca sync. Tombol "Refresh Konteks" (kosongkan systemContext tanpa hapus history), "Perbarui Pengetahuan" (full sync), "Sesi Baru" (reset). Quick prompts: top-risk, top-committer, overbudget, overloaded, overdue, events.
+
+## Extensions (opt-in features)
+
+Beberapa fitur diperlakukan sebagai **extension** — bagian dari aplikasi tapi bisa di-toggle off tanpa kehilangan data, untuk deployment yang tidak butuh fitur tersebut. Saat ini ada dua: **GitHub Integration** dan **Chat AI**. Default keduanya **aktif**.
+
+- **Setting key**: `extensions.<name>.enabled` di tabel `app_settings`. Hanya nilai literal `'false'` yang menonaktifkan; tidak ada row / nilai apa pun lain = aktif (default-on).
+- **Helper**: `src/lib/extensions.ts`
+  - `EXTENSION_KEYS = ['github', 'chat'] as const` — registry type-safe.
+  - `EXTENSION_META[key] = { label, description }` — untuk UI.
+  - `isExtensionEnabled(key)` — cached 60s (modul-level Map).
+  - `isExtensionEnabledFresh(key)` — bypass cache (untuk test / verifikasi).
+  - `getAllExtensions()` — `{ github: boolean, chat: boolean }`.
+  - `invalidateExtensionCache()` — dipanggil otomatis oleh `setSetting('extensions.*', ...)` lewat hook di `src/lib/app-settings.ts`.
+  - `isValidExtensionKey(s)` — type guard.
+- **Gating 4-lapis** saat extension OFF:
+  1. **API** — endpoint terkait balas error/skip. Chat: `/api/admin/chat/stream` & `/api/admin/chat/sync` → 503 `{ error: 'Extension disabled', extension: 'chat' }`. GitHub webhook: `/webhooks/github` → **200** `{ ok: true, skipped: true, reason: 'extension_disabled' }` (200 sengaja agar GitHub tidak auto-disable webhook setelah 100× failure; log `WebhookGithubLog` tetap dengan reason `extension_disabled`).
+  2. **Background work** — `syncChatDocuments` skip di startup boot (`src/index.tsx`) dan cron `*/10 * * * *` saat Chat OFF. Doc type `github_project` di `syncChatDocuments` skip query saat GitHub OFF.
+  3. **Cross-extension awareness** — Chat AI tool `query_github_activity` di-filter keluar dari `CHAT_TOOLS` di `streamChatSSE` saat GitHub OFF (anti halusinasi).
+  4. **UI** — tab "Chat AI" di `/admin` disembunyikan, `GithubActivityCard` di project overview dan `GithubIntegrationCard` di project settings disembunyikan. Hook FE `useIsExtensionEnabled(key)` default `true` saat data masih loading agar tidak flicker hidden → visible.
+- **Toggle UI**: `/dev?tab=ext-github` & `/dev?tab=ext-chat` (grup "Extensions" di sidebar) → `ExtensionTogglePanel`. SUPER_ADMIN only.
+- **Audit**: setiap toggle tulis `AuditLog` action `EXTENSION_TOGGLED` detail `{ name, enabled, source }` (source: `'api'` dari HTTP, `'mcp'` dari MCP tool).
+- **Data preservation**: OFF tidak menghapus apa pun — `chat_document` & `ProjectGithubEvent` rows tetap; saat di-ON lagi data lama bisa langsung diakses (sync cron akan rotate).
+- **API**: lihat `@docs/API.md` § Extensions.
+- **MCP**: lihat `@docs/MCP.md` § Extensions.

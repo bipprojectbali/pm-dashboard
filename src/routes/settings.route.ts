@@ -12,6 +12,7 @@ import { runCronNow } from '../lib/report-cron'
 import { getReportDiagnostic } from '../lib/report-diagnose'
 import { buildChatContext, retrieveRelevantDocs, streamChatSSE, type ChatMessage } from '../lib/chat'
 import { getChatSyncStatus, syncChatDocuments } from '../lib/chat-documents'
+import { isExtensionEnabled } from '../lib/extensions'
 import { deleteReportHistory, getSendHistory, type ReportHistoryRange } from '../lib/report-history'
 import { extractSessionToken, isSystemAdmin } from '../lib/route-helpers'
 
@@ -400,6 +401,11 @@ export function settingsRoutes() {
             status: 403, headers: { 'Content-Type': 'application/json' },
           })
         }
+        if (!(await isExtensionEnabled('chat'))) {
+          return new Response(JSON.stringify({ error: 'Extension disabled', extension: 'chat' }), {
+            status: 503, headers: { 'Content-Type': 'application/json' },
+          })
+        }
 
         const enc = new TextEncoder()
         const sse = (event: string, data: object) => enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
@@ -481,6 +487,10 @@ export function settingsRoutes() {
       .post('/api/admin/chat/sync', async ({ request, set }) => {
         const user = await getAdminUser(request)
         if (!user) { set.status = 403; return { error: 'Forbidden' } }
+        if (!(await isExtensionEnabled('chat'))) {
+          set.status = 503
+          return { error: 'Extension disabled', extension: 'chat' }
+        }
         const start = Date.now()
         const result = await syncChatDocuments({ full: true })
         return { ok: true, ...result, duration: Date.now() - start }

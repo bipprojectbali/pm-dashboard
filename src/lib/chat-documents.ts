@@ -10,6 +10,7 @@
 
 import { getSetting } from './app-settings'
 import { prisma } from './db'
+import { isExtensionEnabled } from './extensions'
 import { computeProjectGithubSummary } from './github-summary'
 import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
 import { computeRetro, renderRetroMarkdown } from './retro'
@@ -542,10 +543,14 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
 
   // ── GitHub per project (aggregate; refreshed on every incremental sync) ────
   // Scope: hanya proyek yang punya githubRepo terisi, tidak archived.
-  const projectsWithRepo = await prisma.project.findMany({
-    where: { archivedAt: null, githubRepo: { not: null } },
-    select: { id: true, name: true },
-  })
+  // Skip kalau extension github OFF — data ProjectGithubEvent ada tapi sumbernya beku.
+  const githubExtensionOn = await isExtensionEnabled('github')
+  const projectsWithRepo = githubExtensionOn
+    ? await prisma.project.findMany({
+        where: { archivedAt: null, githubRepo: { not: null } },
+        select: { id: true, name: true },
+      })
+    : []
 
   for (const p of projectsWithRepo) {
     const summary = await computeProjectGithubSummary(p.id)

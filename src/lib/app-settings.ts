@@ -16,6 +16,10 @@ export async function setSetting(key: string, value: string, userId?: string): P
     const mod = await import('./chat-documents')
     mod.invalidateEmbeddingCache()
   }
+  if (key.startsWith('extensions.')) {
+    const mod = await import('./extensions')
+    mod.invalidateExtensionCache()
+  }
 }
 
 export async function getSettings(keys: string[]): Promise<Record<string, string>> {

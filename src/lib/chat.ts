@@ -1,5 +1,6 @@
 import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
 import { CHAT_TOOLS, executeChatTool } from './chat-tools'
+import { isExtensionEnabled } from './extensions'
 import { searchDocuments, type DocHit } from './chat-documents'
 import { prisma } from './db'
 import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
@@ -387,6 +388,13 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
   let full = ''
   const toolCallsTrace: Array<{ name: string; input: unknown; result: unknown }> = []
 
+  // Auto-hide tool yang depend on extension yang OFF. query_github_activity butuh data
+  // ProjectGithubEvent yang hanya terisi saat GitHub extension aktif.
+  const githubEnabled = await isExtensionEnabled('github')
+  const availableTools = githubEnabled
+    ? CHAT_TOOLS
+    : CHAT_TOOLS.filter((t) => t.name !== 'query_github_activity')
+
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
     const isFinalIter = iter === MAX_TOOL_ITERATIONS - 1
     // Non-streaming for tool-use turns; stream only the final text turn.
@@ -399,7 +407,7 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
       max_tokens: 2048,
       system: systemContext,
       messages: conversation,
-      tools: isFinalIter ? undefined : CHAT_TOOLS,
+      tools: isFinalIter ? undefined : availableTools,
     }
 
     let res: Response

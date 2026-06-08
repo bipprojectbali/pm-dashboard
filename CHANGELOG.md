@@ -7,6 +7,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-06-08
+
+### Diperbaiki
+- **Delete task kini berfungsi** — modal input alasan tidak muncul karena menggunakan hook `useLocalState` yang tidak ada dan komponen modal didefinisikan di dalam fungsi biasa (bukan komponen React). Perbaikan: ekstrak `DeleteReasonModal` sebagai komponen level modul dan ganti ke `useState`.
+
+### Diubah
+- **Migration cleanup**: hapus index `chat_document_embedding_idx` (IVFFlat) dan `chat_document_trgm_idx` (trigram GIN) dari DB — keduanya sudah tidak didefinisikan di `schema.prisma` sehingga menyebabkan drift.
+
 ## [0.7.1] - 2026-06-07
 
 ### Diperbaiki

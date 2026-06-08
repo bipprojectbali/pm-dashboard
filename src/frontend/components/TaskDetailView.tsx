@@ -289,28 +289,35 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   })
 
   const deleteM = useMutation({
-    mutationFn: () => api<{ ok: true }>(`/api/tasks/${taskId}`, { method: 'DELETE' }),
+    mutationFn: (reason: string) =>
+      api<{ ok: true }>(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
-      notifySuccess({ message: 'Task dihapus.' })
+      notifySuccess({ message: 'Task dipindahkan ke Trash.' })
       onBack()
     },
     onError: (err) => notifyError(err),
   })
 
-  const confirmDelete = () =>
-    modals.openConfirmModal({
+  const confirmDelete = () => {
+    modals.open({
       title: 'Hapus task?',
       children: (
-        <Text size="sm">
-          Task beserta comments, evidence, checklist, dependencies, dan timeline status-nya akan dihapus permanen. Aksi
-          ini tidak dapat dibatalkan.
-        </Text>
+        <DeleteReasonModal
+          taskTitle={task?.title ?? ''}
+          onConfirm={(reason) => {
+            deleteM.mutate(reason)
+            modals.closeAll()
+          }}
+          onCancel={() => modals.closeAll()}
+        />
       ),
-      labels: { confirm: 'Hapus', cancel: 'Batal' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => deleteM.mutate(),
     })
+  }
 
   const saveTitle = () => {
     if (!task) return
@@ -1039,6 +1046,38 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
           </Stack>
         </SimpleGrid>
       )}
+    </Stack>
+  )
+}
+
+function DeleteReasonModal({
+  taskTitle,
+  onConfirm,
+  onCancel,
+}: {
+  taskTitle: string
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  return (
+    <Stack gap="sm">
+      <Text size="sm">"{taskTitle}" akan dipindahkan ke Trash. Bisa di-restore dalam 30 hari.</Text>
+      <TextInput
+        placeholder="Tulis alasan penghapusan..."
+        value={reason}
+        onChange={(e) => setReason(e.currentTarget.value)}
+        data-autofocus
+        autoFocus
+      />
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" color="gray" size="xs" onClick={onCancel}>
+          Batal
+        </Button>
+        <Button color="red" size="xs" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>
+          Hapus
+        </Button>
+      </Group>
     </Stack>
   )
 }

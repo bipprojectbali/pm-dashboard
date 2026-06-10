@@ -2028,10 +2028,10 @@ function UserFilterStrip({
                   transform: isActive ? 'scale(1.12)' : 'scale(1)',
                 }}
               >
-                <Avatar
-                  src={u.image ?? undefined}
+                <UserAvatar
+                  image={u.image}
+                  name={u.name}
                   size={AVATAR_SIZE}
-                  radius="xl"
                   color="blue"
                   style={{
                     outline: isActive ? '2px solid var(--mantine-color-blue-5)' : 'none',
@@ -2040,9 +2040,7 @@ function UserFilterStrip({
                     cursor: 'pointer',
                     transition: 'opacity 0.1s, outline 0.1s',
                   }}
-                >
-                  {u.name.slice(0, 2).toUpperCase()}
-                </Avatar>
+                />
               </UnstyledButton>
             </Tooltip>
           )
@@ -2083,10 +2081,10 @@ function UserFilterStrip({
                           }}
                           style={{ transform: isActive ? 'scale(1.12)' : 'scale(1)', transition: 'transform 0.1s' }}
                         >
-                          <Avatar
-                            src={u.image ?? undefined}
+                          <UserAvatar
+                            image={u.image}
+                            name={u.name}
                             size={AVATAR_SIZE}
-                            radius="xl"
                             color="blue"
                             style={{
                               outline: isActive ? '2px solid var(--mantine-color-blue-5)' : 'none',
@@ -2095,9 +2093,7 @@ function UserFilterStrip({
                               cursor: 'pointer',
                               transition: 'opacity 0.1s',
                             }}
-                          >
-                            {u.name.slice(0, 2).toUpperCase()}
-                          </Avatar>
+                          />
                         </UnstyledButton>
                       </Tooltip>
                     )

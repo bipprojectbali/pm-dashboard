@@ -151,10 +151,19 @@ export function projectsRoutes() {
         set.status = 400
         return { error: 'name wajib diisi' }
       }
+      const trimmedName = body.name.trim()
+      const duplicate = await prisma.project.findFirst({
+        where: { name: { equals: trimmedName, mode: 'insensitive' } },
+        select: { id: true },
+      })
+      if (duplicate) {
+        set.status = 409
+        return { error: `Project dengan nama "${trimmedName}" sudah ada` }
+      }
       const endsAt = body.endsAt ? new Date(body.endsAt) : null
       const project = await prisma.project.create({
         data: {
-          name: body.name.trim(),
+          name: trimmedName,
           description: body.description ?? null,
           ownerId: auth.userId,
           status: body.status ?? 'ACTIVE',
@@ -258,7 +267,22 @@ export function projectsRoutes() {
         return { error: 'Project not found' }
       }
       const data: Record<string, unknown> = {}
-      if (body.name !== undefined) data.name = body.name
+      if (body.name !== undefined) {
+        const trimmedName = body.name.trim()
+        if (!trimmedName) {
+          set.status = 400
+          return { error: 'name tidak boleh kosong' }
+        }
+        const duplicate = await prisma.project.findFirst({
+          where: { name: { equals: trimmedName, mode: 'insensitive' }, NOT: { id: params.id } },
+          select: { id: true },
+        })
+        if (duplicate) {
+          set.status = 409
+          return { error: `Project dengan nama "${trimmedName}" sudah ada` }
+        }
+        data.name = trimmedName
+      }
       if (body.description !== undefined) data.description = body.description
       if (body.status !== undefined) data.status = body.status
       if (body.priority !== undefined) data.priority = body.priority

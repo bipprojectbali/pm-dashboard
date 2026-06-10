@@ -5,9 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import {
-  TbActivity,
   TbCode,
-  TbDeviceDesktop,
   TbLayoutDashboard,
   TbListCheck,
   TbSearch,
@@ -102,13 +100,6 @@ export function CommandPalette() {
         onClick: () => navigate({ to: '/pm', search: { tab: 'tasks' } }),
       },
       {
-        id: 'nav-pm-activity',
-        label: 'ActivityWatch Activity',
-        leftSection: <TbActivity size={16} />,
-        keywords: ['aw', 'activity', 'focus'],
-        onClick: () => navigate({ to: '/pm', search: { tab: 'activity' } }),
-      },
-      {
         id: 'nav-pm-team',
         label: 'Team',
         leftSection: <TbUsers size={16} />,
@@ -118,16 +109,9 @@ export function CommandPalette() {
       {
         id: 'nav-settings',
         label: 'My Settings',
-        description: 'Account, devices, preferences',
+        description: 'Account, preferences',
         leftSection: <TbSettings size={16} />,
-        keywords: ['settings', 'profile', 'account', 'devices'],
-        onClick: () => navigate({ to: '/settings' }),
-      },
-      {
-        id: 'nav-my-devices',
-        label: 'My Devices (pm-watch)',
-        leftSection: <TbDeviceDesktop size={16} />,
-        keywords: ['agents', 'devices', 'pmw'],
+        keywords: ['settings', 'profile', 'account', 'preferences'],
         onClick: () => navigate({ to: '/settings' }),
       },
       ...(canAdmin

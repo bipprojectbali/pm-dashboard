@@ -32,7 +32,6 @@ import {
   TbBriefcase,
   TbCheck,
   TbClock,
-  TbDeviceDesktop,
   TbKey,
   TbLayoutGrid,
   TbLock,
@@ -41,14 +40,13 @@ import {
   TbUser,
   TbX,
 } from 'react-icons/tb'
-import { MyDevicesPanel } from '@/frontend/components/MyDevicesPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 
-const validSections = ['profile', 'security', 'devices', 'preferences'] as const
+const validSections = ['profile', 'security', 'preferences'] as const
 type SectionKey = (typeof validSections)[number]
 
 type SettingsSearch = { section?: SectionKey }
@@ -89,7 +87,6 @@ const navItems: {
 }[] = [
   { key: 'profile', label: 'Profil', description: 'Info pribadi & stats kerja', icon: TbUser },
   { key: 'security', label: 'Keamanan', description: 'Password, sesi, riwayat', icon: TbShieldLock },
-  { key: 'devices', label: 'Perangkat', description: 'Agen pm-watch kamu', icon: TbDeviceDesktop },
   { key: 'preferences', label: 'Preferensi', description: 'Notifikasi & tampilan', icon: TbBell },
 ]
 
@@ -228,7 +225,6 @@ function SettingsPage() {
         <Container size="xl" px={0}>
           {active === 'profile' && <ProfileSection user={user} />}
           {active === 'security' && <SecuritySection />}
-          {active === 'devices' && <MyDevicesPanel />}
           {active === 'preferences' && <PreferencesSection />}
         </Container>
       </AppShell.Main>
@@ -465,7 +461,7 @@ type UserPreferences = {
   notifyTaskStatusChanged: boolean
   notifyMentioned: boolean
   notifyProjectDeadline: boolean
-  pmDefaultTab: 'overview' | 'projects' | 'tasks' | 'activity' | 'team'
+  pmDefaultTab: 'overview' | 'projects' | 'tasks' | 'team'
   tasksDefaultFilter: 'mine' | 'all' | 'priority'
   tableDensity: 'compact' | 'comfortable'
 }
@@ -598,7 +594,6 @@ function PreferencesSection() {
               { value: 'overview', label: 'Ringkasan' },
               { value: 'projects', label: 'Proyek' },
               { value: 'tasks', label: 'Tugas' },
-              { value: 'activity', label: 'Aktivitas' },
               { value: 'team', label: 'Tim' },
             ]}
           />

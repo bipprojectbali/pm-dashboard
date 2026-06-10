@@ -3284,24 +3284,13 @@ const ENTITY_OPTIONS = [
   },
   { key: 'tags', label: 'Tags', description: 'Tag per project.' },
   { key: 'milestones', label: 'Milestones', description: 'Milestone per project.' },
-  { key: 'agents', label: 'Agents', description: 'Agent pm-watch (tanpa events).' },
-  {
-    key: 'activityEvents',
-    label: 'Activity Events (7 hari)',
-    description: 'Events pm-watch 7 hari terakhir. Bisa besar.',
-  },
-  {
-    key: 'webhookTokens',
-    label: 'Webhook Tokens',
-    description: 'Token metadata saja. Hash tidak di-sync — token tidak bisa digunakan.',
-  },
 ] as const
 
 type EntityKey = (typeof ENTITY_OPTIONS)[number]['key']
 
 const LS_URL = 'dev:sync:url'
 const LS_ENTITIES = 'dev:sync:entities'
-const DEFAULT_ENTITIES: EntityKey[] = ['users', 'projects', 'tasks', 'tags', 'milestones', 'agents']
+const DEFAULT_ENTITIES: EntityKey[] = ['users', 'projects', 'tasks', 'tags', 'milestones']
 
 function SyncPanel() {
   const [url, setUrl] = useState<string>(() => localStorage.getItem(LS_URL) ?? 'https://pm-dashboard.wibudev.com')

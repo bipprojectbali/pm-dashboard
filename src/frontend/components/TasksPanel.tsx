@@ -260,12 +260,26 @@ export function TasksPanel({
   if (kind) params.set('kind', kind)
   if (mine) params.set('mine', '1')
   if (tagFilter) params.set('tagId', tagFilter)
-  if (view === 'kanban') params.set('limit', '500')
+  // Server-side pagination + filters (list/table view only; kanban has its own per-column queries)
+  if (view !== 'kanban') {
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String((page - 1) * PAGE_SIZE))
+    if (search.trim()) params.set('search', search.trim())
+    if (priorityFilter) params.set('priority', priorityFilter)
+    if (quickFilter === 'overdue') params.set('overdueOnly', '1')
+    else if (quickFilter === 'unassigned') params.set('unassigned', '1')
+    else if (quickFilter === 'nodue') params.set('noDue', '1')
+    else if (quickFilter === 'blocked') params.set('blocked', '1')
+  }
   const query = params.toString()
 
   const tasksQ = useQuery({
     queryKey: ['tasks', query],
-    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks${query ? `?${query}` : ''}`),
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number; limit: number; offset: number }>(
+        `/api/tasks${query ? `?${query}` : ''}`,
+      ),
+    enabled: view !== 'kanban',
   })
 
   // Query khusus chart — hanya scope projectId, tanpa filter status/kind/mine/tag,
@@ -356,27 +370,15 @@ export function TasksPanel({
     [isAdmin, currentUserId, leadProjectIds],
   )
   const rawTasks = tasksQ.data?.tasks ?? []
+  const total = tasksQ.data?.total ?? 0
+  // Server-side handles: search, priority, overdue, unassigned, noDue, blocked.
+  // Client-side still handles: openOnly, dueDateRange, sortBy/sortDir (operates on current page only).
   const tasks = useMemo(() => {
-    const now = Date.now()
-    const q = search.trim().toLowerCase()
     const PRIO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }
 
     let filtered = rawTasks.filter((t) => {
-      if (quickFilter === 'overdue') {
-        if (t.status === 'CLOSED' || !t.dueAt || new Date(t.dueAt).getTime() >= now) return false
-      } else if (quickFilter === 'unassigned') {
-        if (t.assignee) return false
-      } else if (quickFilter === 'openOnly') {
+      if (quickFilter === 'openOnly') {
         if (t.status === 'CLOSED') return false
-      } else if (quickFilter === 'blocked') {
-        if (t._count.blockedBy === 0 || t.status === 'CLOSED') return false
-      } else if (quickFilter === 'nodue') {
-        if (t.dueAt) return false
-      }
-      if (priorityFilter && t.priority !== priorityFilter) return false
-      if (q) {
-        const hay = `${t.title} ${t.description}`.toLowerCase()
-        if (!hay.includes(q)) return false
       }
       const [dueFrom, dueTo] = dueDateRange
       if (dueFrom || dueTo) {
@@ -422,7 +424,7 @@ export function TasksPanel({
     }
 
     return filtered
-  }, [rawTasks, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
+  }, [rawTasks, quickFilter, dueDateRange, sortBy, sortDir])
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
 
   const handleExport = () => {
@@ -451,9 +453,10 @@ export function TasksPanel({
     const date = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
     downloadTasksCsv(rows, `tasks-${projectSlug}-${statusSlug}-${date}.csv`)
   }
-  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  // API already returns the correct page; pagedTasks = tasks after client-side sort/filter
+  const pagedTasks = tasks
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
   useEffect(() => {
@@ -960,7 +963,7 @@ export function TasksPanel({
               ml="auto"
             />
             <Tooltip
-              label={`Download CSV (${tasks.length} task${status ? ` · ${status}` : ' · semua status'})`}
+              label={`Download CSV (${total > 0 ? `${total} task` : 'kosong'}${status ? ` · ${status}` : ' · semua status'} · halaman ini)`}
               withArrow
             >
               <ActionIcon variant="light" color="teal" size="sm" onClick={handleExport} disabled={tasks.length === 0}>
@@ -1005,13 +1008,18 @@ export function TasksPanel({
         <TasksGanttView tasks={tasks} onSelect={(id) => openTask(id)} />
       ) : view === 'kanban' ? (
         <TasksKanbanView
-          tasks={tasks}
+          projectId={activeProjectId ?? null}
+          filters={{
+            kind: kind || null,
+            mine,
+            tagId: tagFilter || null,
+            search: search.trim() || undefined,
+            priority: priorityFilter || null,
+          }}
           canWrite={
             activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
           }
           onSelect={(id) => openTask(id)}
-          totalFetched={rawTasks.length}
-          filterKey={query}
           onDeleteOne={confirmDeleteOne}
           onDeleteSelected={confirmDeleteByIds}
           canDeleteTask={canDeleteTask}
@@ -1245,10 +1253,10 @@ export function TasksPanel({
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>
-          {tasks.length > PAGE_SIZE && (
+          {total > PAGE_SIZE && (
             <Group justify="space-between" p="md">
               <Text size="xs" c="dimmed">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, tasks.length)} dari {tasks.length}
+                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, total)} dari {total}
               </Text>
               <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
             </Group>

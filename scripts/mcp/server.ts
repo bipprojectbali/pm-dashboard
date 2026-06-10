@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { adminTools } from './tools/admin'
-import { agentsTools, agentsReadonly } from './tools/agents'
 import { chatAdmin, chatReadonly } from './tools/chat'
 import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
@@ -22,7 +21,6 @@ import { eventsReadonly, eventsTools } from './tools/events'
 import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
-import { webhooksTools, webhooksReadonly } from './tools/webhooks'
 import type { McpScope, ToolModule } from './tools/shared'
 
 export type { McpScope }
@@ -34,8 +32,6 @@ const READONLY_MODULES: ToolModule[] = [
   healthTools,
   projectTools,
   codeTools,
-  agentsReadonly,
-  webhooksReadonly,
   githubReadonly,
   projectsReadonly,
   tasksReadonly,
@@ -56,8 +52,6 @@ const ADMIN_MODULES: ToolModule[] = [
   adminTools,
   devTools,
   redisTools,
-  agentsTools,
-  webhooksTools,
   projectsTools,
   tasksTools,
   ticketsTools,

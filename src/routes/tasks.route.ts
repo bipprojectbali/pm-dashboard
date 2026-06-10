@@ -19,102 +19,6 @@ function audit(userId: string | null, action: string, detail: string | null, ip:
   prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
 }
 
-interface TaskAwFocus {
-  focusHours: number
-  eventCount: number
-  windowStart: string
-  windowEnd: string
-  topApps: Array<{ app: string; seconds: number }>
-  topTitles: Array<{ app: string; title: string; seconds: number }>
-  matchKeywords: string[]
-  matchedHours: number | null
-}
-
-async function computeTaskAwFocus(task: {
-  id: string
-  title: string
-  route: string | null
-  assigneeId: string | null
-  startsAt: Date | null
-  createdAt: Date
-  closedAt: Date | null
-}): Promise<TaskAwFocus | null> {
-  if (!task.assigneeId) return null
-  const agents = await prisma.agent.findMany({
-    where: { claimedById: task.assigneeId, status: 'APPROVED' },
-    select: { id: true },
-  })
-  if (agents.length === 0) return null
-  const windowStart = task.startsAt ?? task.createdAt
-  const windowEnd = task.closedAt ?? new Date()
-  if (windowEnd.getTime() <= windowStart.getTime()) return null
-  const events = await prisma.activityEvent.findMany({
-    where: {
-      agentId: { in: agents.map((a) => a.id) },
-      timestamp: { gte: windowStart, lte: windowEnd },
-      bucketId: { startsWith: 'aw-watcher-window' },
-    },
-    select: { duration: true, data: true },
-    take: 20_000,
-  })
-  if (events.length === 0) {
-    return {
-      focusHours: 0,
-      eventCount: 0,
-      windowStart: windowStart.toISOString(),
-      windowEnd: windowEnd.toISOString(),
-      topApps: [],
-      topTitles: [],
-      matchKeywords: [],
-      matchedHours: null,
-    }
-  }
-  const keywords = Array.from(
-    new Set(
-      [task.title, task.route ?? '']
-        .join(' ')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((w) => w.length >= 4),
-    ),
-  ).slice(0, 12)
-  const appTotals = new Map<string, number>()
-  const titleTotals = new Map<string, { app: string; title: string; seconds: number }>()
-  let totalSeconds = 0
-  let matchedSeconds = 0
-  for (const e of events) {
-    const d = (e.data ?? {}) as Record<string, unknown>
-    const app = typeof d.app === 'string' ? d.app : null
-    const title = typeof d.title === 'string' ? d.title : null
-    if (!app) continue
-    totalSeconds += e.duration
-    appTotals.set(app, (appTotals.get(app) ?? 0) + e.duration)
-    if (title) {
-      const key = `${app}::${title}`
-      const existing = titleTotals.get(key)
-      if (existing) existing.seconds += e.duration
-      else titleTotals.set(key, { app, title, seconds: e.duration })
-      const combined = `${app} ${title}`.toLowerCase()
-      if (keywords.some((kw) => combined.includes(kw))) matchedSeconds += e.duration
-    }
-  }
-  const topApps = [...appTotals.entries()]
-    .map(([app, seconds]) => ({ app, seconds }))
-    .sort((a, b) => b.seconds - a.seconds)
-    .slice(0, 8)
-  const topTitles = [...titleTotals.values()].sort((a, b) => b.seconds - a.seconds).slice(0, 10)
-  return {
-    focusHours: Math.round((totalSeconds / 3600) * 100) / 100,
-    eventCount: events.length,
-    windowStart: windowStart.toISOString(),
-    windowEnd: windowEnd.toISOString(),
-    topApps,
-    topTitles,
-    matchKeywords: keywords,
-    matchedHours: keywords.length > 0 ? Math.round((matchedSeconds / 3600) * 100) / 100 : null,
-  }
-}
-
 export function tasksRoutes() {
   return new Elysia()
     .get('/api/tasks', async ({ request, query, set }) => {
@@ -171,26 +75,56 @@ export function tasksRoutes() {
       if (query.assigneeId) where.assigneeId = String(query.assigneeId)
       if (query.mine === '1') where.assigneeId = auth.userId
       if (query.tagId) where.tags = { some: { tagId: String(query.tagId) } }
-      const tasks = await prisma.task.findMany({
-        where,
-        include: {
-          project: { select: { id: true, name: true } },
-          reporter: { select: { id: true, name: true, email: true, role: true, image: true } },
-          assignee: { select: { id: true, name: true, email: true, role: true, image: true } },
-          tags: { include: { tag: true } },
-          checklist: { select: { done: true } },
-          blockedBy: { select: { blockedById: true } },
-          _count: { select: { comments: true, evidence: true, blockedBy: true, blocks: true } },
-        },
-        orderBy: [{ status: 'asc' }, { kanbanOrder: 'asc' }, { createdAt: 'desc' }],
-        take: Math.min(Number(query.limit) || 100, 500),
-      })
+      const TASK_PRIORITY_VALUES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
+      if (query.priority) {
+        const p = String(query.priority).toUpperCase()
+        if (!(TASK_PRIORITY_VALUES as readonly string[]).includes(p)) {
+          set.status = 400
+          return { error: `priority must be one of: ${TASK_PRIORITY_VALUES.join(', ')}` }
+        }
+        where.priority = p
+      }
+      if (query.search) {
+        const s = String(query.search)
+        where.OR = [
+          { title: { contains: s, mode: 'insensitive' } },
+          { description: { contains: s, mode: 'insensitive' } },
+        ]
+      }
+      if (query.overdueOnly === '1') {
+        where.dueAt = { lt: new Date() }
+        if (!where.status) where.status = { notIn: ['CLOSED'] }
+      }
+      if (query.unassigned === '1') where.assigneeId = null
+      if (query.noDue === '1') where.dueAt = null
+      if (query.blocked === '1') where.blockedBy = { some: {} }
+      const limit = Math.min(Number(query.limit) || 50, 200)
+      const offset = Math.max(0, Number(query.offset) || 0)
+      const taskInclude = {
+        project: { select: { id: true, name: true } },
+        reporter: { select: { id: true, name: true, email: true, role: true, image: true } },
+        assignee: { select: { id: true, name: true, email: true, role: true, image: true } },
+        tags: { include: { tag: true } },
+        checklist: { select: { done: true } },
+        blockedBy: { select: { blockedById: true } },
+        _count: { select: { comments: true, evidence: true, blockedBy: true, blocks: true } },
+      } as const
+      const [tasks, total] = await Promise.all([
+        prisma.task.findMany({
+          where,
+          include: taskInclude,
+          orderBy: [{ status: 'asc' }, { kanbanOrder: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
+          take: limit,
+          skip: offset,
+        }),
+        prisma.task.count({ where }),
+      ])
       const enriched = tasks.map((t) => ({
         ...t,
         actualHours: computeActualHours(t),
         progressPercent: computeProgressPercent(t),
       }))
-      return { tasks: enriched }
+      return { tasks: enriched, total, limit, offset }
     })
 
     .post('/api/tasks/reorder', async ({ request, set }) => {
@@ -509,8 +443,7 @@ export function tasksRoutes() {
       }
       const actualHours = computeActualHours(task)
       const progressPercent = computeProgressPercent(task)
-      const awFocus = await computeTaskAwFocus(task)
-      return { task: { ...task, actualHours, progressPercent, awFocus } }
+      return { task: { ...task, actualHours, progressPercent } }
     })
 
     .patch('/api/tasks/:id', async ({ request, params, set }) => {

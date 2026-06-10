@@ -8,7 +8,6 @@ import {
 } from '../lib/admin-overview'
 import { appLog, clearAppLogs, getAppLogs } from '../lib/applog'
 import { prisma } from '../lib/db'
-import { computePhantomWork, computeTaskEffort, detectGhostTasks, effortReport } from '../lib/effort'
 import { env } from '../lib/env'
 import { addConnection, getOnlineUserIds, removeConnection } from '../lib/presence'
 import { redis } from '../lib/redis'
@@ -16,7 +15,6 @@ import { extractSessionToken, getIp, isSystemAdmin, requireAuth } from '../lib/r
 import { ROUTES_METADATA } from '../lib/routes-metadata'
 import { parseSchema } from '../lib/schema-parser'
 import { clearSelfProject, getSelfProject, setSelfProject } from '../lib/self-project'
-import { generateWebhookToken } from '../lib/webhook-tokens'
 
 function audit(userId: string | null, action: string, detail: string | null, ip: string) {
   prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
@@ -213,19 +211,27 @@ export function adminRoutes() {
         const url = new URL(request.url)
         const userId = url.searchParams.get('userId')
         const action = url.searchParams.get('action')
-        const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '100', 10), 500)
+        const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200)
+        const offset = Math.max(0, parseInt(url.searchParams.get('offset') ?? '0', 10) || 0)
+        const sinceStr = url.searchParams.get('since')
+        const since = sinceStr ? new Date(sinceStr) : null
 
-        const where: Record<string, any> = {}
+        const where: Record<string, unknown> = {}
         if (userId) where.userId = userId
         if (action) where.action = action
+        if (since && !isNaN(since.getTime())) where.createdAt = { gte: since }
 
-        const logs = await prisma.auditLog.findMany({
-          where,
-          include: { user: { select: { name: true, email: true, image: true } } },
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-        })
-        return { logs }
+        const [logs, total] = await Promise.all([
+          prisma.auditLog.findMany({
+            where,
+            include: { user: { select: { name: true, email: true, image: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            skip: offset,
+          }),
+          prisma.auditLog.count({ where }),
+        ])
+        return { logs, total, limit, offset }
       })
 
       .delete('/api/admin/logs/app', async ({ request, set }) => {
@@ -709,14 +715,6 @@ export function adminRoutes() {
             description: 'Days to keep audit logs',
           },
           {
-            name: 'WEBHOOK_LOG_RETENTION_DAYS',
-            envKey: 'WEBHOOK_LOG_RETENTION_DAYS',
-            required: false,
-            default: '7',
-            category: 'app',
-            description: 'Days to keep /webhooks/aw request logs',
-          },
-          {
             name: 'MCP_SECRET',
             envKey: 'MCP_SECRET',
             required: false,
@@ -724,22 +722,6 @@ export function adminRoutes() {
             category: 'mcp',
             description:
               'Shared secret for MCP (local + /mcp HTTP). Scope gated by NODE_ENV: production=readonly, else=admin.',
-          },
-          {
-            name: 'PMW_WEBHOOK_TOKEN',
-            envKey: 'PMW_WEBHOOK_TOKEN',
-            required: false,
-            default: '(empty)',
-            category: 'webhooks',
-            description: 'Fallback bearer token for /webhooks/aw when no DB tokens are active',
-          },
-          {
-            name: 'PMW_EVENT_BATCH_MAX',
-            envKey: 'PMW_EVENT_BATCH_MAX',
-            required: false,
-            default: '500',
-            category: 'webhooks',
-            description: 'Max events per /webhooks/aw request (413 on overflow)',
           },
           {
             name: 'GITHUB_WEBHOOK_SECRET',
@@ -1196,8 +1178,6 @@ export function adminRoutes() {
         }
 
         const now = Date.now()
-        const since24h = new Date(now - 24 * 60 * 60 * 1000)
-        const LIVE_MS = 5 * 60 * 1000
 
         const dbStart = Date.now()
         let dbOk = false
@@ -1223,76 +1203,22 @@ export function adminRoutes() {
           redisError = e instanceof Error ? e.message : 'unknown'
         }
 
-        const [
-          agents,
-          sessionsTotal,
-          sessionsActive,
-          webhookTotal,
-          webhookOk,
-          webhookFail,
-          webhookAuthFail,
-          webhookEvents,
-          auditLogCount,
-          webhookLogCount,
-          agentsCount,
-          tokensActive,
-        ] = await Promise.all([
-          prisma.agent.findMany({ select: { status: true, lastSeenAt: true } }),
+        const [sessionsTotal, sessionsActive, auditLogCount] = await Promise.all([
           prisma.session.count(),
           prisma.session.count({ where: { expiresAt: { gt: new Date(now) } } }),
-          prisma.webhookRequestLog.count({ where: { createdAt: { gte: since24h } } }),
-          prisma.webhookRequestLog.count({ where: { createdAt: { gte: since24h }, statusCode: { lt: 400 } } }),
-          prisma.webhookRequestLog.count({
-            where: { createdAt: { gte: since24h }, statusCode: { gte: 400 }, reason: { not: 'unauthorized' } },
-          }),
-          prisma.webhookRequestLog.count({ where: { createdAt: { gte: since24h }, reason: 'unauthorized' } }),
-          prisma.webhookRequestLog.aggregate({
-            _sum: { eventsIn: true },
-            where: { createdAt: { gte: since24h } },
-          }),
           prisma.auditLog.count(),
-          prisma.webhookRequestLog.count(),
-          prisma.agent.count(),
-          prisma.webhookToken.count({ where: { status: 'ACTIVE' } }),
         ])
-
-        const agentSummary = {
-          total: agentsCount,
-          pending: agents.filter((a) => a.status === 'PENDING').length,
-          approved: agents.filter((a) => a.status === 'APPROVED').length,
-          revoked: agents.filter((a) => a.status === 'REVOKED').length,
-          live: agents.filter((a) => a.status === 'APPROVED' && a.lastSeenAt && now - a.lastSeenAt.getTime() < LIVE_MS)
-            .length,
-        }
-
-        const webhooks = {
-          total24h: webhookTotal,
-          success24h: webhookOk,
-          fail24h: webhookFail,
-          authFail24h: webhookAuthFail,
-          eventsIn24h: webhookEvents._sum.eventsIn ?? 0,
-          successRate: webhookTotal > 0 ? Math.round((webhookOk / webhookTotal) * 1000) / 10 : null,
-          activeTokens: tokensActive,
-        }
 
         const retention = {
           auditLogDays: env.AUDIT_LOG_RETENTION_DAYS,
           auditLogCount,
-          webhookLogDays: env.WEBHOOK_LOG_RETENTION_DAYS,
-          webhookLogCount,
         }
 
-        const envChecks: { key: string; set: boolean; required: boolean; note?: string }[] = [
+        const envChecks: { key: string; set: boolean; required: boolean }[] = [
           { key: 'DATABASE_URL', set: !!Bun.env.DATABASE_URL, required: true },
           { key: 'REDIS_URL', set: !!Bun.env.REDIS_URL, required: true },
           { key: 'GOOGLE_CLIENT_ID', set: !!Bun.env.GOOGLE_CLIENT_ID, required: true },
           { key: 'GOOGLE_CLIENT_SECRET', set: !!Bun.env.GOOGLE_CLIENT_SECRET, required: true },
-          {
-            key: 'PMW_WEBHOOK_TOKEN',
-            set: !!Bun.env.PMW_WEBHOOK_TOKEN,
-            required: false,
-            note: tokensActive > 0 ? 'DB tokens active, env fallback unused' : 'env fallback in use',
-          },
           { key: 'GITHUB_WEBHOOK_SECRET', set: !!Bun.env.GITHUB_WEBHOOK_SECRET, required: false },
           { key: 'MCP_SECRET', set: !!Bun.env.MCP_SECRET, required: false },
           { key: 'SUPER_ADMIN_EMAIL', set: !!Bun.env.SUPER_ADMIN_EMAIL, required: false },
@@ -1309,79 +1235,9 @@ export function adminRoutes() {
             active: sessionsActive,
             online: getOnlineUserIds().length,
           },
-          agents: agentSummary,
-          webhooks,
           retention,
           env: envChecks,
         }
-      })
-
-      // ─── Effort tracking (pm-watch × tasks) ──────────
-      .get('/api/admin/effort', async ({ request, query, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (!isSystemAdmin(auth.role)) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const projectId = typeof query.projectId === 'string' ? query.projectId : undefined
-        const onlyClosed = query.onlyClosed === 'true'
-        const limit = Math.min(500, Math.max(1, Number(query.limit) || 100))
-        const rows = await effortReport({ projectId, onlyClosed, limit })
-        return { count: rows.length, rows }
-      })
-
-      .get('/api/admin/effort/task/:id', async ({ request, params, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (!isSystemAdmin(auth.role)) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const effort = await computeTaskEffort(params.id)
-        if (!effort) {
-          set.status = 404
-          return { error: 'Task not found' }
-        }
-        return effort
-      })
-
-      .get('/api/admin/effort/ghost', async ({ request, query, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (!isSystemAdmin(auth.role)) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const staleDays = Math.min(30, Math.max(1, Number(query.staleDays) || 3))
-        const limit = Math.min(200, Math.max(1, Number(query.limit) || 50))
-        const rows = await detectGhostTasks({ staleDays, limit })
-        return { count: rows.length, staleDays, rows }
-      })
-
-      .get('/api/admin/effort/phantom', async ({ request, query, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (!isSystemAdmin(auth.role)) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const days = Math.min(90, Math.max(1, Number(query.days) || 7))
-        const limit = Math.min(200, Math.max(1, Number(query.limit) || 50))
-        const rows = await computePhantomWork({ days, limit })
-        return { count: rows.length, days, rows }
       })
 
       // ─── Admin Overview Cockpit ───────────────────────
@@ -1396,8 +1252,7 @@ export function adminRoutes() {
           return { error: 'Forbidden' }
         }
         const staleDays = Math.min(30, Math.max(1, Number(query.staleDays) || 3))
-        const offlineHours = Math.min(720, Math.max(1, Number(query.offlineHours) || 1))
-        return computeRiskReport({ staleDays, offlineHours })
+        return computeRiskReport({ staleDays })
       })
 
       .get('/api/admin/overview/health', async ({ request, query, set }) => {
@@ -1549,7 +1404,6 @@ export function adminRoutes() {
           risks,
           load,
           analytics,
-          effort,
           priorityGroups,
           commitsInPeriod,
           prsOpenedInPeriod,
@@ -1565,7 +1419,6 @@ export function adminRoutes() {
           computeRiskReport({}),
           computeTeamLoad({ limit: 200 }),
           computeAnalytics({ trendDays, timelineLimit: 50 }),
-          effortReport({ limit: 100 }),
           prisma.task.groupBy({ by: ['priority'], _count: true }),
           prisma.projectGithubEvent.count({
             where: { kind: 'PUSH_COMMIT', createdAt: { gte: since, lte: until } },
@@ -1596,15 +1449,6 @@ export function adminRoutes() {
             take: 20,
           }),
         ])
-
-        const overEstimate = effort
-          .filter((e) => e.verdict === 'over' && e.variancePercent !== null)
-          .sort((a, b) => (b.variancePercent ?? 0) - (a.variancePercent ?? 0))
-          .slice(0, 5)
-        const underEstimate = effort
-          .filter((e) => e.verdict === 'under' && e.variancePercent !== null)
-          .sort((a, b) => (a.variancePercent ?? 0) - (b.variancePercent ?? 0))
-          .slice(0, 5)
 
         const projectIds = Array.from(new Set(perProjectGithub.map((g) => g.projectId)))
         const githubProjects =
@@ -1657,11 +1501,6 @@ export function adminRoutes() {
             reviews: reviewsInPeriod,
             byProject: githubByProject,
           },
-          effort: {
-            overEstimate,
-            underEstimate,
-            totalAnalyzed: effort.length,
-          },
           audit: auditHighlights.map((a) => ({
             id: a.id,
             action: a.action,
@@ -1672,420 +1511,6 @@ export function adminRoutes() {
             userName: a.user?.name ?? null,
           })),
         }
-      })
-
-      // ─── Admin Agents API (SUPER_ADMIN only) ───────────
-      .get('/api/admin/agents', async ({ request, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (!isSystemAdmin(auth.role)) {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const agents = await prisma.agent.findMany({
-          include: {
-            claimedBy: { select: { id: true, name: true, email: true, role: true, image: true } },
-            _count: { select: { events: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-        })
-        return { agents }
-      })
-
-      .post('/api/admin/agents/:id/approve', async ({ request, params, set }) => {
-        const ip = getIp(request)
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const { userId } = (await request.json()) as { userId?: string }
-        if (!userId) {
-          set.status = 400
-          return { error: 'userId wajib diisi' }
-        }
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } })
-        if (!user) {
-          set.status = 404
-          return { error: 'User tidak ditemukan' }
-        }
-        const existing = await prisma.agent.findUnique({ where: { id: params.id }, select: { id: true } })
-        if (!existing) {
-          set.status = 404
-          return { error: 'Agent tidak ditemukan' }
-        }
-        const agent = await prisma.agent.update({
-          where: { id: params.id },
-          data: { status: 'APPROVED', claimedById: user.id },
-          include: {
-            claimedBy: { select: { id: true, name: true, email: true, role: true, image: true } },
-            _count: { select: { events: true } },
-          },
-        })
-        audit(auth.userId, 'AGENT_APPROVED', `agent=${agent.agentId} → ${user.email}`, ip)
-        appLog('info', `Agent approved: ${agent.agentId} → ${user.email}`)
-        return { agent }
-      })
-
-      .post('/api/admin/agents/:id/revoke', async ({ request, params, set }) => {
-        const ip = getIp(request)
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const existing = await prisma.agent.findUnique({ where: { id: params.id }, select: { id: true } })
-        if (!existing) {
-          set.status = 404
-          return { error: 'Agent tidak ditemukan' }
-        }
-        const agent = await prisma.agent.update({
-          where: { id: params.id },
-          data: { status: 'REVOKED', claimedById: null },
-          include: {
-            claimedBy: { select: { id: true, name: true, email: true, role: true, image: true } },
-            _count: { select: { events: true } },
-          },
-        })
-        audit(auth.userId, 'AGENT_REVOKED', `agent=${agent.agentId}`, ip)
-        appLog('info', `Agent revoked: ${agent.agentId}`)
-        return { agent }
-      })
-
-      // ─── Admin Webhook Tokens API (SUPER_ADMIN only) ──
-      .get('/api/admin/webhook-tokens', async ({ request, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const tokens = await prisma.webhookToken.findMany({
-          include: { createdBy: { select: { id: true, name: true, email: true, image: true } } },
-          orderBy: { createdAt: 'desc' },
-        })
-        return {
-          tokens: tokens.map((t) => ({
-            id: t.id,
-            name: t.name,
-            tokenPrefix: t.tokenPrefix,
-            status: t.status,
-            expiresAt: t.expiresAt,
-            lastUsedAt: t.lastUsedAt,
-            createdBy: t.createdBy,
-            createdAt: t.createdAt,
-          })),
-          envFallback: !!env.PMW_WEBHOOK_TOKEN,
-        }
-      })
-
-      .post('/api/admin/webhook-tokens', async ({ request, set }) => {
-        const ip = getIp(request)
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        let body: { name?: string; expiresAt?: string | null }
-        try {
-          body = (await request.json()) as typeof body
-        } catch {
-          set.status = 400
-          return { error: 'Invalid JSON' }
-        }
-        const name = (body.name ?? '').trim()
-        if (!name) {
-          set.status = 400
-          return { error: 'name wajib diisi' }
-        }
-        let expiresAt: Date | null = null
-        if (body.expiresAt) {
-          const d = new Date(body.expiresAt)
-          if (Number.isNaN(d.getTime())) {
-            set.status = 400
-            return { error: 'expiresAt invalid' }
-          }
-          expiresAt = d
-        }
-        const { raw, hash, prefix } = generateWebhookToken()
-        const token = await prisma.webhookToken.create({
-          data: {
-            name,
-            tokenHash: hash,
-            tokenPrefix: prefix,
-            expiresAt,
-            createdById: auth.userId,
-          },
-        })
-        audit(auth.userId, 'WEBHOOK_TOKEN_CREATED', `token=${name} prefix=${prefix}`, ip)
-        appLog('info', `Webhook token created: ${name} (${prefix})`)
-        return {
-          token: {
-            id: token.id,
-            name: token.name,
-            tokenPrefix: token.tokenPrefix,
-            status: token.status,
-            expiresAt: token.expiresAt,
-            createdAt: token.createdAt,
-          },
-          raw,
-        }
-      })
-
-      .patch('/api/admin/webhook-tokens/:id', async ({ request, params, set }) => {
-        const ip = getIp(request)
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        let body: { status?: 'ACTIVE' | 'DISABLED' | 'REVOKED'; name?: string }
-        try {
-          body = (await request.json()) as typeof body
-        } catch {
-          set.status = 400
-          return { error: 'Invalid JSON' }
-        }
-        const data: { status?: 'ACTIVE' | 'DISABLED' | 'REVOKED'; name?: string } = {}
-        if (body.status !== undefined) {
-          if (!['ACTIVE', 'DISABLED', 'REVOKED'].includes(body.status)) {
-            set.status = 400
-            return { error: 'status must be ACTIVE | DISABLED | REVOKED' }
-          }
-          data.status = body.status
-        }
-        if (body.name !== undefined) {
-          const trimmed = body.name.trim()
-          if (!trimmed) {
-            set.status = 400
-            return { error: 'name tidak boleh kosong' }
-          }
-          data.name = trimmed
-        }
-        if (Object.keys(data).length === 0) {
-          set.status = 400
-          return { error: 'Provide status and/or name' }
-        }
-        const existing = await prisma.webhookToken.findUnique({ where: { id: params.id } })
-        if (!existing) {
-          set.status = 404
-          return { error: 'Token not found' }
-        }
-        if (data.status && existing.status === 'REVOKED') {
-          set.status = 400
-          return { error: 'Revoked tokens cannot be reactivated' }
-        }
-        const updated = await prisma.webhookToken.update({
-          where: { id: params.id },
-          data,
-          include: { createdBy: { select: { id: true, name: true, email: true, image: true } } },
-        })
-        const auditAction = data.status ? `WEBHOOK_TOKEN_${data.status}` : 'WEBHOOK_TOKEN_RENAMED'
-        audit(auth.userId, auditAction, `token=${updated.name} prefix=${updated.tokenPrefix}`, ip)
-        appLog('info', `Webhook token ${auditAction}: ${updated.name} (${updated.tokenPrefix})`)
-        return {
-          token: {
-            id: updated.id,
-            name: updated.name,
-            tokenPrefix: updated.tokenPrefix,
-            status: updated.status,
-            expiresAt: updated.expiresAt,
-            lastUsedAt: updated.lastUsedAt,
-            createdBy: updated.createdBy,
-            createdAt: updated.createdAt,
-          },
-        }
-      })
-
-      .delete('/api/admin/webhook-tokens/:id', async ({ request, params, set }) => {
-        const ip = getIp(request)
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const existing = await prisma.webhookToken.findUnique({ where: { id: params.id } })
-        if (!existing) {
-          set.status = 404
-          return { error: 'Token not found' }
-        }
-        const token = await prisma.webhookToken.delete({ where: { id: params.id } })
-        audit(auth.userId, 'WEBHOOK_TOKEN_DELETED', `token=${token.name} prefix=${token.tokenPrefix}`, ip)
-        appLog('info', `Webhook token deleted: ${token.name} (${token.tokenPrefix})`)
-        return { ok: true }
-      })
-
-      // ─── Webhook Monitor API (SUPER_ADMIN only) ────────
-      .get('/api/admin/webhooks/stats', async ({ request, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const now = Date.now()
-        const last24h = new Date(now - 24 * 60 * 60 * 1000)
-        const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000)
-
-        const [total24h, total7d, okCount24h, failCount24h, authFail24h, rows24h, byToken, byAgent] = await Promise.all(
-          [
-            prisma.webhookRequestLog.count({ where: { createdAt: { gte: last24h } } }),
-            prisma.webhookRequestLog.count({ where: { createdAt: { gte: last7d } } }),
-            prisma.webhookRequestLog.count({ where: { createdAt: { gte: last24h }, statusCode: 200 } }),
-            prisma.webhookRequestLog.count({ where: { createdAt: { gte: last24h }, statusCode: { gte: 400 } } }),
-            prisma.webhookRequestLog.count({
-              where: { createdAt: { gte: last24h }, statusCode: { in: [401, 403] } },
-            }),
-            prisma.webhookRequestLog.aggregate({
-              where: { createdAt: { gte: last24h }, statusCode: 200 },
-              _sum: { eventsIn: true },
-            }),
-            prisma.webhookRequestLog.groupBy({
-              by: ['tokenId'],
-              where: { createdAt: { gte: last7d } },
-              _count: { _all: true },
-            }),
-            prisma.webhookRequestLog.groupBy({
-              by: ['agentId'],
-              where: { createdAt: { gte: last7d }, agentId: { not: null } },
-              _count: { _all: true },
-            }),
-          ],
-        )
-
-        const tokenIds = byToken.map((b) => b.tokenId).filter((x): x is string => !!x)
-        const agentIds = byAgent.map((b) => b.agentId).filter((x): x is string => !!x)
-        const [tokens, agents, seriesRows] = await Promise.all([
-          tokenIds.length
-            ? prisma.webhookToken.findMany({
-                where: { id: { in: tokenIds } },
-                select: { id: true, name: true, tokenPrefix: true, status: true, lastUsedAt: true },
-              })
-            : [],
-          agentIds.length
-            ? prisma.agent.findMany({
-                where: { id: { in: agentIds } },
-                select: { id: true, agentId: true, hostname: true, status: true, lastSeenAt: true },
-              })
-            : [],
-          prisma.webhookRequestLog.findMany({
-            where: { createdAt: { gte: last24h } },
-            select: { createdAt: true, statusCode: true, eventsIn: true },
-            orderBy: { createdAt: 'asc' },
-          }),
-        ])
-        const tokenMap = new Map(tokens.map((t) => [t.id, t]))
-        const agentMap = new Map(agents.map((a) => [a.id, a]))
-
-        const buckets: { t: string; total: number; ok: number; fail: number; authFail: number; events: number }[] = []
-        const bucketIdx = new Map<number, number>()
-        const hourMs = 60 * 60 * 1000
-        const firstHour = Math.floor((now - 23 * hourMs) / hourMs) * hourMs
-        for (let i = 0; i < 24; i++) {
-          const t = firstHour + i * hourMs
-          bucketIdx.set(t, buckets.length)
-          buckets.push({ t: new Date(t).toISOString(), total: 0, ok: 0, fail: 0, authFail: 0, events: 0 })
-        }
-        for (const r of seriesRows) {
-          const slot = Math.floor(r.createdAt.getTime() / hourMs) * hourMs
-          const idx = bucketIdx.get(slot)
-          if (idx === undefined) continue
-          const b = buckets[idx]
-          b.total += 1
-          if (r.statusCode === 200) {
-            b.ok += 1
-            b.events += r.eventsIn
-          } else if (r.statusCode === 401 || r.statusCode === 403) {
-            b.authFail += 1
-            b.fail += 1
-          } else if (r.statusCode >= 400) {
-            b.fail += 1
-          }
-        }
-
-        return {
-          series: buckets,
-          summary: {
-            total24h,
-            total7d,
-            ok24h: okCount24h,
-            fail24h: failCount24h,
-            authFail24h,
-            eventsIn24h: rows24h._sum.eventsIn ?? 0,
-            successRate24h: total24h ? okCount24h / total24h : null,
-          },
-          perToken: byToken
-            .map((b) => ({
-              tokenId: b.tokenId,
-              token: b.tokenId ? (tokenMap.get(b.tokenId) ?? null) : null,
-              hits: b._count._all,
-            }))
-            .sort((a, b) => b.hits - a.hits),
-          perAgent: byAgent
-            .map((b) => ({
-              agentDbId: b.agentId,
-              agent: b.agentId ? (agentMap.get(b.agentId) ?? null) : null,
-              hits: b._count._all,
-            }))
-            .sort((a, b) => b.hits - a.hits),
-        }
-      })
-
-      .get('/api/admin/webhooks/logs', async ({ request, query, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        if (auth.role !== 'SUPER_ADMIN') {
-          set.status = 403
-          return { error: 'Forbidden' }
-        }
-        const status = typeof query.status === 'string' ? query.status : 'all'
-        const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 500)
-        const where: Record<string, unknown> = {}
-        if (status === 'ok') where.statusCode = 200
-        else if (status === 'fail') where.statusCode = { gte: 400 }
-        else if (status === 'auth') where.statusCode = { in: [401, 403] }
-        const logs = await prisma.webhookRequestLog.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-          include: {
-            token: { select: { id: true, name: true, tokenPrefix: true } },
-            agent: { select: { id: true, agentId: true, hostname: true } },
-          },
-        })
-        return { logs }
       })
 
       // ─── Data Sync: Export (Bearer MCP_SECRET) ───────────
@@ -2152,30 +1577,6 @@ export function adminRoutes() {
         }
         if (want('milestones')) {
           result.milestones = await prisma.projectMilestone.findMany()
-        }
-        if (want('agents')) {
-          result.agents = await prisma.agent.findMany()
-        }
-        if (want('activityEvents')) {
-          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-          result.activityEvents = await prisma.activityEvent.findMany({
-            where: { createdAt: { gte: since } },
-          })
-        }
-        if (want('webhookTokens')) {
-          result.webhookTokens = await prisma.webhookToken.findMany({
-            select: {
-              id: true,
-              name: true,
-              tokenPrefix: true,
-              status: true,
-              expiresAt: true,
-              lastUsedAt: true,
-              createdById: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          })
         }
 
         appLog('info', `Sync export requested (entities: ${[...requested].join(',') || 'all'}) from ${getIp(request)}`)
@@ -2260,16 +1661,6 @@ export function adminRoutes() {
           await prisma.project.deleteMany()
         }
         if (want('milestones')) await prisma.projectMilestone.deleteMany()
-        if (want('activityEvents')) await prisma.activityEvent.deleteMany()
-        if (want('agents')) {
-          await prisma.activityEvent.deleteMany()
-          await prisma.webhookRequestLog.deleteMany()
-          await prisma.agent.deleteMany()
-        }
-        if (want('webhookTokens')) {
-          await prisma.webhookRequestLog.deleteMany()
-          await prisma.webhookToken.deleteMany()
-        }
         if (want('users')) {
           await prisma.notification.deleteMany()
           await prisma.auditLog.deleteMany()
@@ -2341,23 +1732,6 @@ export function adminRoutes() {
           const deps = (data.tasks as TaskRow[]).flatMap((t) => (t.blockedBy as unknown[] | undefined) ?? [])
           if (deps.length) await ins(prisma.taskDependency.createMany.bind(prisma.taskDependency), deps)
         }
-        if (data.agents && want('agents')) {
-          await ins(prisma.agent.createMany.bind(prisma.agent), data.agents as unknown[])
-          summary.agents = (data.agents as unknown[]).length
-        }
-        if (data.activityEvents && want('activityEvents')) {
-          await ins(prisma.activityEvent.createMany.bind(prisma.activityEvent), data.activityEvents as unknown[])
-          summary.activityEvents = (data.activityEvents as unknown[]).length
-        }
-        if (data.webhookTokens && want('webhookTokens')) {
-          const rows = (data.webhookTokens as Array<Record<string, unknown>>).map((t) => ({
-            ...t,
-            tokenHash: `synced-${t.id}`,
-          }))
-          await ins(prisma.webhookToken.createMany.bind(prisma.webhookToken), rows)
-          summary.webhookTokens = rows.length
-        }
-
         const ip = getIp(request)
         appLog(
           'info',

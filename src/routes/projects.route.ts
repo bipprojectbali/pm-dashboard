@@ -43,6 +43,8 @@ export function projectsRoutes() {
       }
       const isAdmin = isSystemAdmin(auth.role)
       const scope = typeof query.scope === 'string' ? query.scope : 'visible'
+      const projLimit = Math.min(Number(query.limit) || 200, 200)
+      const projOffset = Math.max(0, Number(query.offset) || 0)
       const projectInclude = {
         owner: { select: { id: true, name: true, email: true, image: true } },
         members: {
@@ -70,6 +72,8 @@ export function projectsRoutes() {
         projectRows = await prisma.project.findMany({
           include: projectInclude,
           orderBy: { createdAt: 'desc' },
+          take: projLimit,
+          skip: projOffset,
         })
       } else {
         projectRows = await prisma.project.findMany({
@@ -78,6 +82,8 @@ export function projectsRoutes() {
           },
           include: projectInclude,
           orderBy: { createdAt: 'desc' },
+          take: projLimit,
+          skip: projOffset,
         })
       }
       const projectIds = projectRows.map((p) => p.id)

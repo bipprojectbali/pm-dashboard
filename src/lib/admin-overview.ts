@@ -5,7 +5,6 @@
 
 import { prisma } from './db'
 
-const LIVE_MS = 5 * 60 * 1000
 const STALE_IN_PROGRESS_MS = 3 * 24 * 60 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -18,7 +17,6 @@ export type RiskSeverity = 'none' | 'low' | 'medium' | 'high'
 export async function computeAdminOverview(opts: { recentAuditLimit?: number } = {}) {
   const recentAuditLimit = opts.recentAuditLimit ?? 8
   const now = new Date()
-  const since24h = new Date(now.getTime() - DAY_MS)
   const since7d = new Date(now.getTime() - 7 * DAY_MS)
 
   const [
@@ -31,11 +29,6 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
     tasksByStatus,
     overdueOpen,
     staleInProgress,
-    agents,
-    pendingAgents,
-    webhooks24h,
-    webhookSuccess24h,
-    webhookEvents24h,
     closed7d,
     extensions7d,
     recentAudit,
@@ -56,16 +49,6 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
         updatedAt: { lt: new Date(now.getTime() - STALE_IN_PROGRESS_MS) },
       },
     }),
-    prisma.agent.findMany({ select: { status: true, lastSeenAt: true } }),
-    prisma.agent.count({ where: { status: 'PENDING' } }),
-    prisma.webhookRequestLog.count({ where: { createdAt: { gte: since24h } } }),
-    prisma.webhookRequestLog.count({
-      where: { createdAt: { gte: since24h }, statusCode: { lt: 400 } },
-    }),
-    prisma.webhookRequestLog.aggregate({
-      _sum: { eventsIn: true },
-      where: { createdAt: { gte: since24h } },
-    }),
     prisma.task.count({ where: { status: 'CLOSED', closedAt: { gte: since7d } } }),
     prisma.projectExtension.count({ where: { createdAt: { gte: since7d } } }),
     recentAuditLimit > 0
@@ -76,10 +59,6 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
         })
       : Promise.resolve([]),
   ])
-
-  const liveAgents = agents.filter(
-    (a) => a.status === 'APPROVED' && a.lastSeenAt && now.getTime() - a.lastSeenAt.getTime() < LIVE_MS,
-  ).length
 
   return {
     timestamp: now.toISOString(),
@@ -98,17 +77,6 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
       overdueOpen,
       staleInProgress,
       closed7d,
-    },
-    agents: {
-      total: agents.length,
-      pending: pendingAgents,
-      live: liveAgents,
-    },
-    webhooks24h: {
-      total: webhooks24h,
-      success: webhookSuccess24h,
-      successRate: webhooks24h > 0 ? Math.round((webhookSuccess24h / webhooks24h) * 1000) / 10 : null,
-      eventsIn: webhookEvents24h._sum.eventsIn ?? 0,
     },
     velocity: {
       closed7d,
@@ -344,13 +312,12 @@ export async function computeTeamLoad(opts: { projectId?: string; includeUnassig
   return { count: rows.length, rows: rows.slice(0, limit) }
 }
 
-export async function computeRiskReport(opts: { staleDays?: number; offlineHours?: number } = {}) {
-  const { staleDays = 3, offlineHours = 1 } = opts
+export async function computeRiskReport(opts: { staleDays?: number } = {}) {
+  const { staleDays = 3 } = opts
   const now = new Date()
   const staleBefore = new Date(now.getTime() - staleDays * DAY_MS)
-  const offlineBefore = new Date(now.getTime() - offlineHours * 60 * 60 * 1000)
 
-  const [overdueTasks, staleTasks, pastDueProjects, pendingAgents, offlineAgents] = await Promise.all([
+  const [overdueTasks, staleTasks, pastDueProjects] = await Promise.all([
     prisma.task.findMany({
       where: { status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } },
       take: 50,
@@ -379,16 +346,6 @@ export async function computeRiskReport(opts: { staleDays?: number; offlineHours
       orderBy: { endsAt: 'asc' },
       include: { owner: { select: { email: true } } },
     }),
-    prisma.agent.findMany({
-      where: { status: 'PENDING' },
-      select: { id: true, agentId: true, hostname: true, osUser: true, createdAt: true },
-    }),
-    prisma.agent.findMany({
-      where: { status: 'APPROVED', lastSeenAt: { lt: offlineBefore } },
-      select: { id: true, agentId: true, hostname: true, lastSeenAt: true },
-      orderBy: { lastSeenAt: 'asc' },
-      take: 20,
-    }),
   ])
 
   const requiredEnv = [
@@ -404,7 +361,7 @@ export async function computeRiskReport(opts: { staleDays?: number; offlineHours
       ? 'high'
       : overdueTasks.length > 5 || staleTasks.length > 5
         ? 'medium'
-        : overdueTasks.length > 0 || staleTasks.length > 0 || offlineAgents.length > 0 || pendingAgents.length > 0
+        : overdueTasks.length > 0 || staleTasks.length > 0
           ? 'low'
           : 'none'
 
@@ -415,8 +372,6 @@ export async function computeRiskReport(opts: { staleDays?: number; offlineHours
       overdueTasks: overdueTasks.length,
       staleTasks: staleTasks.length,
       pastDueProjects: pastDueProjects.length,
-      pendingAgents: pendingAgents.length,
-      offlineAgents: offlineAgents.length,
       missingEnv: missingEnv.length,
     },
     overdueTasks: overdueTasks.map((t) => ({
@@ -449,8 +404,6 @@ export async function computeRiskReport(opts: { staleDays?: number; offlineHours
       endsAt: p.endsAt,
       daysOverdue: p.endsAt ? daysBetween(now, p.endsAt) : null,
     })),
-    pendingAgents,
-    offlineAgents,
     missingEnv,
   }
 }

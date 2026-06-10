@@ -49,57 +49,6 @@ function sanitizePreferences(input: Record<string, unknown>): UserPreferences {
 export function meRoutes() {
   return (
     new Elysia()
-      // ─── My Agents API (any authenticated user) ────────
-      .get('/api/me/agents', async ({ request, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        const agents = await prisma.agent.findMany({
-          where: { claimedById: auth.userId },
-          select: {
-            id: true,
-            agentId: true,
-            hostname: true,
-            osUser: true,
-            status: true,
-            lastSeenAt: true,
-            createdAt: true,
-            _count: { select: { events: true } },
-          },
-          orderBy: [{ status: 'asc' }, { lastSeenAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
-        })
-        return { agents }
-      })
-
-      .get('/api/me/agents/today', async ({ request, set }) => {
-        const auth = await requireAuth(request)
-        if (!auth) {
-          set.status = 401
-          return { error: 'Unauthorized' }
-        }
-        const agents = await prisma.agent.findMany({
-          where: { claimedById: auth.userId, status: 'APPROVED' },
-          select: { id: true, agentId: true, hostname: true },
-        })
-        if (agents.length === 0) return { totalSeconds: 0, perAgent: [] as { agentId: string; seconds: number }[] }
-        const startOfDay = new Date()
-        startOfDay.setHours(0, 0, 0, 0)
-        const grouped = await prisma.activityEvent.groupBy({
-          by: ['agentId'],
-          where: {
-            agentId: { in: agents.map((a) => a.id) },
-            timestamp: { gte: startOfDay },
-            bucketId: { contains: 'window' },
-          },
-          _sum: { duration: true },
-        })
-        const byAgent = new Map(grouped.map((g) => [g.agentId, g._sum.duration ?? 0] as const))
-        const perAgent = agents.map((a) => ({ agentId: a.id, seconds: Math.round(byAgent.get(a.id) ?? 0) }))
-        const totalSeconds = perAgent.reduce((sum, p) => sum + p.seconds, 0)
-        return { totalSeconds, perAgent }
-      })
 
       // ─── User preferences ────────
       .get('/api/me/preferences', async ({ request, set }) => {

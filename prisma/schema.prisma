@@ -15,17 +15,6 @@ enum Role {
   SUPER_ADMIN
 }
 
-enum AgentStatus {
-  PENDING
-  APPROVED
-  REVOKED
-}
-
-enum WebhookTokenStatus {
-  ACTIVE
-  DISABLED
-  REVOKED
-}
 
 enum ProjectMemberRole {
   OWNER
@@ -109,8 +98,6 @@ model User {
   sessions           Session[]
   accounts           Account[]
   auditLogs          AuditLog[]
-  agents             Agent[]
-  webhookTokens      WebhookToken[]
   ownedProjects      Project[]       @relation("ProjectOwner")
   projectMemberships ProjectMember[]
   projectExtensions  ProjectExtension[] @relation("ProjectExtensionAuthor")
@@ -193,64 +180,6 @@ model AuditLog {
   @@map("audit_log")
 }
 
-model Agent {
-  id          String      @id @default(uuid())
-  agentId     String      @unique
-  hostname    String
-  osUser      String
-  status      AgentStatus @default(PENDING)
-  claimedById String?
-  lastSeenAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  claimedBy   User?               @relation(fields: [claimedById], references: [id], onDelete: SetNull)
-  events      ActivityEvent[]
-  requestLogs WebhookRequestLog[]
-
-  @@index([status])
-  @@index([claimedById])
-  @@map("agent")
-}
-
-model ActivityEvent {
-  id        String   @id @default(uuid())
-  agentId   String
-  bucketId  String
-  eventId   Int
-  timestamp DateTime
-  duration  Float
-  data      Json
-  createdAt DateTime @default(now())
-
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@unique([agentId, bucketId, eventId])
-  @@index([agentId])
-  @@index([timestamp])
-  @@index([bucketId])
-  @@map("activity_event")
-}
-
-model WebhookToken {
-  id          String             @id @default(uuid())
-  name        String
-  tokenHash   String             @unique
-  tokenPrefix String
-  status      WebhookTokenStatus @default(ACTIVE)
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-  createdById String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-
-  createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  requestLogs WebhookRequestLog[]
-
-  @@index([status])
-  @@index([createdById])
-  @@map("webhook_token")
-}
 
 model Project {
   id             String          @id @default(uuid())
@@ -380,6 +309,9 @@ model Task {
   @@index([createdAt])
   @@index([status, kanbanOrder])
   @@index([deletedAt])
+  @@index([projectId, status])
+  @@index([dueAt])
+  @@index([priority])
   @@map("task")
 }
 
@@ -506,25 +438,6 @@ model Notification {
   @@map("notification")
 }
 
-model WebhookRequestLog {
-  id         String   @id @default(uuid())
-  tokenId    String?
-  agentId    String?
-  statusCode Int
-  reason     String?
-  ip         String?
-  eventsIn   Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  token WebhookToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
-  agent Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
-
-  @@index([tokenId])
-  @@index([agentId])
-  @@index([createdAt])
-  @@index([statusCode])
-  @@map("webhook_request_log")
-}
 
 model ProjectGithubEvent {
   id             String          @id @default(uuid())
@@ -585,7 +498,7 @@ model DailySnapshot {
   kpi       Json     // { totalTasks, openTasks, closedToday, overdueCount, staleCount, velocity7d, totalProjects, activeProjects }
   projects  Json     // [{ id, name, status, score, grade, openTasks, overdueTasks, blockedTasks, daysUntilDue, pastDue }]
   team      Json     // [{ userId, name, open, overdue, closed7d, estimateHours, overloaded }]
-  risks     Json     // { severity, pastDueProjects, overdueTasks, staleTasks, offlineAgents, pendingAgents }
+  risks     Json     // { severity, pastDueProjects, overdueTasks, staleTasks }
   createdAt DateTime @default(now())
 
   @@index([date])

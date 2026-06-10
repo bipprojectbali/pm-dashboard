@@ -9,7 +9,7 @@ type InvalidateMessage = {
 }
 
 const TOPIC_KEYS: Record<string, string[][]> = {
-  tasks: [['tasks'], ['task']],
+  tasks: [['tasks'], ['task'], ['tasks-kanban']],
   projects: [['projects'], ['project']],
   tags: [['tags']],
   milestones: [['milestones']],

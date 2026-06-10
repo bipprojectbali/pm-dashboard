@@ -33,7 +33,6 @@ import {
 import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
 import { AnalyticsPanel } from '@/frontend/components/admin/AnalyticsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
-import { EffortPanel } from '@/frontend/components/admin/EffortPanel'
 import { OverviewPanel } from '@/frontend/components/admin/OverviewPanel'
 import { ProjectsOverviewPanel } from '@/frontend/components/admin/ProjectsOverviewPanel'
 import { SessionsPanel } from '@/frontend/components/admin/SessionsPanel'
@@ -55,7 +54,6 @@ const validTabs = [
   'audit-logs',
   'projects',
   'tasks',
-  'effort',
   'analytics',
   'sessions',
   'health',
@@ -91,8 +89,9 @@ type NavItem = {
   label: string
   icon: typeof TbLayoutDashboard
   key: TabKey
-  badgeKey?: 'pastDueProjects' | 'overdueTasks' | 'offlineAgents' | 'missingEnv'
+  badgeKey?: 'pastDueProjects' | 'overdueTasks' | 'missingEnv'
   badgeColor?: string
+  badgeLabel?: string
 }
 
 type NavGroup = { label: string; items: NavItem[] }
@@ -102,9 +101,8 @@ const navGroups: NavGroup[] = [
     label: 'Pantau',
     items: [
       { label: 'Ringkasan', icon: TbLayoutDashboard, key: 'overview' },
-      { label: 'Proyek', icon: TbTarget, key: 'projects', badgeKey: 'pastDueProjects', badgeColor: 'red' },
-      { label: 'Triase Task', icon: TbListCheck, key: 'tasks', badgeKey: 'overdueTasks', badgeColor: 'orange' },
-      { label: 'Effort', icon: TbClockHour3, key: 'effort' },
+      { label: 'Proyek', icon: TbTarget, key: 'projects', badgeKey: 'pastDueProjects', badgeColor: 'red', badgeLabel: 'proyek past-due' },
+      { label: 'Triase Task', icon: TbListCheck, key: 'tasks', badgeKey: 'overdueTasks', badgeColor: 'orange', badgeLabel: 'task overdue' },
       { label: 'Analitik', icon: TbReportAnalytics, key: 'analytics' },
     ],
   },
@@ -119,7 +117,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Sistem',
     items: [
-      { label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red' },
+      { label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red', badgeLabel: 'env var hilang' },
       { label: 'Riwayat Laporan', icon: TbHistory, key: 'report-history' },
     ],
   },
@@ -149,10 +147,6 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   tasks: {
     label: 'Triase Task',
     description: 'Task overdue, tanpa assignee, terblokir, atau stale.',
-  },
-  effort: {
-    label: 'Effort',
-    description: 'Estimasi vs aktual, ghost task, dan phantom work per user.',
   },
   analytics: {
     label: 'Analitik',
@@ -304,9 +298,15 @@ function AdminPage() {
                     leftSection={<Icon size={18} />}
                     rightSection={
                       badgeCount > 0 ? (
-                        <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
-                          {badgeCount > 99 ? '99+' : badgeCount}
-                        </Badge>
+                        <Tooltip
+                          label={`${badgeCount} ${item.badgeLabel ?? 'item perlu perhatian'}`}
+                          withArrow
+                          position="right"
+                        >
+                          <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </Badge>
+                        </Tooltip>
                       ) : null
                     }
                     color="violet"
@@ -347,7 +347,6 @@ function AdminPage() {
               {active === 'audit-logs' && <AuditLogsPanel />}
               {active === 'projects' && <ProjectsOverviewPanel />}
               {active === 'tasks' && <TaskTriagePanel />}
-              {active === 'effort' && <EffortPanel />}
               {active === 'analytics' && <AnalyticsPanel />}
               {active === 'sessions' && <SessionsPanel />}
               {active === 'health' && <SystemHealthPanel />}

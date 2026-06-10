@@ -2,7 +2,6 @@ import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeT
 import { type DocHit, searchDocuments } from './chat-documents'
 import { CHAT_TOOLS, executeChatTool } from './chat-tools'
 import { prisma } from './db'
-import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
 import { isExtensionEnabled } from './extensions'
 
 export interface ChatMessage {
@@ -147,24 +146,6 @@ export async function buildChatContext(): Promise<string> {
     : []
   const ghNameMap = new Map(ghProjectNames.map((p) => [p.id, p.name]))
 
-  // --- Effort 7d aggregate ---
-  const [phantom7d, ghosts, effortRows] = await Promise.all([
-    computePhantomWork({ days: 7, limit: 5 }),
-    detectGhostTasks({ staleDays: 5, limit: 100 }),
-    effortReport({ onlyClosed: false, limit: 200 }),
-  ])
-  const overbudgetCount = effortRows.filter((r) => r.verdict === 'over').length
-  const underbudgetCount = effortRows.filter((r) => r.verdict === 'under').length
-
-  // --- Agent status ---
-  const [pendingAgents, offlineAgents, totalAgents] = await Promise.all([
-    prisma.agent.count({ where: { status: 'PENDING' } }),
-    prisma.agent.count({
-      where: { status: 'APPROVED', OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: since24h } }] },
-    }),
-    prisma.agent.count({ where: { status: 'APPROVED' } }),
-  ])
-
   // Format sections
   const userLines = allUsers
     .map((u) => {
@@ -233,25 +214,6 @@ export async function buildChatContext(): Promise<string> {
     ? topContributors7d.map((c) => `${c.actorLogin}(${c._count._all})`).join(', ')
     : 'tidak ada'
 
-  const effortLines = [
-    `- Phantom workers 7h: ${
-      phantom7d.length
-        ? phantom7d
-            .slice(0, 5)
-            .map((p) => `${p.email}(${p.phantomHours}h)`)
-            .join(', ')
-        : 'tidak ada'
-    }`,
-    `- Ghost tasks (stale >5h tidak ada update): ${ghosts.length}`,
-    `- Task overbudget: ${overbudgetCount} | underbudget: ${underbudgetCount}`,
-  ].join('\n')
-
-  const agentLines = [
-    `- Total agen disetujui: ${totalAgents}`,
-    pendingAgents > 0 ? `- Pending approval: ${pendingAgents}` : '- Tidak ada agen pending',
-    offlineAgents > 0 ? `- Offline >24h: ${offlineAgents}` : '- Semua agen online <24h',
-  ].join('\n')
-
   return `Kamu adalah asisten AI untuk project management dashboard. Kamu memiliki pengetahuan lengkap tentang tim dan proyek. Jawab dengan ringkas, akurat, dan helpful. Data di bawah adalah kondisi real-time.
 
 ATURAN JAWABAN:
@@ -270,7 +232,7 @@ FORMAT MARKDOWN (PENTING — UI render via react-markdown + remark-gfm):
 - List pakai tanda minus + spasi sebagai bullet, dengan newline per item. Hindari emoji sebagai bullet.
 
 PEMAKAIAN TOOLS (WAJIB):
-- Tersedia 5 tool query read-only: query_users, query_tasks, query_project_detail, query_github_activity, query_effort. Hasilnya = data DB akurat real-time.
+- Tersedia 4 tool query read-only: query_users, query_tasks, query_project_detail, query_github_activity. Hasilnya = data DB akurat real-time.
 - WAJIB pakai tool untuk pertanyaan numerik/agregat (berapa, total, jumlah, top, rata-rata). Jangan tebak dari snapshot di atas — snapshot bisa tertinggal beberapa menit.
 - WAJIB pakai tool kalau pertanyaan menyebut entitas spesifik yang belum kelihatan di konteks (mis. "task X", "proyek Y", "siapa Z").
 - Boleh chain beberapa tool dalam satu jawaban (mis. resolve user lewat query_users dulu, lalu query_tasks pakai assigneeEmail).
@@ -300,12 +262,6 @@ ${activityLines || '- Tidak ada aktivitas terbaru'}
 - Top proyek:
 ${githubProjectLines}
 - Top kontributor: ${githubContribLines}
-
-═══ EFFORT 7H ═══
-${effortLines}
-
-═══ AGENT STATUS ═══
-${agentLines}
 
 ═══ RISIKO ═══
 ${riskLines}

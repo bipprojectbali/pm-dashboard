@@ -26,7 +26,6 @@ import {
   TbHeartbeat,
   TbInfoCircle,
   TbListCheck,
-  TbPlugConnected,
   TbRefresh,
   TbShieldCheck,
   TbTarget,
@@ -43,12 +42,6 @@ interface AdminUser {
   id: string
   role: Role
   blocked: boolean
-}
-
-interface AgentRow {
-  id: string
-  status: 'PENDING' | 'APPROVED' | 'REVOKED'
-  lastSeenAt: string | null
 }
 
 interface ProjectRow {
@@ -79,8 +72,6 @@ interface RiskReport {
     overdueTasks: number
     staleTasks: number
     pastDueProjects: number
-    pendingAgents: number
-    offlineAgents: number
     missingEnv: number
   }
   overdueTasks: Array<{
@@ -102,8 +93,6 @@ interface RiskReport {
     projectId: string
   }>
   pastDueProjects: Array<{ id: string; name: string; priority: string; owner: string; daysOverdue: number | null }>
-  pendingAgents: Array<{ id: string; agentId: string; hostname: string; osUser: string }>
-  offlineAgents: Array<{ id: string; agentId: string; hostname: string; lastSeenAt: string }>
   missingEnv: string[]
 }
 
@@ -148,8 +137,6 @@ interface UpcomingEvent {
   tags: Array<{ tagId: string; tag: { name: string; color: string } }>
   project: { id: string; name: string } | null
 }
-
-const LIVE_THRESHOLD_MS = 5 * 60 * 1000
 
 const SEVERITY_COLOR: Record<RiskSeverity, string> = {
   none: 'teal',
@@ -223,13 +210,6 @@ export function OverviewPanel() {
     refetchInterval: 30_000,
   })
 
-  const agentsQ = useQuery({
-    queryKey: ['admin', 'overview', 'agents'],
-    queryFn: () =>
-      fetch('/api/admin/agents', { credentials: 'include' }).then((r) => r.json()) as Promise<{ agents: AgentRow[] }>,
-    refetchInterval: 30_000,
-  })
-
   const auditQ = useQuery({
     queryKey: ['admin', 'overview', 'audit'],
     queryFn: () =>
@@ -280,12 +260,11 @@ export function OverviewPanel() {
     refetchInterval: 5 * 60_000,
   })
 
-  const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || agentsQ.isLoading || auditQ.isLoading
+  const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || auditQ.isLoading
   const fetching =
     usersQ.isFetching ||
     projectsQ.isFetching ||
     tasksQ.isFetching ||
-    agentsQ.isFetching ||
     auditQ.isFetching ||
     risksQ.isFetching ||
     healthQ.isFetching ||
@@ -297,7 +276,6 @@ export function OverviewPanel() {
     const users = usersQ.data?.users ?? []
     const projects = projectsQ.data?.projects ?? []
     const tasks = tasksQ.data?.tasks ?? []
-    const agents = agentsQ.data?.agents ?? []
     const now = Date.now()
 
     const blocked = users.filter((u) => u.blocked).length
@@ -306,10 +284,6 @@ export function OverviewPanel() {
     const overdueTasks = tasks.filter(
       (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < now,
     ).length
-    const liveAgents = agents.filter(
-      (a) => a.status === 'APPROVED' && a.lastSeenAt && now - new Date(a.lastSeenAt).getTime() < LIVE_THRESHOLD_MS,
-    ).length
-    const pendingAgents = agents.filter((a) => a.status === 'PENDING').length
 
     return {
       totalUsers: users.length,
@@ -318,16 +292,13 @@ export function OverviewPanel() {
       totalProjects: projects.length,
       openTasks,
       overdueTasks,
-      liveAgents,
-      pendingAgents,
     }
-  }, [usersQ.data, projectsQ.data, tasksQ.data, agentsQ.data])
+  }, [usersQ.data, projectsQ.data, tasksQ.data])
 
   const refetchAll = () => {
     usersQ.refetch()
     projectsQ.refetch()
     tasksQ.refetch()
-    agentsQ.refetch()
     auditQ.refetch()
     risksQ.refetch()
     healthQ.refetch()
@@ -343,7 +314,6 @@ export function OverviewPanel() {
       usersQ.dataUpdatedAt,
       projectsQ.dataUpdatedAt,
       tasksQ.dataUpdatedAt,
-      agentsQ.dataUpdatedAt,
       auditQ.dataUpdatedAt,
       risksQ.dataUpdatedAt,
       healthQ.dataUpdatedAt,
@@ -356,7 +326,6 @@ export function OverviewPanel() {
     usersQ.dataUpdatedAt,
     projectsQ.dataUpdatedAt,
     tasksQ.dataUpdatedAt,
-    agentsQ.dataUpdatedAt,
     auditQ.dataUpdatedAt,
     risksQ.dataUpdatedAt,
     healthQ.dataUpdatedAt,
@@ -433,16 +402,6 @@ export function OverviewPanel() {
           onClick={() => navigate({ to: '/admin', search: { tab: 'tasks' } })}
           loading={loading}
           info="Task yang belum CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED). Sub-label menghitung yang sudah lewat dueAt. Klik untuk membuka tab Triase Task."
-        />
-        <KpiCard
-          label="Agent Aktif"
-          value={stats.liveAgents}
-          sub={stats.pendingAgents > 0 ? `${stats.pendingAgents} menunggu approval` : 'semua disetujui'}
-          subColor={stats.pendingAgents > 0 ? 'orange' : undefined}
-          icon={TbPlugConnected}
-          color="teal"
-          loading={loading}
-          info="Agent pm-watch yang APPROVED dan mengirim heartbeat <5 menit terakhir. Pending approval perlu di-assign ke user di Konsol Dev → Agents."
         />
       </SimpleGrid>
 
@@ -638,35 +597,6 @@ export function OverviewPanel() {
         </Stack>
       </Card>
 
-      {stats.pendingAgents > 0 && (
-        <Card withBorder padding="md" radius="md">
-          <Group gap="sm">
-            <ThemeIcon variant="light" color="orange" size="lg" radius="md">
-              <TbAlertTriangle size={18} />
-            </ThemeIcon>
-            <div style={{ flex: 1 }}>
-              <Group gap={4} wrap="nowrap">
-                <Text size="sm" fw={500}>
-                  {stats.pendingAgents} agent{stats.pendingAgents > 1 ? 's' : ''} menunggu persetujuan
-                </Text>
-                <Tooltip
-                  multiline
-                  w={320}
-                  withArrow
-                  label="Agent pm-watch status PENDING. Event yang dikirim sebelum approval akan di-reject sampai agent di-assign ke user. Approve di Dev Console → Agents (hanya SUPER_ADMIN)."
-                >
-                  <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-                    <TbInfoCircle size={14} />
-                  </ThemeIcon>
-                </Tooltip>
-              </Group>
-              <Text size="xs" c="dimmed">
-                Approve di Dev Console → Agents panel (SUPER_ADMIN only).
-              </Text>
-            </div>
-          </Group>
-        </Card>
-      )}
     </Stack>
   )
 }
@@ -742,8 +672,7 @@ function KpiCard({
 
 function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: ReturnType<typeof useNavigate> }) {
   const s = risks.summary
-  const nothing =
-    s.overdueTasks + s.staleTasks + s.pastDueProjects + s.pendingAgents + s.offlineAgents + s.missingEnv === 0
+  const nothing = s.overdueTasks + s.staleTasks + s.pastDueProjects + s.missingEnv === 0
 
   if (nothing) {
     return (
@@ -783,8 +712,6 @@ function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: Ret
         <RiskStat label="Overdue tasks" value={s.overdueTasks} color={s.overdueTasks > 0 ? 'red' : 'gray'} />
         <RiskStat label="Stale IN_PROGRESS" value={s.staleTasks} color={s.staleTasks > 0 ? 'orange' : 'gray'} />
         <RiskStat label="Past-due projects" value={s.pastDueProjects} color={s.pastDueProjects > 0 ? 'red' : 'gray'} />
-        <RiskStat label="Pending agents" value={s.pendingAgents} color={s.pendingAgents > 0 ? 'orange' : 'gray'} />
-        <RiskStat label="Offline agents" value={s.offlineAgents} color={s.offlineAgents > 0 ? 'yellow' : 'gray'} />
         <RiskStat label="Missing env" value={s.missingEnv} color={s.missingEnv > 0 ? 'red' : 'gray'} />
       </SimpleGrid>
 

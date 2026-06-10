@@ -2036,7 +2036,7 @@ function UserFilterStrip({
                   style={{
                     outline: isActive
                       ? '2px solid var(--mantine-color-blue-5)'
-                      : '2px solid var(--mantine-color-default-border)',
+                      : '2px solid var(--mantine-color-cyan-5)',
                     outlineOffset: 2,
                     opacity: isDimmed ? 0.32 : 1,
                     cursor: 'pointer',

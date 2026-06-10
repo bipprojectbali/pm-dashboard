@@ -7,6 +7,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-06-10
+
+### Ditambahkan
+- **Server-side pagination untuk Tasks, Audit Logs, dan Projects** — sebelumnya data di-fetch bulk (max 500 task) lalu di-slice di browser. Sekarang setiap request hanya mengambil satu halaman dari server.
+  - `GET /api/tasks`: parameter `limit` (default 50, max 200), `offset`, `search`, `priority`, `overdueOnly`, `unassigned`, `noDue`, `blocked`. Response menyertakan `total` dari `count()` paralel.
+  - `GET /api/admin/logs/audit`: parameter `since` (ISO 8601) dan `offset`; `total` dari `count()` paralel.
+  - `GET /api/projects`: safeguard `take/skip` limit 200.
+  - Kanban view: 5 `useQuery` terpisah per status (`OPEN`, `IN_PROGRESS`, `READY_FOR_QC`, `REOPENED`, `CLOSED`) dengan `colOffset` state dan invalidasi per-kolom saat drag-drop.
+  - Audit Logs panel: `since=` dikirim ke API dari window filter (7d/30d/all), pagination dari `total` API.
+  - Schema: 3 index baru pada tabel `task` — `(projectId, status)`, `(dueAt)`, `(priority)`.
+- **Filter by member di Projects panel** — filter avatar dipindah ke baris terpisah di bawah toolbar (tidak lagi inline). Avatar 36px dengan gap=8, nama anggota aktif ditampilkan, overflow user dalam popover. Mode toggle avatar ↔ dropdown tersimpan di localStorage.
+- **Tests**: `tests/integration/tasks-pagination.test.ts` — 15 test case: pagination, search, priority, quickFilter (overdueOnly, unassigned, noDue), total accuracy, auth.
+
+### Diubah
+- `useRealtimeInvalidate`: key `tasks-kanban` ditambahkan ke invalidasi realtime sehingga kanban per-kolom ter-refresh saat ada update task via WebSocket.
+
 ## [0.7.2] - 2026-06-08
 
 ### Diperbaiki

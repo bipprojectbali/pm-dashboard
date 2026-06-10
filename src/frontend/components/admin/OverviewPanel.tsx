@@ -699,7 +699,7 @@ function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: Ret
             multiline
             w={320}
             withArrow
-            label="Ringkasan isu yang butuh perhatian saat ini: tugas lewat tenggat, tugas IN_PROGRESS yang mandek, proyek telat, agent pm-watch yang belum disetujui atau offline, dan variabel env wajib yang belum diisi. Severity dihitung otomatis (high/medium/low/none) dari kombinasi sinyal tersebut."
+            label="Ringkasan isu yang butuh perhatian saat ini: tugas lewat tenggat, tugas IN_PROGRESS yang mandek, proyek telat, dan variabel env wajib yang belum diisi. Severity dihitung otomatis (high/medium/low/none) dari kombinasi sinyal tersebut."
           >
             <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
               <TbInfoCircle size={14} />

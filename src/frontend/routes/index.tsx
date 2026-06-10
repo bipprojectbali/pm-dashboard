@@ -34,7 +34,6 @@ import {
   TbShieldLock,
   TbSparkles,
   TbUsers,
-  TbWebhook,
 } from 'react-icons/tb'
 import { ThemeToggle } from '@/frontend/components/ThemeToggle'
 import { getDefaultRoute, useSession } from '@/frontend/hooks/useAuth'
@@ -68,22 +67,6 @@ const features: Feature[] = [
     title: 'Task Workflow',
     description:
       'Task, bug, dan QC item dengan prioritas, dependensi, checklist, tag, komentar, dan riwayat status lengkap.',
-  },
-  {
-    icon: TbActivity,
-    color: 'teal',
-    badge: 'Realtime',
-    title: 'pm-watch Activity',
-    description:
-      'Agent ActivityWatch stream event aktivitas nyata ke dashboard — lihat apa yang setiap mesin benar-benar lakukan.',
-  },
-  {
-    icon: TbWebhook,
-    color: 'orange',
-    badge: 'Security',
-    title: 'Secure Webhooks',
-    description:
-      'DB-backed webhook token dengan SHA-256 hashing, show-once secret, expiry preset, dan audit trail lengkap.',
   },
   {
     icon: TbDeviceDesktopAnalytics,

@@ -690,7 +690,7 @@ export function ProjectsPanel() {
             <Text size="sm" c="dimmed" ta="center" maw={360}>
               {projects.length === 0
                 ? canCreateProject
-                  ? 'Create your first project to start organizing tasks and tracking ActivityWatch focus.'
+                  ? 'Create your first project to start organizing tasks and tracking team progress.'
                   : 'You have not been added to any project yet. Ask an admin to invite you.'
                 : hasActiveFilters
                   ? 'Try clearing filters or searching by a different keyword.'

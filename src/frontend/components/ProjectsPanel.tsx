@@ -10,6 +10,7 @@ import {
   Group,
   Kbd,
   Modal,
+  Popover,
   Progress,
   SegmentedControl,
   Select,
@@ -300,6 +301,10 @@ export function ProjectsPanel() {
     key: 'pm:projects:userFilter',
     defaultValue: null,
   })
+  const [userFilterMode, setUserFilterMode] = useLocalStorage<'avatar' | 'dropdown'>({
+    key: 'pm:projects:userFilterMode',
+    defaultValue: 'avatar',
+  })
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
@@ -414,6 +419,19 @@ export function ProjectsPanel() {
       }
     }
     return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [projects])
+
+  const userList = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; image?: string | null }>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId))
+        seen.set(p.ownerId, { id: p.ownerId, name: p.owner.name || p.owner.email || p.ownerId, image: p.owner.image })
+      for (const m of p.members) {
+        if (!seen.has(m.userId))
+          seen.set(m.userId, { id: m.userId, name: m.user.name || m.user.email || m.userId, image: m.user.image })
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [projects])
 
   const hasActiveFilters = !!(
@@ -583,18 +601,34 @@ export function ProjectsPanel() {
               />
               {/* Role filter hidden temporarily */}
               {/* Owner filter hidden temporarily */}
-              <Select
-                size="xs"
-                w={180}
-                placeholder="Any user"
-                value={userFilter}
-                onChange={setUserFilter}
-                data={userOptions}
-                leftSection={<TbUsers size={12} />}
-                searchable
-                clearable
-                nothingFoundMessage="No users"
-              />
+              {userFilterMode === 'avatar' ? (
+                <UserFilterStrip
+                  users={userList}
+                  value={userFilter}
+                  onChange={setUserFilter}
+                  onSwitchMode={() => setUserFilterMode('dropdown')}
+                />
+              ) : (
+                <Group gap={4} wrap="nowrap" align="center">
+                  <Select
+                    size="xs"
+                    w={180}
+                    placeholder="Any user"
+                    value={userFilter}
+                    onChange={setUserFilter}
+                    data={userOptions}
+                    leftSection={<TbUsers size={12} />}
+                    searchable
+                    clearable
+                    nothingFoundMessage="No users"
+                  />
+                  <Tooltip label="Tampilkan sebagai avatar" withArrow>
+                    <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setUserFilterMode('avatar')}>
+                      <TbLayoutGrid size={13} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              )}
               <Select
                 size="xs"
                 w={190}
@@ -1922,5 +1956,162 @@ export function ProjectsGanttView({
         </div>
       </Stack>
     </Card>
+  )
+}
+
+const MAX_AVATAR_VISIBLE = 10
+const AVATAR_SIZE = 24
+const AVATAR_OVERLAP = -7
+
+function UserFilterStrip({
+  users,
+  value,
+  onChange,
+  onSwitchMode,
+}: {
+  users: Array<{ id: string; name: string; image?: string | null }>
+  value: string | null
+  onChange: (id: string | null) => void
+  onSwitchMode: () => void
+}) {
+  const [overflowOpen, setOverflowOpen] = useState(false)
+  const visible = users.slice(0, MAX_AVATAR_VISIBLE)
+  const overflowUsers = users.slice(MAX_AVATAR_VISIBLE)
+  const overflow = overflowUsers.length
+
+  return (
+    <Group gap={0} wrap="nowrap" align="center">
+      {/* "All users" clear button */}
+      <Tooltip label="Semua user" withArrow>
+        <UnstyledButton onClick={() => onChange(null)} style={{ position: 'relative', zIndex: MAX_AVATAR_VISIBLE + 2 }}>
+          <Avatar
+            size={AVATAR_SIZE}
+            radius="xl"
+            variant={!value ? 'filled' : 'default'}
+            color="blue"
+            style={{
+              outline: !value ? '2px solid var(--mantine-color-blue-5)' : 'none',
+              outlineOffset: 1,
+              cursor: 'pointer',
+              border: '1.5px solid var(--mantine-color-body)',
+              transition: 'transform 0.1s',
+            }}
+          >
+            <TbUsers size={12} />
+          </Avatar>
+        </UnstyledButton>
+      </Tooltip>
+
+      {/* Overlapping avatar strip */}
+      {visible.map((u, i) => {
+        const isActive = value === u.id
+        const isDimmed = !!value && !isActive
+        return (
+          <Tooltip key={u.id} label={u.name} withArrow>
+            <UnstyledButton
+              onClick={() => onChange(isActive ? null : u.id)}
+              style={{
+                marginLeft: AVATAR_OVERLAP,
+                position: 'relative',
+                zIndex: isActive ? MAX_AVATAR_VISIBLE + 1 : i + 1,
+                transform: isActive ? 'scale(1.18) translateY(-1px)' : 'scale(1)',
+                transition: 'transform 0.1s, z-index 0s',
+              }}
+            >
+              <Avatar
+                src={u.image ?? undefined}
+                size={AVATAR_SIZE}
+                radius="xl"
+                color="blue"
+                style={{
+                  outline: isActive ? '2px solid var(--mantine-color-blue-5)' : 'none',
+                  outlineOffset: 1,
+                  opacity: isDimmed ? 0.38 : 1,
+                  cursor: 'pointer',
+                  border: '1.5px solid var(--mantine-color-body)',
+                  transition: 'opacity 0.1s',
+                }}
+              >
+                {u.name.slice(0, 2).toUpperCase()}
+              </Avatar>
+            </UnstyledButton>
+          </Tooltip>
+        )
+      })}
+
+      {/* Overflow popover */}
+      {overflow > 0 && (
+        <Popover opened={overflowOpen} onChange={setOverflowOpen} withArrow shadow="md" position="bottom-end">
+          <Popover.Target>
+            <Tooltip label={`+${overflow} user lainnya`} withArrow disabled={overflowOpen}>
+              <UnstyledButton
+                onClick={() => setOverflowOpen((o) => !o)}
+                style={{ marginLeft: AVATAR_OVERLAP, position: 'relative', zIndex: 0 }}
+              >
+                <Avatar
+                  size={AVATAR_SIZE}
+                  radius="xl"
+                  color="gray"
+                  variant="light"
+                  style={{
+                    cursor: 'pointer',
+                    border: '1.5px solid var(--mantine-color-body)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  +{overflow}
+                </Avatar>
+              </UnstyledButton>
+            </Tooltip>
+          </Popover.Target>
+          <Popover.Dropdown p="xs">
+            <Stack gap={6}>
+              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                User lainnya
+              </Text>
+              <Group gap={6} wrap="wrap" style={{ maxWidth: 220 }}>
+                {overflowUsers.map((u) => {
+                  const isActive = value === u.id
+                  return (
+                    <Tooltip key={u.id} label={u.name} withArrow>
+                      <UnstyledButton
+                        onClick={() => {
+                          onChange(isActive ? null : u.id)
+                          setOverflowOpen(false)
+                        }}
+                      >
+                        <Avatar
+                          src={u.image ?? undefined}
+                          size={30}
+                          radius="xl"
+                          color="blue"
+                          style={{
+                            outline: isActive ? '2px solid var(--mantine-color-blue-5)' : '2px solid transparent',
+                            outlineOffset: 1,
+                            opacity: value && !isActive ? 0.4 : 1,
+                            cursor: 'pointer',
+                            transition: 'opacity 0.1s',
+                          }}
+                        >
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </Avatar>
+                      </UnstyledButton>
+                    </Tooltip>
+                  )
+                })}
+              </Group>
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
+      )}
+
+      {/* Mode toggle */}
+      <Tooltip label="Ganti ke dropdown" withArrow>
+        <ActionIcon size="sm" variant="subtle" color="gray" onClick={onSwitchMode} style={{ marginLeft: 6 }}>
+          <TbLayoutList size={12} />
+        </ActionIcon>
+      </Tooltip>
+    </Group>
   )
 }

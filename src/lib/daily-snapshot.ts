@@ -43,8 +43,6 @@ export interface SnapshotRisks {
   pastDueProjects: number
   overdueTasks: number
   staleTasks: number
-  offlineAgents: number
-  pendingAgents: number
 }
 
 export interface DailySnapshotData {
@@ -116,8 +114,6 @@ export async function captureSnapshot(): Promise<DailySnapshotData> {
     pastDueProjects: risk.summary.pastDueProjects,
     overdueTasks: risk.summary.overdueTasks,
     staleTasks: risk.summary.staleTasks,
-    offlineAgents: risk.summary.offlineAgents,
-    pendingAgents: risk.summary.pendingAgents,
   }
 
   const snapshot = await prisma.dailySnapshot.upsert({

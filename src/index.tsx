@@ -173,13 +173,6 @@ async function cleanupAuditLogs() {
   if (count > 0) console.log(`[Audit] Cleaned up ${count} logs older than ${env.AUDIT_LOG_RETENTION_DAYS} days`)
 }
 
-async function cleanupWebhookLogs() {
-  const cutoff = new Date(Date.now() - env.WEBHOOK_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.webhookRequestLog.deleteMany({ where: { createdAt: { lt: cutoff } } })
-  if (count > 0)
-    console.log(`[Webhook] Cleaned up ${count} request logs older than ${env.WEBHOOK_LOG_RETENTION_DAYS} days`)
-}
-
 async function sweepDueTasks() {
   const { dueSoon, overdue } = await runDueSoonSweep()
   if (dueSoon || overdue) console.log(`[Notifications] dueSoon=${dueSoon} overdue=${overdue}`)
@@ -187,10 +180,8 @@ async function sweepDueTasks() {
 
 // Run on startup, then periodically
 cleanupAuditLogs().catch(console.error)
-cleanupWebhookLogs().catch(console.error)
 sweepDueTasks().catch(console.error)
 setInterval(() => cleanupAuditLogs().catch(console.error), 24 * 60 * 60 * 1000)
-setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
 
 import { appLog } from './lib/applog'

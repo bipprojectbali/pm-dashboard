@@ -72,7 +72,6 @@ import {
   TbUsers,
   TbWifi,
 } from 'react-icons/tb'
-import { AgentsPanel } from '@/frontend/components/AgentsPanel'
 import { AiSettingsPanel } from '@/frontend/components/AiSettingsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
@@ -84,19 +83,13 @@ import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
-import { WebhookMonitorPanel } from '@/frontend/components/WebhookMonitorPanel'
-import { WebhookTokensPanel } from '@/frontend/components/WebhookTokensPanel'
 import { type Role, useLogout, useSession } from '@/frontend/hooks/useAuth'
-import { useNavBadges } from '@/frontend/hooks/useNavBadges'
 import { usePresence } from '@/frontend/hooks/usePresence'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 
 const validTabs = [
   'overview',
   'users',
-  'agents',
-  'webhook-tokens',
-  'webhook-monitor',
   'app-logs',
   'user-logs',
   'database',
@@ -118,18 +111,6 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   users: {
     label: 'Pengguna',
     description: 'Manajemen user sistem — role, blok/unblok.',
-  },
-  agents: {
-    label: 'Agent pm-watch',
-    description: 'Approve, revoke, dan pantau liveness agent ActivityWatch.',
-  },
-  'webhook-tokens': {
-    label: 'Token Webhook',
-    description: 'DB-backed tokens untuk /webhooks/aw. Create → plaintext shown once.',
-  },
-  'webhook-monitor': {
-    label: 'Monitor Webhook',
-    description: 'Aktivitas webhook /webhooks/aw: success rate, failures, auth fails.',
   },
   'app-logs': {
     label: 'Log Aplikasi',
@@ -206,13 +187,10 @@ interface AdminUser {
   createdAt: string
 }
 
-type DevBadgeKey = 'pendingAgents' | 'webhookFail24h' | 'offlineAgents'
 type DevNavItem = {
   label: string
   icon: typeof TbLayoutDashboard
   key: TabKey
-  badgeKey?: DevBadgeKey
-  badgeColor?: string
 }
 type DevNavGroup = { label: string; items: DevNavItem[] }
 
@@ -222,20 +200,6 @@ const navGroups: DevNavGroup[] = [
     items: [
       { label: 'Ringkasan', icon: TbLayoutDashboard, key: 'overview' },
       { label: 'Pengguna', icon: TbUsers, key: 'users' },
-    ],
-  },
-  {
-    label: 'pm-watch',
-    items: [
-      { label: 'Agent', icon: TbDeviceDesktop, key: 'agents', badgeKey: 'pendingAgents', badgeColor: 'orange' },
-      { label: 'Token Webhook', icon: TbKey, key: 'webhook-tokens' },
-      {
-        label: 'Monitor Webhook',
-        icon: TbChartBar,
-        key: 'webhook-monitor',
-        badgeKey: 'webhookFail24h',
-        badgeColor: 'red',
-      },
     ],
   },
   {
@@ -278,7 +242,6 @@ function DevPage() {
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
-  const badges = useNavBadges(true)
   const scrollPositions = useRef<Partial<Record<TabKey, number>>>({})
   const previousTab = useRef<TabKey>(active)
   const setActive = (key: TabKey) => {
@@ -359,35 +322,17 @@ function DevPage() {
                 </Text>
               )}
               {group.items.map((item) => {
-                const badgeCount = item.badgeKey ? badges[item.badgeKey] : 0
                 if (collapsed && !isMobile) {
                   return (
-                    <Tooltip
-                      key={item.key}
-                      label={badgeCount > 0 ? `${item.label} (${badgeCount})` : item.label}
-                      position="right"
-                      withArrow
-                    >
-                      <div style={{ position: 'relative' }}>
-                        <ActionIcon
-                          variant={active === item.key ? 'filled' : 'subtle'}
-                          color={active === item.key ? 'red' : 'gray'}
-                          size="lg"
-                          onClick={() => setActive(item.key)}
-                        >
-                          <item.icon size={18} />
-                        </ActionIcon>
-                        {badgeCount > 0 && (
-                          <Badge
-                            size="xs"
-                            color={item.badgeColor ?? 'red'}
-                            variant="filled"
-                            style={{ position: 'absolute', top: -4, right: -4, pointerEvents: 'none' }}
-                          >
-                            {badgeCount > 99 ? '99+' : badgeCount}
-                          </Badge>
-                        )}
-                      </div>
+                    <Tooltip key={item.key} label={item.label} position="right" withArrow>
+                      <ActionIcon
+                        variant={active === item.key ? 'filled' : 'subtle'}
+                        color={active === item.key ? 'red' : 'gray'}
+                        size="lg"
+                        onClick={() => setActive(item.key)}
+                      >
+                        <item.icon size={18} />
+                      </ActionIcon>
                     </Tooltip>
                   )
                 }
@@ -396,15 +341,7 @@ function DevPage() {
                     key={item.key}
                     label={item.label}
                     leftSection={<item.icon size={18} />}
-                    rightSection={
-                      badgeCount > 0 ? (
-                        <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
-                          {badgeCount > 99 ? '99+' : badgeCount}
-                        </Badge>
-                      ) : (
-                        <TbChevronRight size={14} />
-                      )
-                    }
+                    rightSection={<TbChevronRight size={14} />}
                     color="red"
                     active={active === item.key}
                     onClick={() => setActive(item.key)}
@@ -440,9 +377,6 @@ function DevPage() {
             <SectionErrorBoundary key={active} label={active}>
               {active === 'overview' && <OverviewPanel />}
               {active === 'users' && <UsersPanel />}
-              {active === 'agents' && <AgentsPanel />}
-              {active === 'webhook-tokens' && <WebhookTokensPanel />}
-              {active === 'webhook-monitor' && <WebhookMonitorPanel />}
               {active === 'app-logs' && <AppLogsPanel />}
               {active === 'user-logs' && <AuditLogsPanel />}
               {active === 'database' && <DatabasePanel />}
@@ -3350,24 +3284,13 @@ const ENTITY_OPTIONS = [
   },
   { key: 'tags', label: 'Tags', description: 'Tag per project.' },
   { key: 'milestones', label: 'Milestones', description: 'Milestone per project.' },
-  { key: 'agents', label: 'Agents', description: 'Agent pm-watch (tanpa events).' },
-  {
-    key: 'activityEvents',
-    label: 'Activity Events (7 hari)',
-    description: 'Events pm-watch 7 hari terakhir. Bisa besar.',
-  },
-  {
-    key: 'webhookTokens',
-    label: 'Webhook Tokens',
-    description: 'Token metadata saja. Hash tidak di-sync — token tidak bisa digunakan.',
-  },
 ] as const
 
 type EntityKey = (typeof ENTITY_OPTIONS)[number]['key']
 
 const LS_URL = 'dev:sync:url'
 const LS_ENTITIES = 'dev:sync:entities'
-const DEFAULT_ENTITIES: EntityKey[] = ['users', 'projects', 'tasks', 'tags', 'milestones', 'agents']
+const DEFAULT_ENTITIES: EntityKey[] = ['users', 'projects', 'tasks', 'tags', 'milestones']
 
 function SyncPanel() {
   const [url, setUrl] = useState<string>(() => localStorage.getItem(LS_URL) ?? 'https://pm-dashboard.wibudev.com')

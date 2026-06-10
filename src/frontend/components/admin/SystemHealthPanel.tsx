@@ -5,11 +5,9 @@ import {
   TbAlertTriangle,
   TbCheck,
   TbDatabase,
-  TbPlugConnected,
   TbRefresh,
   TbServer,
   TbShieldLock,
-  TbWebhook,
 } from 'react-icons/tb'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 
@@ -22,21 +20,9 @@ interface HealthResponse {
     redis: ServiceStatus
   }
   sessions: { total: number; active: number; online: number }
-  agents: { total: number; pending: number; approved: number; revoked: number; live: number }
-  webhooks: {
-    total24h: number
-    success24h: number
-    fail24h: number
-    authFail24h: number
-    eventsIn24h: number
-    successRate: number | null
-    activeTokens: number
-  }
   retention: {
     auditLogDays: number
     auditLogCount: number
-    webhookLogDays: number
-    webhookLogCount: number
   }
   env: { key: string; set: boolean; required: boolean; note?: string }[]
 }
@@ -60,7 +46,7 @@ export function SystemHealthPanel() {
             <Title order={3}>System Health</Title>
             <InfoTip
               width={360}
-              label="Status realtime infrastruktur: database, redis, agent pm-watch, webhook, sesi, retensi log, env vars. Endpoint: GET /api/admin/health, poll 20 detik."
+              label="Status realtime infrastruktur: database, redis, sesi aktif, retensi log, dan env vars. Endpoint: GET /api/admin/health, poll 20 detik."
             />
           </Group>
           <Text size="sm" c="dimmed">
@@ -111,108 +97,6 @@ export function SystemHealthPanel() {
         <Card withBorder padding="md" radius="md">
           <Stack gap="sm">
             <Group gap="xs">
-              <TbPlugConnected size={16} />
-              <Title order={5}>Agents</Title>
-              <InfoTip
-                width={340}
-                label="Agent pm-watch (ActivityWatch). Live = APPROVED + heartbeat <5 menit. Pending = belum di-approve (tidak bisa kirim event). Revoked = sudah di-off (event ditolak)."
-              />
-            </Group>
-            <SimpleGrid cols={2} spacing="xs">
-              <Stat
-                label="Live (5m)"
-                value={data?.agents.live ?? '—'}
-                color="teal"
-                tip="Agent APPROVED dengan lastSeenAt < 5 menit lalu. Sedang kirim event = online dan healthy."
-              />
-              <Stat
-                label="Approved"
-                value={data?.agents.approved ?? '—'}
-                color="blue"
-                tip="Total agent berstatus APPROVED (boleh kirim event). Termasuk yang offline."
-              />
-              <Stat
-                label="Pending"
-                value={data?.agents.pending ?? '—'}
-                color={data && data.agents.pending > 0 ? 'orange' : 'dimmed'}
-                tip="Agent yang sudah register tapi belum di-approve admin. Event dari agent ini ditolak sampai di-approve."
-              />
-              <Stat
-                label="Revoked"
-                value={data?.agents.revoked ?? '—'}
-                color="dimmed"
-                tip="Agent yang sudah di-revoke. Event ditolak (403). Revoke bisa di-undo dari panel Agents."
-              />
-            </SimpleGrid>
-          </Stack>
-        </Card>
-
-        <Card withBorder padding="md" radius="md">
-          <Stack gap="sm">
-            <Group gap="xs">
-              <TbWebhook size={16} />
-              <Title order={5}>Webhooks (24h)</Title>
-              <InfoTip
-                width={340}
-                label="Aktivitas endpoint /webhooks/aw (pm-watch) dalam 24 jam terakhir. Data dari tabel WebhookRequestLog."
-              />
-            </Group>
-            <SimpleGrid cols={2} spacing="xs">
-              <Stat
-                label="Requests"
-                value={data?.webhooks.total24h ?? '—'}
-                color="blue"
-                tip="Total HTTP request ke /webhooks/aw (success + fail + auth-fail) dalam 24 jam."
-              />
-              <Stat
-                label="Success rate"
-                value={
-                  data?.webhooks.successRate !== null && data?.webhooks.successRate !== undefined
-                    ? `${data.webhooks.successRate}%`
-                    : '—'
-                }
-                color={
-                  data?.webhooks.successRate !== null && data?.webhooks.successRate !== undefined
-                    ? data.webhooks.successRate >= 95
-                      ? 'teal'
-                      : data.webhooks.successRate >= 80
-                        ? 'orange'
-                        : 'red'
-                    : 'dimmed'
-                }
-                tip="success24h / total24h × 100. ≥95% = healthy, 80–95% = warning, <80% = investigate (agent bermasalah atau endpoint error)."
-              />
-              <Stat
-                label="Failures"
-                value={data?.webhooks.fail24h ?? '—'}
-                color={data && data.webhooks.fail24h > 0 ? 'red' : 'dimmed'}
-                tip="Request yang dibalas 4xx/5xx (selain auth fail). Mis. 413 = payload terlalu besar, 400 = JSON invalid, 500 = error internal."
-              />
-              <Stat
-                label="Auth fails"
-                value={data?.webhooks.authFail24h ?? '—'}
-                color={data && data.webhooks.authFail24h > 0 ? 'red' : 'dimmed'}
-                tip="Request dengan token tidak valid / expired / revoked (HTTP 403). Jika tinggi, ada agent pakai token salah atau token sudah di-rotate."
-              />
-              <Stat
-                label="Events in"
-                value={data?.webhooks.eventsIn24h ?? '—'}
-                color="violet"
-                tip="Total ActivityEvent baru yang masuk lewat webhook (setelah dedup). Proxy untuk volume aktivitas tim."
-              />
-              <Stat
-                label="Active tokens"
-                value={data?.webhooks.activeTokens ?? '—'}
-                color="blue"
-                tip="WebhookToken dengan status ACTIVE (bukan DISABLED/REVOKED). Token yang bisa pakai untuk authenticate webhook."
-              />
-            </SimpleGrid>
-          </Stack>
-        </Card>
-
-        <Card withBorder padding="md" radius="md">
-          <Stack gap="sm">
-            <Group gap="xs">
               <TbActivity size={16} />
               <Title order={5}>Sessions</Title>
               <InfoTip
@@ -250,21 +134,15 @@ export function SystemHealthPanel() {
               <Title order={5}>Log Retention</Title>
               <InfoTip
                 width={340}
-                label="Retensi log di DB. Auto-cleanup menghapus row lebih tua dari window. Jalan saat startup + setiap 24 jam. Dikendalikan env AUDIT_LOG_RETENTION_DAYS (default 90) dan WEBHOOK_LOG_RETENTION_DAYS (default 7)."
+                label="Retensi log audit di DB. Auto-cleanup menghapus row lebih tua dari window. Jalan saat startup + setiap 24 jam. Dikendalikan env AUDIT_LOG_RETENTION_DAYS (default 90)."
               />
             </Group>
-            <SimpleGrid cols={2} spacing="xs">
+            <SimpleGrid cols={1} spacing="xs">
               <Stat
                 label={`Audit (${data?.retention.auditLogDays ?? '—'}d)`}
                 value={data?.retention.auditLogCount ?? '—'}
                 color="blue"
                 tip="Jumlah AuditLog rows saat ini. Menyimpan login/role change/block untuk compliance. Window dari AUDIT_LOG_RETENTION_DAYS."
-              />
-              <Stat
-                label={`Webhook (${data?.retention.webhookLogDays ?? '—'}d)`}
-                value={data?.retention.webhookLogCount ?? '—'}
-                color="violet"
-                tip="Jumlah WebhookRequestLog rows saat ini. Setiap request /webhooks/aw log 1 row. Window pendek karena volume tinggi."
               />
             </SimpleGrid>
             <Text size="xs" c="dimmed">

@@ -4,13 +4,11 @@
 //   - Compatible with any OpenAI-compatible API (OpenRouter, OpenAI, dll)
 //   - Settings: embedding.apiKey, embedding.baseUrl, embedding.model
 //
-// Coverage: user, task, project, event, comment, github_project, effort_user,
-// effort_task, ghost_task, milestone, extension, dependency, evidence,
-// audit_recent, agent_status, report_history, project_retro.
+// Coverage: user, task, project, event, comment, github_project, milestone,
+// extension, dependency, evidence, audit_recent, report_history, project_retro.
 
 import { getSetting } from './app-settings'
 import { prisma } from './db'
-import { computePhantomWork, detectGhostTasks, effortReport } from './effort'
 import { isExtensionEnabled } from './extensions'
 import { computeProjectGithubSummary } from './github-summary'
 import { computeRetro, renderRetroMarkdown } from './retro'
@@ -649,75 +647,6 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
     )
   }
 
-  // ── Effort per user (aggregate, last 7 days) ──────────────────────────────
-  const phantom = await computePhantomWork({ days: 7, limit: 50 })
-  for (const row of phantom) {
-    const user = await prisma.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true } })
-    if (!user) continue
-    const content = [
-      `[EFFORT-USER] ${user.name} (${user.email}) — 7 hari terakhir`,
-      `Total tracked aktivitas: ${row.totalHours}h`,
-      `Terhubung ke task: ${row.trackedHours}h`,
-      `Phantom (tidak ke task manapun): ${row.phantomHours}h${row.phantomPercent != null ? ` (${row.phantomPercent}%)` : ''}`,
-      `Task open saat ini: ${row.openTaskCount}`,
-    ].join('\n')
-    await upsertDoc(
-      { type: 'effort_user', entityId: row.userId, title: `Effort: ${user.name}`, content, tags: 'effort,phantom' },
-      embSettings ?? undefined,
-      counters,
-    )
-  }
-
-  // ── Effort per task (over/under-budget only) ──────────────────────────────
-  const effort = await effortReport({ onlyClosed: false, limit: 200 })
-  for (const row of effort) {
-    if (row.verdict !== 'over' && row.verdict !== 'under') continue
-    const content = [
-      `[EFFORT-TASK] ${row.title}`,
-      `Proyek: ${row.projectName} | Assignee: ${row.assigneeEmail ?? 'Unassigned'}`,
-      `Status: ${row.status} | Priority: ${row.priority}`,
-      `Estimasi: ${row.estimateHours ?? '?'}h | Aktual: ${row.actualHours}h | Variance: ${row.variancePercent != null ? `${row.variancePercent}%` : '?'}`,
-      `Verdict: ${row.verdict === 'over' ? 'OVERBUDGET' : 'UNDERBUDGET'}`,
-    ].join('\n')
-    await upsertDoc(
-      {
-        type: 'effort_task',
-        entityId: row.taskId,
-        title: `Effort: ${row.title}`,
-        content,
-        tags: `effort,${row.verdict}`,
-        projectId: row.projectId,
-      },
-      embSettings ?? undefined,
-      counters,
-    )
-  }
-
-  // ── Ghost tasks (stale IN_PROGRESS) ───────────────────────────────────────
-  const ghosts = await detectGhostTasks({ staleDays: 5, limit: 100 })
-  for (const g of ghosts) {
-    const content = [
-      `[GHOST-TASK] ${g.title}`,
-      `Proyek: ${g.projectName} | Assignee: ${g.assigneeEmail ?? 'Unassigned'}`,
-      `Status: ${g.status} | Priority: ${g.priority}`,
-      `Stale: ${g.daysStale} hari tanpa update`,
-      `Aktivitas 7h terakhir: ${g.actualHoursLast7d}h`,
-      `Assignee online 24h: ${g.assigneeOnlineLast24h ? 'ya' : 'tidak'}`,
-    ].join('\n')
-    await upsertDoc(
-      {
-        type: 'ghost_task',
-        entityId: g.taskId,
-        title: `Ghost: ${g.title}`,
-        content,
-        tags: 'ghost,stale',
-        projectId: g.projectId,
-      },
-      embSettings ?? undefined,
-      counters,
-    )
-  }
-
   // ── Milestones (semua, mendatang & lewat) ─────────────────────────────────
   const milestones = await prisma.projectMilestone.findMany({
     where: since ? { updatedAt: { gte: since } } : {},
@@ -885,39 +814,6 @@ export async function syncChatDocuments(opts: { full?: boolean } = {}): Promise<
     )
   }
 
-  // ── Agent status (pm-watch) ───────────────────────────────────────────────
-  const agents = await prisma.agent.findMany({
-    where: since ? { updatedAt: { gte: since } } : {},
-    include: { claimedBy: { select: { name: true, email: true } } },
-    take: 200,
-  })
-  for (const ag of agents) {
-    const lastSeenDays = ag.lastSeenAt ? daysAgo(ag.lastSeenAt) : null
-    const onlineLabel =
-      lastSeenDays === null
-        ? 'belum pernah online'
-        : lastSeenDays < 1
-          ? 'online <24 jam'
-          : `terakhir ${lastSeenDays} hari lalu`
-    const content = [
-      `[AGENT] ${ag.agentId} — ${ag.status}`,
-      `Host: ${ag.hostname} (${ag.osUser})`,
-      ag.claimedBy ? `Diklaim oleh: ${ag.claimedBy.name} (${ag.claimedBy.email})` : 'Belum diklaim',
-      `Aktivitas: ${onlineLabel}`,
-    ].join('\n')
-    await upsertDoc(
-      {
-        type: 'agent_status',
-        entityId: ag.id,
-        title: `Agent: ${ag.agentId}`,
-        content,
-        tags: ag.status.toLowerCase(),
-      },
-      embSettings ?? undefined,
-      counters,
-    )
-  }
-
   // ── Report history (laporan harian Telegram — 30d) ────────────────────────
   const reports = await prisma.reportHistory.findMany({
     where: { sentAt: { gte: since ?? cutoff30d } },
@@ -1074,37 +970,6 @@ async function pruneOrphanDocs(): Promise<number> {
     return ids
   })
 
-  // effort_user: prune kalau user blocked/hilang
-  total += await pruneByType('effort_user', async () => {
-    const ids = (await prisma.user.findMany({ where: { blocked: false }, select: { id: true } })).map((u) => u.id)
-    return ids
-  })
-
-  // effort_task: prune kalau task tidak ada / sudah CLOSED lama
-  total += await pruneByType('effort_task', async () => {
-    const ids = (
-      await prisma.task.findMany({
-        where: {
-          deletedAt: null,
-          OR: [{ status: { notIn: ['CLOSED'] } }, { closedAt: { gte: closed180d } }],
-        },
-        select: { id: true },
-      })
-    ).map((t) => t.id)
-    return ids
-  })
-
-  // ghost_task: prune kalau task tidak ada lagi
-  total += await pruneByType('ghost_task', async () => {
-    const ids = (
-      await prisma.task.findMany({
-        where: { deletedAt: null, status: { notIn: ['CLOSED'] } },
-        select: { id: true },
-      })
-    ).map((t) => t.id)
-    return ids
-  })
-
   // milestone: prune kalau milestone tidak ada
   total += await pruneByType('milestone', async () => {
     const ids = (await prisma.projectMilestone.findMany({ select: { id: true } })).map((m) => m.id)
@@ -1139,12 +1004,6 @@ async function pruneOrphanDocs(): Promise<number> {
         select: { id: true },
       })
     ).map((a) => a.id)
-    return ids
-  })
-
-  // agent_status: prune kalau agent dihapus
-  total += await pruneByType('agent_status', async () => {
-    const ids = (await prisma.agent.findMany({ select: { id: true } })).map((a) => a.id)
     return ids
   })
 

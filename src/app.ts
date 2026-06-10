@@ -4,7 +4,6 @@ import { Elysia } from 'elysia'
 import pkg from '../package.json' with { type: 'json' }
 import { appLog } from './lib/applog'
 import { broadcastToAdmins } from './lib/presence'
-import { activityRoutes } from './routes/activity.route'
 import { adminRoutes } from './routes/admin.route'
 import { authRoutes } from './routes/auth.route'
 import { eventsRoutes } from './routes/events.route'
@@ -78,7 +77,6 @@ export function createApp() {
     .use(qcRoutes())
     .use(projectsRoutes())
     .use(tasksRoutes())
-    .use(activityRoutes())
     .use(meRoutes())
     .use(webhooksRoutes())
     .use(settingsRoutes())

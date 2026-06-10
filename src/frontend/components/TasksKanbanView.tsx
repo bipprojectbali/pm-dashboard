@@ -1,10 +1,9 @@
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
-import { ActionIcon, Badge, Button, Card, Group, Stack, Text, ThemeIcon, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Group, Pagination, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  TbAlertTriangle,
   TbArrowsMaximize,
   TbArrowsMinimize,
   TbCheck,
@@ -116,75 +115,115 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-const KANBAN_PAGE = 20
-const API_CEIL = 500
+const KANBAN_COL_SIZE = 20
+
+interface KanbanFilters {
+  kind?: string | null
+  mine?: boolean
+  tagId?: string | null
+  search?: string
+  priority?: string | null
+}
 
 export function TasksKanbanView({
-  tasks,
+  projectId,
+  filters,
   canWrite,
   onSelect,
-  totalFetched,
-  filterKey,
   onDeleteOne,
   onDeleteSelected,
   canDeleteTask,
 }: {
-  tasks: TaskListItem[]
+  projectId: string | null
+  filters: KanbanFilters
   canWrite: boolean
   onSelect: (id: string) => void
-  totalFetched?: number
-  filterKey?: string
   onDeleteOne?: (task: TaskListItem) => void
   onDeleteSelected?: (ids: string[]) => void
   canDeleteTask?: (task: TaskListItem) => boolean
 }) {
   const qc = useQueryClient()
-  // cols: per-kolom array, persis apa yang di-render.
-  // Di-init dan di-sync dari tasks prop (server data sudah terurut by kanbanOrder).
-  // Tidak perlu optimistic state — setelah drop kita langsung update DB,
-  // lalu refetch mengembalikan urutan yang sudah tersimpan.
-  const buildCols = useCallback((src: TaskListItem[]): Record<TaskStatus, TaskListItem[]> => {
-    const m: Record<TaskStatus, TaskListItem[]> = {
-      OPEN: [],
-      IN_PROGRESS: [],
-      READY_FOR_QC: [],
-      REOPENED: [],
-      CLOSED: [],
-    }
-    for (const t of src) m[t.status].push(t)
-    return m
-  }, [])
-  const [cols, setCols] = useState<Record<TaskStatus, TaskListItem[]>>(() => buildCols(tasks))
 
-  // Sync cols from server whenever tasks prop changes (after refetch)
-  const prevTasksRef = useRef(tasks)
-  useEffect(() => {
-    if (prevTasksRef.current === tasks) return
-    prevTasksRef.current = tasks
-    setCols(buildCols(tasks))
-  }, [tasks, buildCols])
-
-  // Per-column current page (0-indexed).
-  // Reset hanya saat filterKey berubah (project/status/search ganti),
-  // bukan saat drag-drop — safePage clamp handle out-of-range otomatis.
-  const [colPage, setColPage] = useState<Record<TaskStatus, number>>({
+  const [colOffset, setColOffset] = useState<Record<TaskStatus, number>>({
     OPEN: 0,
     IN_PROGRESS: 0,
     READY_FOR_QC: 0,
     REOPENED: 0,
     CLOSED: 0,
   })
-  const prevFilterKeyRef = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    if (filterKey === undefined || filterKey === prevFilterKeyRef.current) return
-    prevFilterKeyRef.current = filterKey
-    setColPage({ OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0 })
-    setSelectedIds(new Set())
-    setSelectMode(false)
-  }, [filterKey])
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
+  const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
+    key: 'pm:kanban:col-hidden',
+    defaultValue: {},
+  })
+  const [colMax, setColMax] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
+    key: 'pm:kanban:col-max',
+    defaultValue: {},
+  })
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
+
+  const buildColParams = (status: TaskStatus, offset: number): string => {
+    const p = new URLSearchParams({ status, limit: String(KANBAN_COL_SIZE), offset: String(offset) })
+    if (projectId) p.set('projectId', projectId)
+    if (filters.kind) p.set('kind', filters.kind)
+    if (filters.mine) p.set('mine', '1')
+    if (filters.tagId) p.set('tagId', filters.tagId)
+    if (filters.search) p.set('search', filters.search)
+    if (filters.priority) p.set('priority', filters.priority)
+    return p.toString()
+  }
+
+  const openQ = useQuery({
+    queryKey: ['tasks-kanban', 'OPEN', projectId, filters, colOffset.OPEN],
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number }>(`/api/tasks?${buildColParams('OPEN', colOffset.OPEN)}`),
+    staleTime: 30_000,
+  })
+  const inProgQ = useQuery({
+    queryKey: ['tasks-kanban', 'IN_PROGRESS', projectId, filters, colOffset.IN_PROGRESS],
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number }>(
+        `/api/tasks?${buildColParams('IN_PROGRESS', colOffset.IN_PROGRESS)}`,
+      ),
+    staleTime: 30_000,
+  })
+  const readyQ = useQuery({
+    queryKey: ['tasks-kanban', 'READY_FOR_QC', projectId, filters, colOffset.READY_FOR_QC],
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number }>(
+        `/api/tasks?${buildColParams('READY_FOR_QC', colOffset.READY_FOR_QC)}`,
+      ),
+    staleTime: 30_000,
+  })
+  const reopenedQ = useQuery({
+    queryKey: ['tasks-kanban', 'REOPENED', projectId, filters, colOffset.REOPENED],
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number }>(`/api/tasks?${buildColParams('REOPENED', colOffset.REOPENED)}`),
+    staleTime: 30_000,
+  })
+  const closedQ = useQuery({
+    queryKey: ['tasks-kanban', 'CLOSED', projectId, filters, colOffset.CLOSED],
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number }>(`/api/tasks?${buildColParams('CLOSED', colOffset.CLOSED)}`),
+    staleTime: 30_000,
+  })
+
+  const COL_QUERIES = {
+    OPEN: openQ,
+    IN_PROGRESS: inProgQ,
+    READY_FOR_QC: readyQ,
+    REOPENED: reopenedQ,
+    CLOSED: closedQ,
+  } as const
+
+  // Reset column offsets and selection when projectId or any filter changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on filter identity
+  useEffect(() => {
+    setColOffset({ OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0 })
+    setSelectedIds(new Set())
+    setSelectMode(false)
+  }, [projectId, filters.kind, filters.mine, filters.tagId, filters.search, filters.priority])
 
   const exitSelect = useCallback(() => {
     setSelectedIds(new Set())
@@ -199,147 +238,131 @@ export function TasksKanbanView({
     return () => window.removeEventListener('keydown', onKey)
   }, [exitSelect])
 
-  const isMaybeTruncated = (totalFetched ?? 0) >= API_CEIL
-
-  const [colHidden, setColHidden] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
-    key: 'pm:kanban:col-hidden',
-    defaultValue: {},
-  })
-  const [colMax, setColMax] = useLocalStorage<Partial<Record<TaskStatus, boolean>>>({
-    key: 'pm:kanban:col-max',
-    defaultValue: {},
-  })
-
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
-  const draggingTask = draggingTaskId
-    ? Object.values(cols)
-        .flat()
-        .find((t) => t.id === draggingTaskId)
-    : null
+  const allVisibleTasks = KANBAN_COLUMNS.flatMap((col) => COL_QUERIES[col.status].data?.tasks ?? [])
+  const draggingTask = draggingTaskId ? allVisibleTasks.find((t) => t.id === draggingTaskId) : null
   const allowedTargets = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
 
   const toggleHidden = (s: TaskStatus) => setColHidden((p) => ({ ...p, [s]: !p[s] }))
   const toggleMax = (s: TaskStatus) => setColMax((p) => ({ ...p, [s]: !p[s] }))
 
-  const handleDragEnd = useCallback(
-    (result: import('@hello-pangea/dnd').DropResult) => {
-      setDraggingTaskId(null)
-      const { source, destination, draggableId, reason } = result
+  const handleDragEnd = (result: import('@hello-pangea/dnd').DropResult) => {
+    setDraggingTaskId(null)
+    const { source, destination, draggableId, reason } = result
 
-      if (reason === 'CANCEL' || !destination) return
-      if (source.droppableId === destination.droppableId && source.index === destination.index) return
+    if (reason === 'CANCEL' || !destination) return
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
-      const srcStatus = source.droppableId as TaskStatus
-      const dstStatus = destination.droppableId as TaskStatus
+    const srcStatus = source.droppableId as TaskStatus
+    const dstStatus = destination.droppableId as TaskStatus
 
-      const allTasks = Object.values(cols).flat()
-      const primaryTask = allTasks.find((t) => t.id === draggableId)
-      if (!primaryTask) return
+    const allTasks = KANBAN_COLUMNS.flatMap((col) => COL_QUERIES[col.status].data?.tasks ?? [])
+    const primaryTask = allTasks.find((t) => t.id === draggableId)
+    if (!primaryTask) return
 
-      // Multi-drag: dragged card is in selection and selection has >1 task
-      const isMulti = selectedIds.has(draggableId) && selectedIds.size > 1
-      const tasksToMove = isMulti
-        ? allTasks.filter((t) => selectedIds.has(t.id) && kanbanAllowed(t.status, t.kind).includes(dstStatus))
-        : [primaryTask]
+    const isMulti = selectedIds.has(draggableId) && selectedIds.size > 1
+    const tasksToMove = isMulti
+      ? allTasks.filter((t) => selectedIds.has(t.id) && kanbanAllowed(t.status, t.kind).includes(dstStatus))
+      : [primaryTask]
 
-      const movedIds = new Set(tasksToMove.map((t) => t.id))
-      // Track original statuses before mutation so we know which columns were affected
-      const originalStatusOf = new Map(tasksToMove.map((t) => [t.id, t.status]))
+    const movedIds = new Set(tasksToMove.map((t) => t.id))
+    const originalStatusOf = new Map(tasksToMove.map((t) => [t.id, t.status]))
 
-      let newCols: Record<TaskStatus, TaskListItem[]> | null = null
-      setCols((prev) => {
-        const next: Record<TaskStatus, TaskListItem[]> = {
-          OPEN: [...prev.OPEN],
-          IN_PROGRESS: [...prev.IN_PROGRESS],
-          READY_FOR_QC: [...prev.READY_FOR_QC],
-          REOPENED: [...prev.REOPENED],
-          CLOSED: [...prev.CLOSED],
-        }
+    if (isMulti) setSelectedIds(new Set())
 
-        if (!isMulti) {
-          // Original single-task logic — unchanged
-          const [moved] = next[srcStatus].splice(source.index, 1)
-          if (!moved) return prev
-          if (srcStatus !== dstStatus) {
-            const allowed = kanbanAllowed(srcStatus, moved.kind)
-            if (!allowed.includes(dstStatus)) {
-              next[srcStatus].splice(source.index, 0, moved)
-              return prev
-            }
-            next[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
-          } else {
-            next[dstStatus].splice(destination.index, 0, moved)
-          }
-        } else {
-          // Multi-drag: pull all selected tasks out of their current columns first
-          for (const status of Object.keys(next) as TaskStatus[]) {
-            next[status] = next[status].filter((t) => !movedIds.has(t.id))
-          }
-          // Insert at drop index: primary card first, then the rest in original order
-          const others = tasksToMove.filter((t) => t.id !== draggableId)
-          next[dstStatus].splice(
-            destination.index,
-            0,
-            { ...primaryTask, status: dstStatus },
-            ...others.map((t) => ({ ...t, status: dstStatus })),
-          )
-        }
+    // Build tentative column state for optimistic cache update
+    const tentativeCols: Record<TaskStatus, TaskListItem[]> = {
+      OPEN: [...(COL_QUERIES.OPEN.data?.tasks ?? [])],
+      IN_PROGRESS: [...(COL_QUERIES.IN_PROGRESS.data?.tasks ?? [])],
+      READY_FOR_QC: [...(COL_QUERIES.READY_FOR_QC.data?.tasks ?? [])],
+      REOPENED: [...(COL_QUERIES.REOPENED.data?.tasks ?? [])],
+      CLOSED: [...(COL_QUERIES.CLOSED.data?.tasks ?? [])],
+    }
 
-        newCols = next
-        return next
-      })
+    if (!isMulti) {
+      const [moved] = tentativeCols[srcStatus].splice(source.index, 1)
+      if (!moved) return
+      if (srcStatus !== dstStatus) {
+        const allowed = kanbanAllowed(srcStatus, moved.kind)
+        if (!allowed.includes(dstStatus)) return
+        tentativeCols[dstStatus].splice(destination.index, 0, { ...moved, status: dstStatus })
+      } else {
+        tentativeCols[dstStatus].splice(destination.index, 0, moved)
+      }
+    } else {
+      for (const status of Object.keys(tentativeCols) as TaskStatus[]) {
+        tentativeCols[status] = tentativeCols[status].filter((t) => !movedIds.has(t.id))
+      }
+      const others = tasksToMove.filter((t) => t.id !== draggableId)
+      tentativeCols[dstStatus].splice(
+        destination.index,
+        0,
+        { ...primaryTask, status: dstStatus },
+        ...others.map((t) => ({ ...t, status: dstStatus })),
+      )
+    }
 
-      if (isMulti) setSelectedIds(new Set())
+    const affectedStatuses = isMulti
+      ? new Set<TaskStatus>([...(originalStatusOf.values() as unknown as TaskStatus[]), dstStatus])
+      : new Set<TaskStatus>(srcStatus === dstStatus ? [srcStatus] : [srcStatus, dstStatus])
 
-      setTimeout(() => {
-        if (!newCols) return
-        const updates: Array<{ id: string; kanbanOrder: number; status?: string }> = []
-        const affectedStatuses = isMulti
-          ? new Set<TaskStatus>([...(originalStatusOf.values() as unknown as TaskStatus[]), dstStatus])
-          : new Set<TaskStatus>(srcStatus === dstStatus ? [srcStatus] : [srcStatus, dstStatus])
-
-        for (const status of affectedStatuses) {
-          newCols[status].forEach((t, idx) => {
-            updates.push({
-              id: t.id,
-              kanbanOrder: idx,
-              ...(movedIds.has(t.id) && originalStatusOf.get(t.id) !== dstStatus ? { status: dstStatus } : {}),
-            })
-          })
-        }
-
-        api('/api/tasks/reorder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates }),
+    // Optimistic cache update so cards don't snap back before API response
+    for (const status of affectedStatuses) {
+      const currentData = COL_QUERIES[status].data
+      if (currentData) {
+        qc.setQueryData(['tasks-kanban', status, projectId, filters, colOffset[status]], {
+          ...currentData,
+          tasks: tentativeCols[status],
         })
-          .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-          .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-      }, 0)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    },
-    [qc, cols, selectedIds],
-  )
+      }
+    }
+
+    // Build reorder payload
+    const updates: Array<{ id: string; kanbanOrder: number; status?: string }> = []
+    for (const status of affectedStatuses) {
+      tentativeCols[status].forEach((t, idx) => {
+        updates.push({
+          id: t.id,
+          kanbanOrder: idx,
+          ...(movedIds.has(t.id) && originalStatusOf.get(t.id) !== dstStatus ? { status: dstStatus } : {}),
+        })
+      })
+    }
+
+    setTimeout(() => {
+      api('/api/tasks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+        .then(() => {
+          for (const s of affectedStatuses) {
+            qc.invalidateQueries({ queryKey: ['tasks-kanban', s, projectId] })
+          }
+          qc.invalidateQueries({ queryKey: ['tasks'] })
+        })
+        .catch(() => {
+          for (const s of KANBAN_COLUMNS.map((c) => c.status)) {
+            qc.invalidateQueries({ queryKey: ['tasks-kanban', s, projectId] })
+          }
+          qc.invalidateQueries({ queryKey: ['tasks'] })
+        })
+    }, 0)
+  }
 
   const gridCols = KANBAN_COLUMNS.map((col) =>
     colHidden[col.status] ? '44px' : colMax[col.status] ? 'minmax(360px, 2fr)' : 'minmax(240px, 1fr)',
   ).join(' ')
 
-  const allTaskIds = Object.values(cols)
-    .flat()
-    .map((t) => t.id)
+  const allTaskIds = allVisibleTasks.map((t) => t.id)
   const allSelected = allTaskIds.length > 0 && allTaskIds.every((id) => selectedIds.has(id))
   const deletableSelectedIds = Array.from(selectedIds).filter((id) => {
-    const t = Object.values(cols)
-      .flat()
-      .find((x) => x.id === id)
+    const t = allVisibleTasks.find((x) => x.id === id)
     return t && canDeleteTask ? canDeleteTask(t) : !!t
   })
 
   return (
     <>
       <Group mb={8} justify="space-between" align="center">
-        {/* Kiri: info pilihan (hanya muncul saat ada pilihan atau selectMode aktif) */}
         <Group gap={6} align="center">
           {selectMode || selectedIds.size > 0 ? (
             <>
@@ -384,7 +407,6 @@ export function TasksKanbanView({
           )}
         </Group>
 
-        {/* Kanan: tombol masuk/keluar select mode */}
         <Button
           size="compact-xs"
           variant={selectMode ? 'filled' : 'light'}
@@ -401,18 +423,13 @@ export function TasksKanbanView({
       <DragDropContext onDragStart={(initial) => setDraggingTaskId(initial.draggableId)} onDragEnd={handleDragEnd}>
         <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 12, overflowX: 'auto' }}>
           {KANBAN_COLUMNS.map((col) => {
-            const items = cols[col.status]
-            const page = colPage[col.status]
-            const totalPages = Math.max(1, Math.ceil(items.length / KANBAN_PAGE))
-            const safePage = Math.min(page, totalPages - 1)
-            const visible = items.slice(safePage * KANBAN_PAGE, (safePage + 1) * KANBAN_PAGE)
-            const rangeStart = safePage * KANBAN_PAGE + 1
-            const rangeEnd = Math.min((safePage + 1) * KANBAN_PAGE, items.length)
+            const colData = COL_QUERIES[col.status]
+            const items = colData.data?.tasks ?? []
+            const total = colData.data?.total ?? 0
+            const totalPages = Math.max(1, Math.ceil(total / KANBAN_COL_SIZE))
+            const currentPage = Math.floor(colOffset[col.status] / KANBAN_COL_SIZE) + 1
             const isHidden = !!colHidden[col.status]
-            const colMaybeTruncated =
-              isMaybeTruncated && col.status === Object.entries(cols).sort((a, b) => b[1].length - a[1].length)[0]?.[0]
             const isMax = !!colMax[col.status]
-            // A column is a valid drop target if the task can transition to it
             const isDropDisabled =
               !canWrite ||
               isHidden ||
@@ -431,11 +448,10 @@ export function TasksKanbanView({
                   minHeight: isHidden ? 0 : 240,
                 }}
               >
-                {/* Column header — minimized: vertical stack */}
                 {isHidden ? (
                   <Stack align="center" gap={4}>
                     <Text size="xs" fw={700} c="dimmed">
-                      {items.length}
+                      {total || items.length}
                     </Text>
                     <Tooltip label={`Tampilkan ${col.label}`} position="right">
                       <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleHidden(col.status)}>
@@ -450,18 +466,8 @@ export function TasksKanbanView({
                         {col.label}
                       </Badge>
                       <Text size="xs" c="dimmed">
-                        {items.length}
+                        {total > 0 ? total : items.length}
                       </Text>
-                      {colMaybeTruncated && (
-                        <Tooltip
-                          label="Data mungkin terpotong — batas 500 task tercapai. Gunakan filter untuk mempersempit."
-                          withArrow
-                        >
-                          <ThemeIcon size="xs" color="orange" variant="light" style={{ flexShrink: 0 }}>
-                            <TbAlertTriangle size={10} />
-                          </ThemeIcon>
-                        </Tooltip>
-                      )}
                     </Group>
                     <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
                       {selectMode &&
@@ -508,7 +514,6 @@ export function TasksKanbanView({
                   </Group>
                 )}
 
-                {/* Cards */}
                 {!isHidden && (
                   <>
                     <Droppable droppableId={col.status} isDropDisabled={isDropDisabled}>
@@ -530,13 +535,13 @@ export function TasksKanbanView({
                             transition: 'background 120ms ease',
                           }}
                         >
-                          {visible.length === 0 && !snapshot.isDraggingOver && (
+                          {items.length === 0 && !snapshot.isDraggingOver && (
                             <Text size="xs" c="dimmed" ta="center" py="md">
                               No tasks
                             </Text>
                           )}
 
-                          {visible.map((t, idx) => (
+                          {items.map((t, idx) => (
                             <Draggable key={t.id} draggableId={t.id} index={idx} isDragDisabled={!canWrite}>
                               {(dragProvided, dragSnapshot) => {
                                 const isSelected = selectedIds.has(t.id)
@@ -573,7 +578,6 @@ export function TasksKanbanView({
                                       flexShrink: 0,
                                     }}
                                   >
-                                    {/* Checkbox indicator — muncul saat select mode aktif */}
                                     {selectMode && !dragSnapshot.isDragging && (
                                       <div
                                         style={{
@@ -600,7 +604,6 @@ export function TasksKanbanView({
                                     )}
 
                                     {dragSnapshot.isDragging ? (
-                                      /* Drag preview — hanya tampilkan jumlah + asal */
                                       <Stack align="center" justify="center" gap={2} style={{ minHeight: 72 }}>
                                         <Text
                                           fw={900}
@@ -715,41 +718,29 @@ export function TasksKanbanView({
                             </Draggable>
                           ))}
 
-                          {/* Required by @hello-pangea/dnd — reserves space for dragged item */}
                           {provided.placeholder}
                         </Stack>
                       )}
                     </Droppable>
 
-                    {totalPages > 1 && (
+                    {total > KANBAN_COL_SIZE && (
                       <Group
-                        justify="space-between"
-                        align="center"
+                        justify="center"
                         pt={6}
                         mt={4}
                         style={{ borderTop: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}
                       >
-                        <ActionIcon
+                        <Pagination
+                          value={currentPage}
+                          total={totalPages}
                           size="xs"
-                          variant="subtle"
-                          color="gray"
-                          disabled={safePage === 0}
-                          onClick={() => setColPage((p) => ({ ...p, [col.status]: safePage - 1 }))}
-                        >
-                          <TbChevronLeft size={12} />
-                        </ActionIcon>
-                        <Text size="xs" c="dimmed">
-                          {rangeStart}–{rangeEnd} / {items.length}
-                        </Text>
-                        <ActionIcon
-                          size="xs"
-                          variant="subtle"
-                          color="gray"
-                          disabled={safePage >= totalPages - 1}
-                          onClick={() => setColPage((p) => ({ ...p, [col.status]: safePage + 1 }))}
-                        >
-                          <TbChevronRight size={12} />
-                        </ActionIcon>
+                          withEdges={false}
+                          siblings={0}
+                          boundaries={1}
+                          onChange={(page) =>
+                            setColOffset((p) => ({ ...p, [col.status]: (page - 1) * KANBAN_COL_SIZE }))
+                          }
+                        />
                       </Group>
                     )}
                   </>

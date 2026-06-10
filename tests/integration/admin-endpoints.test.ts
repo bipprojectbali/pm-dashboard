@@ -34,7 +34,6 @@ const ADMIN_READ_ENDPOINTS = [
   '/api/admin/users',
   '/api/admin/logs/audit',
   '/api/admin/sessions',
-  '/api/admin/agents',
   '/api/admin/health',
 ]
 
@@ -63,7 +62,7 @@ describe('admin read endpoints: auth gating', () => {
 })
 
 describe('GET /api/admin/health response shape', () => {
-  test('returns services, sessions, agents, webhooks, retention, env', async () => {
+  test('returns services, sessions, retention, env', async () => {
     const res = await get('/api/admin/health', superToken)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -81,19 +80,8 @@ describe('GET /api/admin/health response shape', () => {
     expect(typeof body.sessions.active).toBe('number')
     expect(typeof body.sessions.online).toBe('number')
 
-    expect(body.agents).toBeDefined()
-    expect(typeof body.agents.total).toBe('number')
-    expect(typeof body.agents.live).toBe('number')
-    expect(typeof body.agents.pending).toBe('number')
-
-    expect(body.webhooks).toBeDefined()
-    expect(typeof body.webhooks.total24h).toBe('number')
-    expect(typeof body.webhooks.eventsIn24h).toBe('number')
-    expect(typeof body.webhooks.activeTokens).toBe('number')
-
     expect(body.retention).toBeDefined()
     expect(typeof body.retention.auditLogDays).toBe('number')
-    expect(typeof body.retention.webhookLogDays).toBe('number')
 
     expect(Array.isArray(body.env)).toBe(true)
     const dbUrlEntry = body.env.find((e: { key: string }) => e.key === 'DATABASE_URL')

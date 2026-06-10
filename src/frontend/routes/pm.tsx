@@ -44,7 +44,6 @@ import {
   TbUserPlus,
   TbUsers,
 } from 'react-icons/tb'
-import { ActivityPanel } from '@/frontend/components/ActivityPanel'
 import { EChart } from '@/frontend/components/charts/EChart'
 import { EventDetailView } from '@/frontend/components/EventDetailView'
 import { EventFormView } from '@/frontend/components/EventFormView'
@@ -61,7 +60,7 @@ import { TeamPanel } from '@/frontend/components/TeamPanel'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 import { toLocalDateStr } from '@/frontend/lib/dates'
 
-const validTabs = ['overview', 'projects', 'tasks', 'activity', 'team', 'events'] as const
+const validTabs = ['overview', 'projects', 'tasks', 'team', 'events'] as const
 type TabKey = (typeof validTabs)[number]
 
 type PmSearch = {
@@ -142,7 +141,6 @@ function buildNavItems(counts: { events: number; tasks: number; projects: number
       badge: counts.tasks > 0 ? String(counts.tasks) : undefined,
       badgeColor: counts.overdue > 0 ? 'orange' : 'blue',
     },
-    // { label: 'Aktivitas', description: 'Event ActivityWatch', icon: TbActivity, key: 'activity', badge: 'AW' },
     { label: 'Tim', description: 'Anggota & beban kerja', icon: TbUsers, key: 'team' },
     {
       label: 'Events',
@@ -167,10 +165,6 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   tasks: {
     label: 'Task',
     description: 'Semua task di proyek kamu. Filter by assignee, status, tag, atau prioritas.',
-  },
-  activity: {
-    label: 'Aktivitas',
-    description: 'Event ActivityWatch dari pm-watch agent — pantau fokus kerja tim.',
   },
   team: {
     label: 'Tim',
@@ -463,7 +457,6 @@ function PmPage() {
                     onBackToProjects={() => setActive('projects')}
                   />
                 ))}
-              {active === 'activity' && <ActivityPanel />}
               {active === 'team' && <TeamPanel />}
               {active === 'events' &&
                 (eventMode === 'create' ? (

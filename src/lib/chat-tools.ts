@@ -1,10 +1,8 @@
 // Tool-calling helpers untuk Chat AI: definisi tool + executor.
 // Setiap tool read-only, hasil di-cap 50 row, error format konsisten.
-// Reuse helper di effort.ts / github-summary.ts daripada query ulang.
 
 import { z } from 'zod'
 import { prisma } from './db'
-import { computePhantomWork, computeTaskEffort, effortReport } from './effort'
 import { computeProjectGithubSummary } from './github-summary'
 
 const MAX_ROWS = 50
@@ -112,30 +110,6 @@ export const CHAT_TOOLS: AnthropicTool[] = [
       },
     },
   },
-  {
-    name: 'query_effort',
-    description:
-      'Effort tracking dari pm-watch: actualHours per user atau task dalam window. ' +
-      'Mode="user": phantom work per user. Mode="task": variance estimate vs actual untuk satu task. ' +
-      'Mode="overbudget": list task overbudget/underbudget.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        mode: { type: 'string', enum: ['user', 'task', 'overbudget'] },
-        userEmail: { type: 'string', description: 'Untuk mode=user, filter satu user.' },
-        taskId: { type: 'string', description: 'Untuk mode=task.' },
-        projectId: { type: 'string', description: 'Untuk mode=overbudget filter ke satu proyek.' },
-        sinceDays: { type: 'number', description: 'Window hari, default 7 (mode=user), maks 90.' },
-        verdict: {
-          type: 'string',
-          enum: ['over', 'under', 'both'],
-          description: 'Untuk mode=overbudget. Default both.',
-        },
-        limit: { type: 'number', description: '1-50, default 20.' },
-      },
-      required: ['mode'],
-    },
-  },
 ]
 
 // ─── Zod schemas untuk validasi runtime ─────────────────────────────────────
@@ -176,16 +150,6 @@ const QueryGithubInput = z.object({
   limit: z.number().int().min(1).max(MAX_ROWS).optional(),
 })
 
-const QueryEffortInput = z.object({
-  mode: z.enum(['user', 'task', 'overbudget']),
-  userEmail: z.string().optional(),
-  taskId: z.string().optional(),
-  projectId: z.string().optional(),
-  sinceDays: z.number().int().min(1).max(MAX_WINDOW_DAYS).optional(),
-  verdict: z.enum(['over', 'under', 'both']).optional(),
-  limit: z.number().int().min(1).max(MAX_ROWS).optional(),
-})
-
 // ─── Executor ───────────────────────────────────────────────────────────────
 
 export interface ToolResult {
@@ -207,8 +171,6 @@ export async function executeChatTool(name: string, rawInput: unknown): Promise<
         return await runQueryProjectDetail(QueryProjectDetailInput.parse(rawInput))
       case 'query_github_activity':
         return await runQueryGithub(QueryGithubInput.parse(rawInput))
-      case 'query_effort':
-        return await runQueryEffort(QueryEffortInput.parse(rawInput))
       default:
         return { ok: false, error: `Unknown tool: ${name}` }
     }
@@ -567,46 +529,4 @@ async function runQueryGithub(input: z.infer<typeof QueryGithubInput>): Promise<
   }
 }
 
-// ─── Tool: query_effort ─────────────────────────────────────────────────────
 
-async function runQueryEffort(input: z.infer<typeof QueryEffortInput>): Promise<ToolResult> {
-  const limit = input.limit ?? 20
-
-  if (input.mode === 'task') {
-    if (!input.taskId) return { ok: false, error: 'mode=task butuh taskId' }
-    const eff = await computeTaskEffort(input.taskId)
-    if (!eff) return { ok: true, rows: [], summary: { note: 'Task tidak ditemukan' } }
-    return { ok: true, rows: [eff] }
-  }
-
-  if (input.mode === 'user') {
-    const days = input.sinceDays ?? 7
-    const phantom = await computePhantomWork({ days, limit: MAX_ROWS })
-    let rows = phantom
-    if (input.userEmail) {
-      rows = rows.filter((r) => r.email.toLowerCase() === input.userEmail!.toLowerCase())
-    }
-    return {
-      ok: true,
-      rows: rows.slice(0, limit),
-      summary: { sinceDays: days, totalUsers: phantom.length },
-    }
-  }
-
-  // mode = overbudget
-  const all = await effortReport({ onlyClosed: false, limit: MAX_ROWS, projectId: input.projectId })
-  const verdict = input.verdict ?? 'both'
-  const filtered = all.filter((r) => {
-    if (verdict === 'over') return r.verdict === 'over'
-    if (verdict === 'under') return r.verdict === 'under'
-    return r.verdict === 'over' || r.verdict === 'under'
-  })
-  return {
-    ok: true,
-    rows: filtered.slice(0, limit),
-    summary: {
-      totalOver: all.filter((r) => r.verdict === 'over').length,
-      totalUnder: all.filter((r) => r.verdict === 'under').length,
-    },
-  }
-}

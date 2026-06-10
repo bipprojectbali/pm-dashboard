@@ -31,7 +31,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   TbActivity,
   TbAlertTriangle,
-  TbApps,
   TbArrowLeft,
   TbBug,
   TbCalendarEvent,
@@ -40,7 +39,6 @@ import {
   TbClock,
   TbCloudUpload,
   TbCopy,
-  TbDeviceDesktop,
   TbEdit,
   TbLink,
   TbListCheck,
@@ -51,7 +49,6 @@ import {
   TbRefresh,
   TbShieldCheck,
   TbTag,
-  TbTarget,
   TbTrash,
   TbUpload,
   TbX,
@@ -124,17 +121,6 @@ interface TagListItem {
   color: string
 }
 
-interface AwFocus {
-  focusHours: number
-  eventCount: number
-  windowStart: string
-  windowEnd: string
-  topApps: Array<{ app: string; seconds: number }>
-  topTitles: Array<{ app: string; title: string; seconds: number }>
-  matchKeywords: string[]
-  matchedHours: number | null
-}
-
 interface TaskDetail {
   id: string
   projectId: string
@@ -162,7 +148,6 @@ interface TaskDetail {
   blocks: Array<{ id: string; taskId: string; task: DependencyTask }>
   checklist: ChecklistItem[]
   statusChanges: StatusChange[]
-  awFocus: AwFocus | null
 }
 
 interface ProjectDetail {
@@ -1041,8 +1026,6 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             {/* Hours + Progress */}
             <HoursProgressCard task={task} />
 
-            {/* AW Focus */}
-            {task.awFocus && <AwFocusCard focus={task.awFocus} task={task} />}
           </Stack>
         </SimpleGrid>
       )}
@@ -1454,146 +1437,6 @@ function formatHoursMinutes(hours: number): string {
   const h = Math.floor(hours)
   const m = Math.round((hours - h) * 60)
   return m === 0 ? `${h}h` : `${h}h ${m}m`
-}
-
-function AwFocusCard({ focus, task }: { focus: AwFocus; task: TaskDetail }) {
-  const matchRatio =
-    focus.matchedHours != null && focus.focusHours > 0
-      ? Math.min(100, Math.round((focus.matchedHours / focus.focusHours) * 100))
-      : null
-  const windowLabel = `${new Date(focus.windowStart).toLocaleDateString()} → ${
-    task.closedAt ? new Date(focus.windowEnd).toLocaleDateString() : 'now'
-  }`
-
-  return (
-    <Card withBorder padding="sm" radius="md">
-      <Stack gap="xs">
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="xs">
-            <TbDeviceDesktop size={14} />
-            <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-              ActivityWatch focus
-            </Text>
-          </Group>
-          <Tooltip
-            label={`From ${new Date(focus.windowStart).toLocaleString()} to ${new Date(focus.windowEnd).toLocaleString()}`}
-          >
-            <Text size="xs" c="dimmed">
-              {windowLabel}
-            </Text>
-          </Tooltip>
-        </Group>
-
-        {focus.eventCount === 0 ? (
-          <Text size="xs" c="dimmed">
-            No tracked activity in this window yet.
-          </Text>
-        ) : (
-          <>
-            <Group gap="xl" wrap="wrap">
-              <div>
-                <Text size="xs" c="dimmed">
-                  Focus time
-                </Text>
-                <Text fw={600}>{formatHoursMinutes(focus.focusHours)}</Text>
-              </div>
-              {focus.matchedHours != null && (
-                <div>
-                  <Text size="xs" c="dimmed">
-                    <TbTarget size={10} style={{ marginRight: 4 }} />
-                    On-task (keyword match)
-                  </Text>
-                  <Text fw={600} c={matchRatio != null && matchRatio >= 30 ? 'green' : undefined}>
-                    {formatHoursMinutes(focus.matchedHours)}
-                    {matchRatio != null ? ` · ${matchRatio}%` : ''}
-                  </Text>
-                </div>
-              )}
-              <div>
-                <Text size="xs" c="dimmed">
-                  Events
-                </Text>
-                <Text fw={600}>{focus.eventCount.toLocaleString()}</Text>
-              </div>
-              {task.estimateHours != null && focus.focusHours > 0 && (
-                <div>
-                  <Text size="xs" c="dimmed">
-                    vs estimate
-                  </Text>
-                  <Text fw={600} c={focus.focusHours > task.estimateHours ? 'red' : 'green'}>
-                    {focus.focusHours > task.estimateHours ? '+' : ''}
-                    {(focus.focusHours - task.estimateHours).toFixed(1)}h
-                  </Text>
-                </div>
-              )}
-            </Group>
-
-            {focus.matchKeywords.length > 0 && (
-              <Group gap={4} wrap="wrap">
-                <Text size="xs" c="dimmed">
-                  Matching:
-                </Text>
-                {focus.matchKeywords.slice(0, 8).map((k) => (
-                  <Badge key={k} size="xs" variant="dot" color="teal">
-                    {k}
-                  </Badge>
-                ))}
-              </Group>
-            )}
-
-            {focus.topApps.length > 0 && (
-              <div>
-                <Group gap="xs" mb={4}>
-                  <TbApps size={12} />
-                  <Text size="xs" c="dimmed" fw={500}>
-                    Top apps
-                  </Text>
-                </Group>
-                <Stack gap={2}>
-                  {focus.topApps.slice(0, 5).map((a) => {
-                    const pct = focus.focusHours > 0 ? Math.round((a.seconds / 3600 / focus.focusHours) * 100) : 0
-                    return (
-                      <Group key={a.app} gap="xs" wrap="nowrap" justify="space-between">
-                        <Text size="xs" truncate style={{ flex: 1, minWidth: 0 }}>
-                          {a.app}
-                        </Text>
-                        <Text size="xs" c="dimmed" style={{ minWidth: 90, textAlign: 'right' }}>
-                          {formatHoursMinutes(a.seconds / 3600)} · {pct}%
-                        </Text>
-                      </Group>
-                    )
-                  })}
-                </Stack>
-              </div>
-            )}
-
-            {focus.topTitles.length > 0 && (
-              <div>
-                <Text size="xs" c="dimmed" fw={500} mb={4}>
-                  Top window titles
-                </Text>
-                <Stack gap={2}>
-                  {focus.topTitles.slice(0, 5).map((t) => (
-                    <Group key={`${t.app}|${t.title}`} gap="xs" wrap="nowrap" justify="space-between">
-                      <Text size="xs" truncate style={{ flex: 1, minWidth: 0 }}>
-                        <Text span c="dimmed" size="xs">
-                          {t.app} ·{' '}
-                        </Text>
-                        {t.title}
-                      </Text>
-                      <Text size="xs" c="dimmed" style={{ minWidth: 60, textAlign: 'right' }}>
-                        {formatHoursMinutes(t.seconds / 3600)}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
-              </div>
-            )}
-          </>
-        )}
-      </Stack>
-    </Card>
-  )
 }
 
 function EstimateField({ value, onCommit }: { value: number | null; onCommit: (v: number | null) => void }) {

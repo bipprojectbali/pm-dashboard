@@ -90,8 +90,6 @@ interface ReportPayload {
       overdueTasks: number
       staleTasks: number
       pastDueProjects: number
-      pendingAgents: number
-      offlineAgents: number
       missingEnv: number
     }
     overdueTasks: Array<{ id: string; title: string; priority: string; daysOverdue: number | null; project: string }>
@@ -639,8 +637,6 @@ function RiskRadarSection({ data }: { data: ReportPayload }) {
         <RiskStat label="Task Overdue" value={r.summary.overdueTasks} color="red" />
         <RiskStat label="Task Stale" value={r.summary.staleTasks} color="orange" />
         <RiskStat label="Proyek Lewat" value={r.summary.pastDueProjects} color="red" />
-        <RiskStat label="Agent Pending" value={r.summary.pendingAgents} color="yellow" />
-        <RiskStat label="Agent Offline" value={r.summary.offlineAgents} color="gray" />
         <RiskStat label="Env Hilang" value={r.summary.missingEnv} color="red" />
       </SimpleGrid>
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">

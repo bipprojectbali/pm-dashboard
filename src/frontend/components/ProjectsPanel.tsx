@@ -690,7 +690,7 @@ export function ProjectsPanel() {
             <Text size="sm" c="dimmed" ta="center" maw={360}>
               {projects.length === 0
                 ? canCreateProject
-                  ? 'Create your first project to start organizing tasks and tracking ActivityWatch focus.'
+                  ? 'Create your first project to start organizing tasks and tracking team progress.'
                   : 'You have not been added to any project yet. Ask an admin to invite you.'
                 : hasActiveFilters
                   ? 'Try clearing filters or searching by a different keyword.'
@@ -724,6 +724,7 @@ export function ProjectsPanel() {
         opened={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={(body) => create.mutate(body)}
+        onReset={() => create.reset()}
         loading={create.isPending}
         error={create.error?.message}
       />
@@ -1187,6 +1188,7 @@ function CreateProjectModal({
   opened,
   onClose,
   onSubmit,
+  onReset,
   loading,
   error,
 }: {
@@ -1200,6 +1202,7 @@ function CreateProjectModal({
     startsAt?: string | null
     endsAt?: string | null
   }) => void
+  onReset: () => void
   loading: boolean
   error?: string
 }) {
@@ -1293,10 +1296,14 @@ function CreateProjectModal({
             label="Nama proyek"
             placeholder="mis. Redesign Website Acme"
             value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              if (error) onReset()
+            }}
             required
             data-autofocus
             size="md"
+            error={error?.includes('sudah ada') ? error : undefined}
           />
           <Textarea
             label="Deskripsi"
@@ -1412,7 +1419,7 @@ function CreateProjectModal({
           </Group>
         </Stack>
 
-        {error && (
+        {error && !error.includes('sudah ada') && (
           <Alert color="red" variant="light" icon={<TbAlertTriangle size={16} />} radius="md">
             {error}
           </Alert>

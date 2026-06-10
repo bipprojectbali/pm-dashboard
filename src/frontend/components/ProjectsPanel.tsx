@@ -1994,7 +1994,7 @@ function UserFilterStrip({
       </Group>
 
       {/* Center: avatar list */}
-      <Group gap={8} wrap="wrap" style={{ flex: 1 }}>
+      <Group gap={14} wrap="wrap" style={{ flex: 1 }}>
         {/* "Semua" button */}
         <Tooltip label="Semua anggota" withArrow>
           <UnstyledButton onClick={() => onChange(null)}>
@@ -2034,7 +2034,9 @@ function UserFilterStrip({
                   size={AVATAR_SIZE}
                   color="blue"
                   style={{
-                    outline: isActive ? '2px solid var(--mantine-color-blue-5)' : 'none',
+                    outline: isActive
+                      ? '2px solid var(--mantine-color-blue-5)'
+                      : '2px solid var(--mantine-color-default-border)',
                     outlineOffset: 2,
                     opacity: isDimmed ? 0.32 : 1,
                     cursor: 'pointer',
@@ -2087,7 +2089,9 @@ function UserFilterStrip({
                             size={AVATAR_SIZE}
                             color="blue"
                             style={{
-                              outline: isActive ? '2px solid var(--mantine-color-blue-5)' : 'none',
+                              outline: isActive
+                                ? '2px solid var(--mantine-color-blue-5)'
+                                : '2px solid var(--mantine-color-default-border)',
                               outlineOffset: 2,
                               opacity: value && !isActive ? 0.35 : 1,
                               cursor: 'pointer',

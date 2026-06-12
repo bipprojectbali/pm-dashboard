@@ -20,6 +20,7 @@ import { reportAdmin, reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { eventsReadonly, eventsTools } from './tools/events'
 import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
+import { permissionsAdmin, permissionsReadonly } from './tools/permissions'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import type { McpScope, ToolModule } from './tools/shared'
@@ -46,6 +47,7 @@ const READONLY_MODULES: ToolModule[] = [
   eventsReadonly,
   chatReadonly,
   extensionsReadonly,
+  permissionsReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -65,6 +67,7 @@ const ADMIN_MODULES: ToolModule[] = [
   eventsTools,
   chatAdmin,
   extensionsAdmin,
+  permissionsAdmin,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {

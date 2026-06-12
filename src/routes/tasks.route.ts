@@ -4,6 +4,7 @@ import { prisma } from '../lib/db'
 import { env } from '../lib/env'
 import { notifyTaskAssigned, notifyTaskCommented, notifyTaskStatusChanged } from '../lib/notifications'
 import { emitInvalidate } from '../lib/presence'
+import { getPermissionRule, meetsMinProjectRole } from '../lib/permission-config'
 import {
   canReadProject,
   computeActualHours,
@@ -158,9 +159,12 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const reorderMembership = await requireProjectMember(firstTask.projectId, auth.userId)
-      if (!isSystemAdmin(auth.role) && (!reorderMembership || reorderMembership.role === 'VIEWER')) {
-        set.status = 403
-        return { error: 'Not a writable project member' }
+      if (!isSystemAdmin(auth.role)) {
+        const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
+        if (!reorderMembership || !meetsMinProjectRole(reorderMembership.role, minWriteRoles)) {
+          set.status = 403
+          return { error: 'Not a writable project member' }
+        }
       }
       await Promise.all(
         updates.map((u) =>
@@ -209,9 +213,12 @@ export function tasksRoutes() {
         return { error: 'Maksimum 500 task per import' }
       }
       const membership = await requireProjectMember(body.projectId, auth.userId)
-      if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
-        set.status = 403
-        return { error: 'Not a writable project member' }
+      if (!isSystemAdmin(auth.role)) {
+        const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
+        if (!membership || !meetsMinProjectRole(membership.role, minWriteRoles)) {
+          set.status = 403
+          return { error: 'Not a writable project member' }
+        }
       }
       if (!membership) {
         const exists = await prisma.project.findUnique({ where: { id: body.projectId }, select: { id: true } })
@@ -383,9 +390,12 @@ export function tasksRoutes() {
         return { error: 'Title must be 500 characters or fewer' }
       }
       const membership = await requireProjectMember(body.projectId, auth.userId)
-      if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
-        set.status = 403
-        return { error: 'Not a writable project member' }
+      if (!isSystemAdmin(auth.role)) {
+        const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
+        if (!membership || !meetsMinProjectRole(membership.role, minWriteRoles)) {
+          set.status = 403
+          return { error: 'Not a writable project member' }
+        }
       }
       if (!membership) {
         const exists = await prisma.project.findUnique({ where: { id: body.projectId }, select: { id: true } })
@@ -491,9 +501,12 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const membership = await requireProjectMember(current.projectId, auth.userId)
-      if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
-        set.status = 403
-        return { error: 'Not a writable project member' }
+      if (!isSystemAdmin(auth.role)) {
+        const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
+        if (!membership || !meetsMinProjectRole(membership.role, minWriteRoles)) {
+          set.status = 403
+          return { error: 'Not a writable project member' }
+        }
       }
       const body = (await request.json()) as {
         title?: string
@@ -608,9 +621,11 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const isReporter = current.reporterId === auth.userId
+      // SUPER_ADMIN bypass hardcode — tidak bisa dikonfigurasi
       if (auth.role !== 'SUPER_ADMIN' && !isReporter) {
         const membership = await requireProjectMember(current.projectId, auth.userId)
-        if (!membership || (membership.role !== 'OWNER' && membership.role !== 'PM')) {
+        const allowedDeleteRoles = await getPermissionRule('permissions.task.delete.allowedProjectRoles')
+        if (!membership || !allowedDeleteRoles.includes(membership.role)) {
           set.status = 403
           return { error: 'Only the reporter or project OWNER/PM can delete tasks' }
         }

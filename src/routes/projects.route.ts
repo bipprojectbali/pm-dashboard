@@ -3,6 +3,7 @@ import { appLog } from '../lib/applog'
 import { prisma } from '../lib/db'
 import { normalizeGithubRepo } from '../lib/github'
 import { computeProjectGithubSummary } from '../lib/github-summary'
+import { getPermissionRule } from '../lib/permission-config'
 import { emitInvalidate } from '../lib/presence'
 import { computeRetro, renderRetroMarkdown } from '../lib/retro'
 import {
@@ -140,9 +141,13 @@ export function projectsRoutes() {
         set.status = 401
         return { error: 'Unauthorized' }
       }
-      if (auth.role !== 'ADMIN' && auth.role !== 'SUPER_ADMIN') {
-        set.status = 403
-        return { error: 'Only admins can create projects' }
+      // SUPER_ADMIN selalu bisa — bypass sebelum cek konfigurasi
+      if (auth.role !== 'SUPER_ADMIN') {
+        const allowedRoles = await getPermissionRule('permissions.project.create.allowedRoles')
+        if (!allowedRoles.includes(auth.role)) {
+          set.status = 403
+          return { error: 'Only admins can create projects' }
+        }
       }
       const body = (await request.json()) as {
         name?: string
@@ -337,11 +342,14 @@ export function projectsRoutes() {
       }
       const me = await prisma.user.findUnique({ where: { id: auth.userId }, select: { role: true } })
       const membership = await requireProjectMember(params.id, auth.userId)
-      const isOwner = membership?.role === 'OWNER'
       const isSuperAdmin = me?.role === 'SUPER_ADMIN'
-      if (!isOwner && !isSuperAdmin) {
-        set.status = 403
-        return { error: 'Only the project OWNER or SUPER_ADMIN can delete a project' }
+      // SUPER_ADMIN selalu bisa — cek project role hanya untuk yang lain
+      if (!isSuperAdmin) {
+        const allowedDeleteRoles = await getPermissionRule('permissions.project.delete.allowedProjectRoles')
+        if (!membership || !allowedDeleteRoles.includes(membership.role)) {
+          set.status = 403
+          return { error: 'Only the project OWNER or SUPER_ADMIN can delete a project' }
+        }
       }
       const project = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, name: true } })
       if (!project) {

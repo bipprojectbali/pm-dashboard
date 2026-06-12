@@ -20,6 +20,10 @@ export async function setSetting(key: string, value: string, userId?: string): P
     const mod = await import('./extensions')
     mod.invalidateExtensionCache()
   }
+  if (key.startsWith('permissions.')) {
+    const mod = await import('./permission-config')
+    mod.invalidatePermissionCache()
+  }
 }
 
 export async function getSettings(keys: string[]): Promise<Record<string, string>> {

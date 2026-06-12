@@ -77,6 +77,7 @@ import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
 import { ExtensionTogglePanel } from '@/frontend/components/ExtensionTogglePanel'
+import { PermissionsPanel } from '@/frontend/components/PermissionsPanel'
 import { FileHealthPanel } from '@/frontend/components/FileHealthPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
@@ -100,6 +101,7 @@ const validTabs = [
   'ai',
   'ext-github',
   'ext-chat',
+  'permissions',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -151,6 +153,10 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
   'ext-chat': {
     label: 'Chat AI',
     description: 'Toggle extension: tab Chat AI di /admin, sync chat_document, embedding & Anthropic call.',
+  },
+  permissions: {
+    label: 'Aturan Izin',
+    description: 'Konfigurasi runtime role permission — project create/delete, task write/delete. Cache 60s.',
   },
 }
 
@@ -231,6 +237,10 @@ const navGroups: DevNavGroup[] = [
       { label: 'GitHub Integration', icon: TbBrandGithub, key: 'ext-github' },
       { label: 'Chat AI', icon: TbMessageChatbot, key: 'ext-chat' },
     ],
+  },
+  {
+    label: 'Keamanan',
+    items: [{ label: 'Aturan Izin', icon: TbShieldCheck, key: 'permissions' }],
   },
 ]
 
@@ -387,6 +397,7 @@ function DevPage() {
               {active === 'ai' && <AiSettingsPanel showDeleteHistory />}
               {active === 'ext-github' && <ExtensionTogglePanel only="github" />}
               {active === 'ext-chat' && <ExtensionTogglePanel only="chat" />}
+              {active === 'permissions' && <PermissionsPanel />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

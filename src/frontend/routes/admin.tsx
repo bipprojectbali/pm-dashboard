@@ -227,7 +227,7 @@ function AdminPage() {
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
-      <AppShell.Header>
+      <AppShell.Header style={{ backgroundImage: 'linear-gradient(rgba(148,103,220,0.07), rgba(148,103,220,0.07))' }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
             <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="sm" />
@@ -248,8 +248,8 @@ function AdminPage() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'}>
-        <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto' }}>
+      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ background: 'light-dark(rgba(148,103,220,0.05), rgba(148,103,220,0.08))' }}>
+        <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
           {filteredNavGroups.map((group) => (
             <Stack key={group.label} gap={4}>
               {!(collapsed && !isMobile) && (
@@ -330,7 +330,7 @@ function AdminPage() {
         />
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main style={{ borderTop: '3px solid var(--mantine-color-violet-5)' }}>
         <Container size={'xl'} px={0}>
           <Stack gap="md">
             <div>

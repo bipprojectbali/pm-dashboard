@@ -7,6 +7,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-06-12
+
+### Ditambahkan
+- **ProjectPhase — pengelompokan task ke dalam fase/sprint** — setiap project bisa punya beberapa fase dengan status (PLANNING / ACTIVE / COMPLETED), urutan, dan rentang tanggal opsional.
+  - Schema: model `ProjectPhase` (id, projectId, title, description, status, order, startsAt, endsAt, timestamps) + enum `PhaseStatus`; kolom `phaseId` (nullable FK, `onDelete: SetNull`) di `Task`.
+  - API: `GET /api/projects/:id/phases`, `GET /api/phases`, `POST /api/projects/:id/phases`, `PATCH /api/phases/:id`, `DELETE /api/phases/:id`. Endpoint write di-gate `canManageProject` (OWNER/PM/ADMIN/SUPER_ADMIN).
+  - Task filter: `GET /api/tasks?phaseId=<id>` hanya task di fase tersebut; `phaseId=none` hanya task tanpa fase (backlog view).
+  - Frontend: tab "Phases" di `ProjectDetailView` dengan badge jumlah; `PhasesSection.tsx` — daftar fase + form create/edit inline + delete dengan konfirmasi. Filter fase di `TasksPanel` (Select dropdown muncul jika project punya fase) dan di `TasksKanbanView`. Phase filter tersimpan di localStorage.
+  - MCP: modul `phases.ts` — `phase_list` (readonly), `phase_create`, `phase_update`, `phase_delete` (admin). Terdaftar di `scripts/mcp/server.ts`.
+  - Tests: `tests/integration/phases.test.ts` — 17 test case: list kosong, create (golden path + auto-order + VIEWER 403 + validation), update (title/status/tanggal + VIEWER 403 + 404), delete (SET NULL pada task + VIEWER 403 + 404), filter phaseId=X, filter phaseId=none.
+
 ## [0.7.3] - 2026-06-10
 
 ### Ditambahkan

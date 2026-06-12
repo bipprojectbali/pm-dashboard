@@ -1,5 +1,5 @@
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
-import { ActionIcon, Badge, Button, Card, Group, Pagination, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Group, Loader, Pagination, Skeleton, Stack, Text, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
@@ -121,6 +121,7 @@ interface KanbanFilters {
   kind?: string | null
   mine?: boolean
   tagId?: string | null
+  phaseId?: string | null
   search?: string
   priority?: string | null
 }
@@ -169,6 +170,7 @@ export function TasksKanbanView({
     if (filters.kind) p.set('kind', filters.kind)
     if (filters.mine) p.set('mine', '1')
     if (filters.tagId) p.set('tagId', filters.tagId)
+    if (filters.phaseId) p.set('phaseId', filters.phaseId)
     if (filters.search) p.set('search', filters.search)
     if (filters.priority) p.set('priority', filters.priority)
     return p.toString()
@@ -426,6 +428,8 @@ export function TasksKanbanView({
             const colData = COL_QUERIES[col.status]
             const items = colData.data?.tasks ?? []
             const total = colData.data?.total ?? 0
+            const isColLoading = colData.isLoading
+            const isColFetching = colData.isFetching && !colData.isLoading
             const totalPages = Math.max(1, Math.ceil(total / KANBAN_COL_SIZE))
             const currentPage = Math.floor(colOffset[col.status] / KANBAN_COL_SIZE) + 1
             const isHidden = !!colHidden[col.status]
@@ -468,6 +472,7 @@ export function TasksKanbanView({
                       <Text size="xs" c="dimmed">
                         {total > 0 ? total : items.length}
                       </Text>
+                      {isColFetching && <Loader size={10} color="gray" />}
                     </Group>
                     <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
                       {selectMode &&
@@ -535,7 +540,14 @@ export function TasksKanbanView({
                             transition: 'background 120ms ease',
                           }}
                         >
-                          {items.length === 0 && !snapshot.isDraggingOver && (
+                          {isColLoading && (
+                            <Stack gap={6} py={4}>
+                              {[0, 1, 2].map((i) => (
+                                <Skeleton key={i} h={60} radius="sm" />
+                              ))}
+                            </Stack>
+                          )}
+                          {!isColLoading && items.length === 0 && !snapshot.isDraggingOver && (
                             <Text size="xs" c="dimmed" ta="center" py="md">
                               No tasks
                             </Text>

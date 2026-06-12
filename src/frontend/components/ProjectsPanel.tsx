@@ -101,7 +101,7 @@ export interface ProjectListItem {
   updatedAt: string
   owner: ProjectUser
   members: ProjectMember[]
-  _count: { members: number; tasks: number; milestones: number }
+  _count: { members: number; tasks: number; milestones: number; phases: number }
   myRole: MemberRole | null
   canWrite: boolean
   joinedAt: string | null

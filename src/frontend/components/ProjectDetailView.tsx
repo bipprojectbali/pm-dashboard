@@ -30,6 +30,7 @@ import {
   TbDots,
   TbFlag,
   TbHistory,
+  TbLayoutColumns,
   TbListCheck,
   TbRefresh,
   TbReport,
@@ -43,6 +44,7 @@ import { ExtensionsSection } from './ExtensionsSection'
 import { GithubActivityCard } from './GithubActivityCard'
 import { MembersSection } from './MembersSection'
 import { MilestonesSection } from './MilestonesSection'
+import { PhasesSection } from './PhasesSection'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
 import type { ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus } from './ProjectsPanel'
 import { RetroTab } from './RetroTab'
@@ -55,6 +57,7 @@ export const PROJECT_DETAIL_TABS = [
   'tasks',
   'team',
   'milestones',
+  'phases',
   'extensions',
   'retro',
   'settings',
@@ -283,6 +286,13 @@ export function ProjectDetailView({
                 >
                   Milestones
                 </Tabs.Tab>
+                <Tabs.Tab
+                  value="phases"
+                  leftSection={<TbLayoutColumns size={14} />}
+                  rightSection={<TabCount value={tabCounts?.phases} />}
+                >
+                  Phases
+                </Tabs.Tab>
               </Tabs.List>
 
               {/* Secondary tabs — overflow menu */}
@@ -365,6 +375,9 @@ export function ProjectDetailView({
             </Tabs.Panel>
             <Tabs.Panel value="milestones" pt="md">
               <MilestonesSection projectId={project.id} canManage={computeCanManage(project.myRole, systemRole)} />
+            </Tabs.Panel>
+            <Tabs.Panel value="phases" pt="md">
+              <PhasesSection projectId={project.id} canManage={computeCanManage(project.myRole, systemRole)} />
             </Tabs.Panel>
             <Tabs.Panel value="extensions" pt="md">
               <ExtensionsSection

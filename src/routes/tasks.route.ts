@@ -98,12 +98,16 @@ export function tasksRoutes() {
       if (query.unassigned === '1') where.assigneeId = null
       if (query.noDue === '1') where.dueAt = null
       if (query.blocked === '1') where.blockedBy = { some: {} }
+      if (query.phaseId) {
+        where.phaseId = query.phaseId === 'none' ? null : String(query.phaseId)
+      }
       const limit = Math.min(Number(query.limit) || 50, 200)
       const offset = Math.max(0, Number(query.offset) || 0)
       const taskInclude = {
         project: { select: { id: true, name: true } },
         reporter: { select: { id: true, name: true, email: true, role: true, image: true } },
         assignee: { select: { id: true, name: true, email: true, role: true, image: true } },
+        phase: { select: { id: true, title: true } },
         tags: { include: { tag: true } },
         checklist: { select: { done: true } },
         blockedBy: { select: { blockedById: true } },

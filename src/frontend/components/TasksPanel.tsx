@@ -224,6 +224,7 @@ export function TasksPanel({
   const [mine, setMine] = useState(false)
   const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [phaseFilter, setPhaseFilter] = useLocalStorage<string | null>({ key: 'pm:tasks:phase-filter', defaultValue: null })
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(
@@ -245,6 +246,7 @@ export function TasksPanel({
 
   const changeProject = (id: string | null) => {
     setTagFilter(null)
+    setPhaseFilter(null)
     onProjectChange?.(id)
   }
 
@@ -254,12 +256,19 @@ export function TasksPanel({
     enabled: !!activeProjectId,
   })
 
+  const phasesQ = useQuery({
+    queryKey: ['phases', activeProjectId],
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${activeProjectId}/phases`),
+    enabled: !!activeProjectId,
+  })
+
   const params = new URLSearchParams()
   if (activeProjectId) params.set('projectId', activeProjectId)
   if (status) params.set('status', status)
   if (kind) params.set('kind', kind)
   if (mine) params.set('mine', '1')
   if (tagFilter) params.set('tagId', tagFilter)
+  if (phaseFilter) params.set('phaseId', phaseFilter)
   // Server-side pagination + filters (list/table view only; kanban has its own per-column queries)
   if (view !== 'kanban') {
     params.set('limit', String(PAGE_SIZE))
@@ -589,6 +598,7 @@ export function TasksPanel({
     kind,
     mine,
     tagFilter,
+    phaseFilter,
     search,
     quickFilter,
     dueDateRange,
@@ -788,6 +798,20 @@ export function TasksPanel({
                 w={155}
               />
             ) : null}
+            {activeProjectId && phasesQ.data?.phases.length ? (
+              <Select
+                placeholder="All phases"
+                data={[
+                  { value: 'none', label: 'No phase' },
+                  ...phasesQ.data.phases.map((p) => ({ value: p.id, label: p.title })),
+                ]}
+                value={phaseFilter}
+                onChange={setPhaseFilter}
+                clearable
+                size="xs"
+                w={155}
+              />
+            ) : null}
           </Group>
 
           {/* ─── Urutan ─── */}
@@ -934,7 +958,7 @@ export function TasksPanel({
             >
               No due date
             </Badge>
-            {(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy) && (
+            {(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy || phaseFilter) && (
               <Button
                 variant="subtle"
                 color="gray"
@@ -946,6 +970,7 @@ export function TasksPanel({
                   setPriorityFilter(null)
                   setSortBy(null)
                   setSortDir('asc')
+                  setPhaseFilter(null)
                 }}
               >
                 Clear all
@@ -976,6 +1001,25 @@ export function TasksPanel({
 
       {trashView ? (
         <TasksTrashView projectId={activeProjectId} />
+      ) : view === 'kanban' ? (
+        <TasksKanbanView
+          projectId={activeProjectId ?? null}
+          filters={{
+            kind: kind || null,
+            mine,
+            tagId: tagFilter || null,
+            phaseId: phaseFilter || null,
+            search: search.trim() || undefined,
+            priority: priorityFilter || null,
+          }}
+          canWrite={
+            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
+          }
+          onSelect={(id) => openTask(id)}
+          onDeleteOne={confirmDeleteOne}
+          onDeleteSelected={confirmDeleteByIds}
+          canDeleteTask={canDeleteTask}
+        />
       ) : tasks.length === 0 && !tasksQ.isLoading ? (
         <Card withBorder p="xl" radius="md">
           <Stack align="center" gap="sm">
@@ -1006,24 +1050,6 @@ export function TasksPanel({
         </Card>
       ) : view === 'gantt' ? (
         <TasksGanttView tasks={tasks} onSelect={(id) => openTask(id)} />
-      ) : view === 'kanban' ? (
-        <TasksKanbanView
-          projectId={activeProjectId ?? null}
-          filters={{
-            kind: kind || null,
-            mine,
-            tagId: tagFilter || null,
-            search: search.trim() || undefined,
-            priority: priorityFilter || null,
-          }}
-          canWrite={
-            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
-          }
-          onSelect={(id) => openTask(id)}
-          onDeleteOne={confirmDeleteOne}
-          onDeleteSelected={confirmDeleteByIds}
-          canDeleteTask={canDeleteTask}
-        />
       ) : (
         <Card withBorder padding={0} radius="md">
           {deletableSelected.length > 0 && (

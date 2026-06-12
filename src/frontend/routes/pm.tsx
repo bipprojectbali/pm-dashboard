@@ -321,7 +321,7 @@ function PmPage() {
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
-      <AppShell.Header>
+      <AppShell.Header style={{ backgroundImage: 'linear-gradient(rgba(34,139,230,0.07), rgba(34,139,230,0.07))' }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
             <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="sm" />
@@ -342,7 +342,7 @@ function PmPage() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'}>
+      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ background: 'light-dark(rgba(34,139,230,0.05), rgba(34,139,230,0.08))' }}>
         <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
           <Stack gap={4}>
             {!(collapsed && !isMobile) && (
@@ -419,7 +419,7 @@ function PmPage() {
         />
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main style={{ borderTop: '3px solid var(--mantine-color-blue-5)' }}>
         <Container size={'xl'} px={0}>
           <Stack gap="md">
             {!activeProjectId && !activeTaskId && !activeEventId && !eventMode && <PmPageHeader tabKey={active} />}

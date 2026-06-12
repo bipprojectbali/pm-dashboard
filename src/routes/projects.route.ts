@@ -51,7 +51,7 @@ export function projectsRoutes() {
           include: { user: { select: { id: true, name: true, email: true, role: true, image: true } } },
           orderBy: { joinedAt: 'asc' },
         },
-        _count: { select: { members: true, tasks: true, milestones: true } },
+        _count: { select: { members: true, tasks: true, milestones: true, phases: true } },
       } as const
       const memberships = await prisma.projectMember.findMany({
         where: { userId: auth.userId },
@@ -205,7 +205,7 @@ export function projectsRoutes() {
             include: { user: { select: { id: true, name: true, email: true, role: true, image: true } } },
             orderBy: { joinedAt: 'asc' },
           },
-          _count: { select: { tasks: true, members: true, milestones: true } },
+          _count: { select: { tasks: true, members: true, milestones: true, phases: true } },
         },
       })
       if (!project) {

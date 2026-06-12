@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth.route'
 import { eventsRoutes } from './routes/events.route'
 import { extensionsRoutes } from './routes/extensions.route'
 import { meRoutes } from './routes/me.route'
+import { phasesRoutes } from './routes/phases.route'
 import { projectsRoutes } from './routes/projects.route'
 import { qcRoutes } from './routes/qc.route'
 import { settingsRoutes } from './routes/settings.route'
@@ -76,6 +77,7 @@ export function createApp() {
     .use(adminRoutes())
     .use(qcRoutes())
     .use(projectsRoutes())
+    .use(phasesRoutes())
     .use(tasksRoutes())
     .use(meRoutes())
     .use(webhooksRoutes())

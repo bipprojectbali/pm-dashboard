@@ -81,7 +81,7 @@ export function SidebarAppSwitcher({
     return (
       <Box
         style={{
-          background: 'light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.12))',
+          background: 'light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.50))',
           borderRadius: 10,
           padding: '6px 4px',
         }}
@@ -112,7 +112,7 @@ export function SidebarAppSwitcher({
   return (
     <Box
       style={{
-        background: 'light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.12))',
+        background: 'light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.50))',
         borderRadius: 10,
         padding: '4px 4px 6px',
       }}

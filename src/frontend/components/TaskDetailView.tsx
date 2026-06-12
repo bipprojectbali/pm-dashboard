@@ -132,6 +132,8 @@ interface TaskDetail {
   route: string | null
   reporter: TaskUser
   assignee: TaskUser | null
+  phaseId: string | null
+  phase: { id: string; title: string } | null
   startsAt: string | null
   dueAt: string | null
   estimateHours: number | null
@@ -228,6 +230,12 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   })
   const myRole = projectQ.data?.myRole ?? null
   const canWrite = myRole !== null && myRole !== 'VIEWER'
+
+  const phasesQ = useQuery({
+    queryKey: ['phases', task?.projectId],
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${task?.projectId}/phases`),
+    enabled: !!task?.projectId,
+  })
   const session = useSession()
   const sessionRole = session.data?.user?.role
   const canDelete = sessionRole === 'SUPER_ADMIN' || myRole === 'OWNER' || myRole === 'PM'
@@ -251,6 +259,7 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
         description?: string
         route?: string | null
         assigneeId?: string | null
+        phaseId?: string | null
         startsAt?: string | null
         dueAt?: string | null
         estimateHours?: number | null
@@ -904,6 +913,17 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                     ) : undefined
                   }
                 />
+                {(phasesQ.data?.phases.length ?? 0) > 0 && (
+                  <Select
+                    label="Fase"
+                    size="xs"
+                    placeholder="Tanpa fase"
+                    clearable
+                    data={(phasesQ.data?.phases ?? []).map((p) => ({ value: p.id, label: p.title }))}
+                    value={task.phaseId ?? null}
+                    onChange={(v) => update.mutate({ phaseId: v })}
+                  />
+                )}
               </Stack>
             )}
 

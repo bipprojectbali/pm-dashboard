@@ -75,6 +75,7 @@ export function CreateTaskModal({
     dueAt: string | null
     estimateHours: number | null
     tagIds: string[]
+    phaseId: string | null
   }) => void
   onBulkSubmit: (body: {
     projectId: string
@@ -104,8 +105,14 @@ export function CreateTaskModal({
   const [dueAt, setDueAt] = useState<Date | null>(null)
   const [estimateHours, setEstimateHours] = useState<number | string>('')
   const [tagIds, setTagIds] = useState<string[]>([])
+  const [phaseId, setPhaseId] = useState<string | null>(null)
 
   const [csvText, setCsvText] = useState('')
+  const phasesQ = useQuery({
+    queryKey: ['phases', projectId, 'modal'],
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${projectId}/phases`),
+    enabled: !!projectId,
+  })
   const projectTagsQ = useQuery({
     queryKey: ['tags', projectId, 'modal'],
     queryFn: () => api<{ tags: TagListItem[] }>(`/api/projects/${projectId}/tags`),
@@ -148,6 +155,7 @@ export function CreateTaskModal({
     setDueAt(null)
     setEstimateHours('')
     setTagIds([])
+    setPhaseId(null)
     setCsvText('')
   }
 
@@ -276,6 +284,16 @@ export function CreateTaskModal({
                 onChange={setTagIds}
                 leftSection={<TbTag size={14} />}
                 searchable
+                clearable
+              />
+            )}
+            {(phasesQ.data?.phases.length ?? 0) > 0 && (
+              <Select
+                label="Fase"
+                placeholder="Tanpa fase"
+                data={(phasesQ.data?.phases ?? []).map((p) => ({ value: p.id, label: p.title }))}
+                value={phaseId}
+                onChange={setPhaseId}
                 clearable
               />
             )}
@@ -436,6 +454,7 @@ export function CreateTaskModal({
                   dueAt: dueAt ? dueAt.toISOString() : null,
                   estimateHours: typeof estimateHours === 'number' ? estimateHours : null,
                   tagIds,
+                  phaseId,
                 })
               }
               disabled={!projectId || !title.trim() || !description.trim() || Boolean(invalidRange) || loading}

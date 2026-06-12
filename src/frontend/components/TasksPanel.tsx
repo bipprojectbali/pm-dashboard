@@ -77,6 +77,33 @@ function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) =
   )
 }
 
+function PhasePill({
+  label,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string
+  count?: number
+  active: boolean
+  color: string
+  onClick: () => void
+}) {
+  return (
+    <Badge
+      color={color}
+      variant={active ? 'filled' : 'light'}
+      size="sm"
+      style={{ cursor: 'pointer', userSelect: 'none' }}
+      onClick={onClick}
+    >
+      {label}
+      {count !== undefined ? ` · ${count}` : ''}
+    </Badge>
+  )
+}
+
 import { DatePickerInput } from '@mantine/dates'
 import { useLocalStorage } from '@mantine/hooks'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
@@ -127,6 +154,7 @@ interface TaskListItem {
   updatedAt: string
   closedAt: string | null
   project: { id: string; name: string }
+  phase: { id: string; title: string } | null
   tags: TaskTag[]
   blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
@@ -258,7 +286,7 @@ export function TasksPanel({
 
   const phasesQ = useQuery({
     queryKey: ['phases', activeProjectId],
-    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${activeProjectId}/phases`),
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string; _count: { tasks: number } }> }>(`/api/projects/${activeProjectId}/phases`),
     enabled: !!activeProjectId,
   })
 
@@ -315,6 +343,7 @@ export function TasksPanel({
       dueAt: string | null
       estimateHours: number | null
       tagIds: string[]
+      phaseId: string | null
     }) =>
       api<{ task: TaskListItem }>('/api/tasks', {
         method: 'POST',
@@ -690,6 +719,33 @@ export function TasksPanel({
         <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
       ) : null}
 
+      {activeProjectId && (phasesQ.data?.phases.length ?? 0) > 0 && (
+        <Group gap={6} wrap="wrap" px={4}>
+          <PhasePill
+            label="Semua"
+            active={phaseFilter === null}
+            color="blue"
+            onClick={() => setPhaseFilter(null)}
+          />
+          {phasesQ.data!.phases.map((p) => (
+            <PhasePill
+              key={p.id}
+              label={p.title}
+              count={p._count.tasks}
+              active={phaseFilter === p.id}
+              color={p.status === 'COMPLETED' ? 'green' : p.status === 'ACTIVE' ? 'blue' : 'gray'}
+              onClick={() => setPhaseFilter(phaseFilter === p.id ? null : p.id)}
+            />
+          ))}
+          <PhasePill
+            label="Tanpa Fase"
+            active={phaseFilter === 'none'}
+            color="gray"
+            onClick={() => setPhaseFilter(phaseFilter === 'none' ? null : 'none')}
+          />
+        </Group>
+      )}
+
       <Card withBorder padding="sm" radius="md">
         <Stack gap="sm">
           {/* ─── Scope ─── */}
@@ -793,20 +849,6 @@ export function TasksPanel({
                 data={tagsQ.data.tags.map((t) => ({ value: t.id, label: t.name }))}
                 value={tagFilter}
                 onChange={setTagFilter}
-                clearable
-                size="xs"
-                w={155}
-              />
-            ) : null}
-            {activeProjectId && phasesQ.data?.phases.length ? (
-              <Select
-                placeholder="All phases"
-                data={[
-                  { value: 'none', label: 'No phase' },
-                  ...phasesQ.data.phases.map((p) => ({ value: p.id, label: p.title })),
-                ]}
-                value={phaseFilter}
-                onChange={setPhaseFilter}
                 clearable
                 size="xs"
                 w={155}
@@ -1105,6 +1147,7 @@ export function TasksPanel({
                   <Table.Th style={{ width: 130 }}>Status</Table.Th>
                   <Table.Th style={{ width: 110 }}>Priority</Table.Th>
                   <Table.Th style={{ width: 150 }}>Assignee</Table.Th>
+                  {activeProject ? <Table.Th style={{ width: 110 }}>Fase</Table.Th> : null}
                   <Table.Th style={{ width: 110 }}>Due</Table.Th>
                   <Table.Th style={{ width: 90 }}>Hours</Table.Th>
                   <Table.Th style={{ width: 110 }}>Progress</Table.Th>
@@ -1198,6 +1241,17 @@ export function TasksPanel({
                           </Text>
                         )}
                       </Table.Td>
+                      {activeProject ? (
+                        <Table.Td>
+                          {t.phase ? (
+                            <Badge size="xs" variant="light" color="indigo">
+                              {t.phase.title}
+                            </Badge>
+                          ) : (
+                            <Text size="xs" c="dimmed">—</Text>
+                          )}
+                        </Table.Td>
+                      ) : null}
                       <Table.Td>
                         {t.dueAt ? (
                           (() => {

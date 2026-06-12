@@ -345,6 +345,7 @@ export function tasksRoutes() {
         dueAt?: string
         estimateHours?: number
         tagIds?: string[]
+        phaseId?: string
       }
       if (!body.projectId || !body.title || !body.description) {
         set.status = 400
@@ -389,6 +390,7 @@ export function tasksRoutes() {
           startsAt: body.startsAt ? new Date(body.startsAt) : null,
           dueAt: body.dueAt ? new Date(body.dueAt) : null,
           estimateHours: typeof body.estimateHours === 'number' ? body.estimateHours : null,
+          phaseId: body.phaseId ?? null,
           tags: body.tagIds?.length ? { create: body.tagIds.map((tagId) => ({ tagId })) } : undefined,
         },
       })
@@ -479,6 +481,7 @@ export function tasksRoutes() {
         estimateHours?: number | null
         progressPercent?: number | null
         tagIds?: string[]
+        phaseId?: string | null
       }
       if (body.title !== undefined && body.title.length > 500) {
         set.status = 400
@@ -499,6 +502,7 @@ export function tasksRoutes() {
         const p = body.progressPercent
         data.progressPercent = p === null ? null : Math.max(0, Math.min(100, Math.round(p)))
       }
+      if (body.phaseId !== undefined) data.phaseId = body.phaseId
       let statusTransition: { from: string; to: string } | null = null
       if (body.status !== undefined) {
         const allowed = getAllowedTaskTransitions(current.status, current.kind)

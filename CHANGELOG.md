@@ -8,6 +8,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 ## [Unreleased]
 
 ### Ditambahkan
+- **Phase tabs + Phase assignment di Tasks** — integrasi fase ke tampilan dan form task:
+  - Baris pill interaktif (Semua / nama fase dengan jumlah task / Tanpa Fase) menggantikan dropdown filter di TasksPanel — klik pill untuk filter, klik lagi untuk clear
+  - Select "Fase" di form Create Task (hanya muncul jika project punya fase)
+  - Select "Fase" di sidebar edit TaskDetailView — ubah fase langsung dari detail task
+  - Kolom "Fase" di tabel task (hanya ketika dalam scope project) dengan Badge warna indigo
+  - Backend `POST /api/tasks` dan `PATCH /api/tasks/:id` sekarang menerima `phaseId`
 - **Phase summary + Stepper + Template** — tiga peningkatan pada fitur ProjectPhase:
   - Field `summary` (nullable) untuk kesimpulan fase — diisi saat menutup fase via modal "Selesaikan Fase" (ACTIVE → COMPLETED)
   - Tampilan `<Stepper>` vertikal menggantikan list card — progres PLANNING → ACTIVE → COMPLETED terbaca visual dengan warna per status

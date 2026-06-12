@@ -51,6 +51,7 @@ interface TaskListItem {
   updatedAt: string
   closedAt: string | null
   project: { id: string; name: string }
+  phase: { id: string; title: string } | null
   tags: TaskTag[]
   blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }

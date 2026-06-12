@@ -32,6 +32,7 @@ import {
   TbClock,
   TbDownload,
   TbFilter,
+  TbInfoCircle,
   TbListCheck,
   TbLock,
   TbPlus,
@@ -95,7 +96,7 @@ function PhasePill({
       color={color}
       variant={active ? 'filled' : 'light'}
       size="sm"
-      style={{ cursor: 'pointer', userSelect: 'none' }}
+      style={{ cursor: 'pointer', userSelect: 'none', ...(active ? { color: 'white' } : {}) }}
       onClick={onClick}
     >
       {label}
@@ -371,6 +372,7 @@ export function TasksPanel({
         estimateHours: number | null
         assigneeEmail: string | null
         tagNames: string[]
+        phaseName: string | null
       }>
     }) =>
       api<{ count: number; ids: string[] }>('/api/tasks/bulk', {
@@ -482,6 +484,7 @@ export function TasksPanel({
       assigneeName: t.assignee?.name ?? null,
       reporterEmail: t.reporter.email,
       projectName: t.project.name,
+      phaseTitle: t.phase?.title ?? null,
       tags: t.tags.map((tg) => tg.tag.name),
       createdAt: t.createdAt,
       closedAt: t.closedAt,
@@ -720,30 +723,56 @@ export function TasksPanel({
       ) : null}
 
       {activeProjectId && (phasesQ.data?.phases.length ?? 0) > 0 && (
-        <Group gap={6} wrap="wrap" px={4}>
-          <PhasePill
-            label="Semua"
-            active={phaseFilter === null}
-            color="blue"
-            onClick={() => setPhaseFilter(null)}
-          />
-          {phasesQ.data!.phases.map((p) => (
+        <Card withBorder padding="xs" radius="md">
+          <Group gap={6} wrap="wrap" align="center">
+            <Group gap={4} align="center" mr={4}>
+              <Text size="xs" fw={600} c="dimmed">
+                Fase
+              </Text>
+              <Tooltip
+                label={
+                  <Stack gap={4}>
+                    <Text size="xs" fw={600}>Apa itu Fase?</Text>
+                    <Text size="xs">Fase adalah tahapan atau sprint dalam proyek — misalnya Planning, Development, Testing, Release. Setiap task bisa dimasukkan ke satu fase agar lebih mudah dilacak per tahapan.</Text>
+                    <Text size="xs" fw={600} mt={2}>Cara pakai filter ini</Text>
+                    <Text size="xs">• Klik fase untuk filter — klik lagi untuk reset</Text>
+                    <Text size="xs">• Angka di setiap pill = jumlah task dalam fase</Text>
+                    <Text size="xs">• "Tanpa Fase" = task yang belum masuk fase manapun</Text>
+                    <Text size="xs" c="dimmed" mt={2}>Kelola fase di tab Fase pada halaman detail proyek.</Text>
+                  </Stack>
+                }
+                withArrow
+                position="bottom-start"
+                multiline
+                w={300}
+              >
+                <TbInfoCircle size={12} style={{ color: 'var(--mantine-color-dimmed)', cursor: 'help' }} />
+              </Tooltip>
+            </Group>
             <PhasePill
-              key={p.id}
-              label={p.title}
-              count={p._count.tasks}
-              active={phaseFilter === p.id}
-              color={p.status === 'COMPLETED' ? 'green' : p.status === 'ACTIVE' ? 'blue' : 'gray'}
-              onClick={() => setPhaseFilter(phaseFilter === p.id ? null : p.id)}
+              label="Semua"
+              active={phaseFilter === null}
+              color="blue"
+              onClick={() => setPhaseFilter(null)}
             />
-          ))}
-          <PhasePill
-            label="Tanpa Fase"
-            active={phaseFilter === 'none'}
-            color="gray"
-            onClick={() => setPhaseFilter(phaseFilter === 'none' ? null : 'none')}
-          />
-        </Group>
+            {phasesQ.data!.phases.map((p) => (
+              <PhasePill
+                key={p.id}
+                label={p.title}
+                count={p._count.tasks}
+                active={phaseFilter === p.id}
+                color={p.status === 'COMPLETED' ? 'green' : p.status === 'ACTIVE' ? 'blue' : 'gray'}
+                onClick={() => setPhaseFilter(phaseFilter === p.id ? null : p.id)}
+              />
+            ))}
+            <PhasePill
+              label="Tanpa Fase"
+              active={phaseFilter === 'none'}
+              color="gray"
+              onClick={() => setPhaseFilter(phaseFilter === 'none' ? null : 'none')}
+            />
+          </Group>
+        </Card>
       )}
 
       <Card withBorder padding="sm" radius="md">

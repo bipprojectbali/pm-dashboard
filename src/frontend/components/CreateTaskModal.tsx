@@ -89,6 +89,7 @@ export function CreateTaskModal({
       estimateHours: number | null
       assigneeEmail: string | null
       tagNames: string[]
+      phaseName: string | null
     }>
   }) => void
   loading: boolean
@@ -183,6 +184,7 @@ export function CreateTaskModal({
         estimateHours: r.estimateHours,
         assigneeEmail: r.assigneeEmail,
         tagNames: r.tagNames,
+        phaseName: r.phaseTitle ?? null,
       })),
     })
   }
@@ -366,6 +368,7 @@ export function CreateTaskModal({
                             <Table.Th>Est (h)</Table.Th>
                             <Table.Th>Assignee</Table.Th>
                             <Table.Th>Tags</Table.Th>
+                            <Table.Th>Fase</Table.Th>
                             <Table.Th>Errors</Table.Th>
                           </Table.Tr>
                         </Table.Thead>
@@ -399,6 +402,7 @@ export function CreateTaskModal({
                                 <Table.Td>{row.estimateHours ?? '—'}</Table.Td>
                                 <Table.Td>{row.assigneeEmail ?? '—'}</Table.Td>
                                 <Table.Td>{row.tagNames.join(', ') || '—'}</Table.Td>
+                                <Table.Td>{row.phaseTitle || '—'}</Table.Td>
                                 <Table.Td>
                                   {hasError ? (
                                     <Stack gap={2}>

@@ -184,6 +184,7 @@ export function tasksRoutes() {
           dueAt?: string | null
           estimateHours?: number | null
           tagNames?: string[]
+          phaseName?: string | null
         }>
       }
       if (!body.projectId || !Array.isArray(body.tasks) || body.tasks.length === 0) {
@@ -211,6 +212,7 @@ export function tasksRoutes() {
       const errors: Array<{ index: number; field: string; message: string }> = []
       const emailSet = new Set<string>()
       const tagNameSet = new Set<string>()
+      const phaseNameSet = new Set<string>()
       const normalizedRows: Array<{
         title: string
         description: string
@@ -222,6 +224,7 @@ export function tasksRoutes() {
         dueAt: Date | null
         estimateHours: number | null
         tagNames: string[]
+        phaseName: string | null
       }> = []
       for (let i = 0; i < body.tasks.length; i++) {
         const r = body.tasks[i]
@@ -264,6 +267,8 @@ export function tasksRoutes() {
         }
         const tagNames = Array.isArray(r.tagNames) ? r.tagNames.map((t) => String(t).trim()).filter(Boolean) : []
         for (const t of tagNames) tagNameSet.add(t)
+        const phaseName = r.phaseName?.trim() || null
+        if (phaseName) phaseNameSet.add(phaseName)
         normalizedRows.push({
           title,
           description,
@@ -275,6 +280,7 @@ export function tasksRoutes() {
           dueAt,
           estimateHours,
           tagNames,
+          phaseName,
         })
       }
       const users = emailSet.size
@@ -297,6 +303,13 @@ export function tasksRoutes() {
           if (!tagIdByName.has(tn)) errors.push({ index: i, field: 'tagNames', message: `tag not in project: ${tn}` })
         }
       }
+      const phasesByName = phaseNameSet.size
+        ? await prisma.projectPhase.findMany({
+            where: { projectId: body.projectId, title: { in: [...phaseNameSet] } },
+            select: { id: true, title: true },
+          })
+        : []
+      const phaseIdByName = new Map(phasesByName.map((p) => [p.title, p.id]))
       if (errors.length) {
         set.status = 400
         return { error: 'Validation failed', errors }
@@ -316,6 +329,7 @@ export function tasksRoutes() {
               startsAt: r.startsAt,
               dueAt: r.dueAt,
               estimateHours: r.estimateHours,
+              phaseId: r.phaseName ? (phaseIdByName.get(r.phaseName) ?? null) : null,
               tags: r.tagNames.length ? { create: r.tagNames.map((n) => ({ tagId: tagIdByName.get(n)! })) } : undefined,
             },
           }),

@@ -26,6 +26,7 @@ export interface ParsedTaskRow {
   estimateHours: number | null
   assigneeEmail: string | null
   tagNames: string[]
+  phaseTitle: string | null
 }
 
 export interface RowError {
@@ -117,6 +118,7 @@ export function parseTaskCsv(text: string): ParseResult {
   const idx: Record<TaskCsvHeader, number> = Object.fromEntries(
     TASK_CSV_HEADERS.map((h) => [h, header.indexOf(h)]),
   ) as Record<TaskCsvHeader, number>
+  const phaseTitleIdx = header.indexOf('phaseTitle')
 
   for (let r = 1; r < raw.length; r++) {
     const cols = raw[r]
@@ -131,6 +133,7 @@ export function parseTaskCsv(text: string): ParseResult {
     const estRaw = get('estimateHours')
     const assigneeEmailRaw = get('assigneeEmail')
     const tagNamesRaw = get('tagNames')
+    const phaseTitleRaw = phaseTitleIdx >= 0 ? (cols[phaseTitleIdx] ?? '').trim() : ''
 
     if (!title) errors.push({ index: rowIndex, field: 'title', message: 'title wajib' })
     else if (title.length > 500) errors.push({ index: rowIndex, field: 'title', message: 'title > 500 char' })
@@ -179,7 +182,9 @@ export function parseTaskCsv(text: string): ParseResult {
           .filter(Boolean)
       : []
 
-    rows.push({ title, description, kind, priority, startsAt, dueAt, estimateHours, assigneeEmail, tagNames })
+    const phaseTitle = phaseTitleRaw || null
+
+    rows.push({ title, description, kind, priority, startsAt, dueAt, estimateHours, assigneeEmail, tagNames, phaseTitle })
   }
   return { rows, errors, rawRows: raw }
 }
@@ -188,7 +193,7 @@ export function buildSampleCsv(): string {
   const tomorrow = toLocalDateStr(new Date(Date.now() + 86_400_000))
   const nextWeek = toLocalDateStr(new Date(Date.now() + 7 * 86_400_000))
   const lines: string[] = []
-  lines.push(TASK_CSV_HEADERS.join(','))
+  lines.push([...TASK_CSV_HEADERS, 'phaseTitle'].join(','))
   lines.push(
     csvRow([
       'Implement login flow',
@@ -200,6 +205,7 @@ export function buildSampleCsv(): string {
       '6.5',
       '',
       'frontend;auth',
+      'Development',
     ]),
   )
   lines.push(
@@ -213,6 +219,7 @@ export function buildSampleCsv(): string {
       '3',
       'kurosakiblackangel@gmail.com',
       'backend',
+      '',
     ]),
   )
   lines.push(
@@ -226,6 +233,7 @@ export function buildSampleCsv(): string {
       '',
       '',
       '',
+      'Testing',
     ]),
   )
   return `${lines.join('\n')}\n`
@@ -256,6 +264,7 @@ export interface ExportTaskRow {
   assigneeName: string | null
   reporterEmail: string
   projectName: string
+  phaseTitle: string | null
   tags: string[]
   createdAt: string
   closedAt: string | null
@@ -277,6 +286,7 @@ const EXPORT_HEADERS = [
   'assigneeName',
   'reporterEmail',
   'projectName',
+  'phaseTitle',
   'tags',
   'createdAt',
   'closedAt',
@@ -302,6 +312,7 @@ export function buildExportCsv(tasks: ExportTaskRow[]): string {
         t.assigneeName ?? '',
         t.reporterEmail,
         t.projectName,
+        t.phaseTitle ?? '',
         t.tags.join(';'),
         t.createdAt,
         t.closedAt ?? '',

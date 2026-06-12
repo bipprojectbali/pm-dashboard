@@ -149,6 +149,19 @@ export function tasksRoutes() {
         return { error: 'updates array required' }
       }
       const updates = body.updates as Array<{ id: string; kanbanOrder: number; status?: string }>
+      const firstTask = await prisma.task.findUnique({
+        where: { id: updates[0].id, deletedAt: null },
+        select: { projectId: true },
+      })
+      if (!firstTask) {
+        set.status = 404
+        return { error: 'Task not found' }
+      }
+      const reorderMembership = await requireProjectMember(firstTask.projectId, auth.userId)
+      if (!isSystemAdmin(auth.role) && (!reorderMembership || reorderMembership.role === 'VIEWER')) {
+        set.status = 403
+        return { error: 'Not a writable project member' }
+      }
       await Promise.all(
         updates.map((u) =>
           prisma.task.update({
@@ -457,7 +470,7 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership && auth.role !== 'SUPER_ADMIN') {
+      if (!membership && !isSystemAdmin(auth.role)) {
         set.status = 403
         return { error: 'Not a project member' }
       }
@@ -478,7 +491,7 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const membership = await requireProjectMember(current.projectId, auth.userId)
-      if (!membership || membership.role === 'VIEWER') {
+      if (!isSystemAdmin(auth.role) && (!membership || membership.role === 'VIEWER')) {
         set.status = 403
         return { error: 'Not a writable project member' }
       }
@@ -916,7 +929,7 @@ export function tasksRoutes() {
         return { error: 'Task not found' }
       }
       const membership = await requireProjectMember(task.projectId, auth.userId)
-      if (!membership && auth.role !== 'SUPER_ADMIN') {
+      if (!membership && !isSystemAdmin(auth.role)) {
         set.status = 403
         return { error: 'Not a project member' }
       }

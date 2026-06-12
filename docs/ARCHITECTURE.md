@@ -25,6 +25,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `GithubWebhookLog` (id, projectId?, deliveryId?, event, statusCode, reason?, ip?, eventsIn, createdAt) — audit trail for `/webhooks/github`
   - `ProjectMember` (projectId, userId, role) — unique per (projectId, userId)
   - `ProjectMilestone`, `ProjectExtension` — planning + audited deadline pushes
+  - `ProjectPhase` (id, projectId, title, description?, summary?, status=PhaseStatus, order, startsAt?, endsAt?, timestamps) — fase/sprint per project; `summary` diisi saat menutup fase (ACTIVE→COMPLETED). Tasks link via nullable FK `phaseId` with `onDelete: SetNull`. Enum `PhaseStatus` = `PLANNING | ACTIVE | COMPLETED`.
   - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, timestamps)
   - `Tag` (id, projectId, name, color) — unique per (projectId, name)
   - `TaskTag` — m2m between Task and Tag

@@ -202,6 +202,33 @@ describe('PATCH /api/phases/:id', () => {
     )
     expect(res.status).toBe(404)
   })
+
+  test('update summary + status COMPLETED — summary tersimpan', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/phases/${phaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ status: 'COMPLETED', summary: 'Sprint selesai, semua target tercapai.' }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.phase.summary).toBe('Sprint selesai, semua target tercapai.')
+    expect(body.phase.status).toBe('COMPLETED')
+  })
+
+  test('list phases — field summary ikut dalam response', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects/${projectId}/phases`, {
+        headers: { cookie: `session=${ownerToken}` },
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    const patchedPhase = body.phases.find((p: { id: string }) => p.id === phaseId)
+    expect(patchedPhase).toBeDefined()
+    expect(patchedPhase?.summary).toBe('Sprint selesai, semua target tercapai.')
+  })
 })
 
 describe('DELETE /api/phases/:id', () => {

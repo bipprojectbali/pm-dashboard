@@ -336,7 +336,7 @@ export function ProjectDetailView({
               </Menu>
 
               {/* Active secondary tab indicator */}
-              {(['extensions', 'retro', 'settings'] as const).includes(tab as 'extensions' | 'retro' | 'settings') && (
+              {(tab === 'extensions' || tab === 'retro' || tab === 'settings') && (
                 <Box
                   px="sm"
                   py={4}

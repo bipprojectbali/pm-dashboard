@@ -121,6 +121,7 @@ export function phasesRoutes() {
       const body = (await request.json()) as {
         title?: string
         description?: string | null
+        summary?: string | null
         status?: string
         startsAt?: string | null
         endsAt?: string | null
@@ -133,6 +134,7 @@ export function phasesRoutes() {
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title.trim()
       if (body.description !== undefined) data.description = body.description?.trim() || null
+      if (body.summary !== undefined) data.summary = body.summary?.trim() || null
       if (body.status !== undefined) data.status = body.status
       if (body.startsAt !== undefined) data.startsAt = body.startsAt ? new Date(body.startsAt) : null
       if (body.endsAt !== undefined) data.endsAt = body.endsAt ? new Date(body.endsAt) : null

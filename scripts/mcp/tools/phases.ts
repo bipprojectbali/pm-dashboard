@@ -52,13 +52,14 @@ export const phasesTools: ToolModule = {
           projectId: z.string(),
           title: z.string().min(1),
           description: z.string().optional(),
+          summary: z.string().nullable().optional(),
           status: PhaseStatusEnum.default('PLANNING'),
           startsAt: z.string().optional(),
           endsAt: z.string().optional(),
           order: z.number().int().optional(),
         },
       },
-      async ({ projectId, title, description, status, startsAt, endsAt, order }) => {
+      async ({ projectId, title, description, summary, status, startsAt, endsAt, order }) => {
         let nextOrder = order
         if (nextOrder === undefined) {
           const last = await prisma.projectPhase.findFirst({
@@ -73,6 +74,7 @@ export const phasesTools: ToolModule = {
             projectId,
             title,
             description: description ?? null,
+            summary: summary ?? null,
             status,
             startsAt: startsAt ? new Date(startsAt) : null,
             endsAt: endsAt ? new Date(endsAt) : null,
@@ -94,6 +96,7 @@ export const phasesTools: ToolModule = {
           phaseId: z.string(),
           title: z.string().optional(),
           description: z.string().nullable().optional(),
+          summary: z.string().nullable().optional(),
           status: PhaseStatusEnum.optional(),
           startsAt: z.string().nullable().optional(),
           endsAt: z.string().nullable().optional(),

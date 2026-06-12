@@ -7,6 +7,13 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Ditambahkan
+- **Phase summary + Stepper + Template** — tiga peningkatan pada fitur ProjectPhase:
+  - Field `summary` (nullable) untuk kesimpulan fase — diisi saat menutup fase via modal "Selesaikan Fase" (ACTIVE → COMPLETED)
+  - Tampilan `<Stepper>` vertikal menggantikan list card — progres PLANNING → ACTIVE → COMPLETED terbaca visual dengan warna per status
+  - Tombol "Gunakan Template Standar" di empty state — buat 4 fase preset sekaligus (Planning, Development, Testing, Release)
+  - Edit fase via modal; aksi per fase: "Mulai Fase" (PLANNING→ACTIVE), "Selesaikan Fase" (ACTIVE→COMPLETED+summary)
+
 ## [0.7.4] - 2026-06-12
 
 ### Ditambahkan

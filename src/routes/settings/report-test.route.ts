@@ -1,0 +1,97 @@
+import { Elysia } from 'elysia'
+import { getSetting } from '../../lib/app-settings'
+import { getAdminUser } from './helpers'
+
+export function reportTestRoutes() {
+  return new Elysia()
+
+    .post('/api/admin/report/test-ai', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) {
+        set.status = 403
+        return { error: 'Forbidden' }
+      }
+      const [apiKey, model, baseUrl] = await Promise.all([
+        getSetting('ai.anthropicApiKey'),
+        getSetting('ai.model'),
+        getSetting('ai.baseUrl'),
+      ])
+      if (!apiKey) return { ok: false, message: 'Anthropic API key belum dikonfigurasi' }
+      const endpoint = baseUrl ? `${baseUrl.replace(/\/$/, '')}/v1/messages` : 'https://api.anthropic.com/v1/messages'
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model ?? 'claude-haiku-4-5-20251001',
+            max_tokens: 16,
+            messages: [{ role: 'user', content: 'Reply with: OK' }],
+          }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: { message?: string; type?: string } }
+          const kind = err.error?.type ?? ''
+          const detail = err.error?.message ?? 'unknown'
+          if (res.status === 429 || kind === 'rate_limit_error') {
+            set.status = 429
+            const resetAt =
+              res.headers.get('x-ratelimit-reset-tokens') ?? res.headers.get('x-ratelimit-reset-requests')
+            const resetHint = resetAt
+              ? ` Reset: ${new Date(resetAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' })} WITA.`
+              : ''
+            return {
+              ok: false,
+              message: `Rate limit proxy — quota request token ini habis.${resetHint} Coba rotate token atau tunggu reset.`,
+            }
+          }
+          if (res.status === 401 || res.status === 403) {
+            set.status = 401
+            return { ok: false, message: `API key tidak valid atau tidak punya akses (${res.status}).` }
+          }
+          set.status = 502
+          return { ok: false, message: `Claude API error ${res.status}: ${detail}` }
+        }
+        return { ok: true, message: `Koneksi Claude API berhasil (model: ${model ?? 'claude-haiku-4-5-20251001'})` }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        set.status = 502
+        return { ok: false, message: `Tidak bisa menghubungi Claude API: ${msg}` }
+      }
+    })
+
+    .post('/api/admin/report/test-telegram', async ({ request, set }) => {
+      const user = await getAdminUser(request)
+      if (!user) {
+        set.status = 403
+        return { error: 'Forbidden' }
+      }
+      const [botToken, chatId] = await Promise.all([getSetting('telegram.botToken'), getSetting('telegram.chatId')])
+      if (!botToken) return { ok: false, message: 'Telegram bot token belum dikonfigurasi' }
+      if (!chatId) return { ok: false, message: 'Telegram chat ID belum dikonfigurasi' }
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: '✅ Test berhasil! Koneksi Telegram pm-dashboard berjalan normal.',
+          }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { description?: string }
+          set.status = 502
+          return { ok: false, message: `Telegram error ${res.status}: ${err.description ?? 'unknown'}` }
+        }
+        return { ok: true, message: 'Pesan test berhasil dikirim ke Telegram' }
+      } catch (e) {
+        set.status = 502
+        return { ok: false, message: e instanceof Error ? e.message : String(e) }
+      }
+    })
+}

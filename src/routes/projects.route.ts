@@ -641,6 +641,7 @@ export function projectsRoutes() {
       if (projectIds.length === 0) return { milestones: [] }
       const milestones = await prisma.projectMilestone.findMany({
         where: { projectId: { in: projectIds } },
+        include: { tags: { include: { tag: true } } },
         orderBy: [{ order: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
       })
       return { milestones }
@@ -659,6 +660,7 @@ export function projectsRoutes() {
       }
       const milestones = await prisma.projectMilestone.findMany({
         where: { projectId: params.id },
+        include: { tags: { include: { tag: true } } },
         orderBy: [{ order: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
       })
       return { milestones }
@@ -679,6 +681,7 @@ export function projectsRoutes() {
         title?: string
         description?: string | null
         dueAt?: string | null
+        tagIds?: string[]
       }
       if (!body.title?.trim()) {
         set.status = 400
@@ -689,7 +692,7 @@ export function projectsRoutes() {
         orderBy: { order: 'desc' },
         select: { order: true },
       })
-      const milestone = await prisma.projectMilestone.create({
+      const created = await prisma.projectMilestone.create({
         data: {
           projectId: params.id,
           title: body.title.trim(),
@@ -698,7 +701,17 @@ export function projectsRoutes() {
           order: (last?.order ?? -1) + 1,
         },
       })
-      audit(auth.userId, 'MILESTONE_CREATED', `${params.id} ${milestone.title}`, getIp(request))
+      if (body.tagIds?.length) {
+        await prisma.milestoneTag.createMany({
+          data: body.tagIds.map((tagId) => ({ milestoneId: created.id, tagId })),
+          skipDuplicates: true,
+        })
+      }
+      const milestone = await prisma.projectMilestone.findUnique({
+        where: { id: created.id },
+        include: { tags: { include: { tag: true } } },
+      })
+      audit(auth.userId, 'MILESTONE_CREATED', `${params.id} ${created.title}`, getIp(request))
       emitInvalidate('milestones', { projectId: params.id })
       return { milestone }
     })
@@ -728,6 +741,7 @@ export function projectsRoutes() {
         dueAt?: string | null
         completed?: boolean
         order?: number
+        tagIds?: string[]
       }
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title.trim()
@@ -735,7 +749,20 @@ export function projectsRoutes() {
       if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null
       if (body.completed !== undefined) data.completedAt = body.completed ? new Date() : null
       if (body.order !== undefined) data.order = body.order
-      const milestone = await prisma.projectMilestone.update({ where: { id: params.id }, data })
+      await prisma.projectMilestone.update({ where: { id: params.id }, data })
+      if (body.tagIds !== undefined) {
+        await prisma.milestoneTag.deleteMany({ where: { milestoneId: params.id } })
+        if (body.tagIds.length) {
+          await prisma.milestoneTag.createMany({
+            data: body.tagIds.map((tagId) => ({ milestoneId: params.id, tagId })),
+            skipDuplicates: true,
+          })
+        }
+      }
+      const milestone = await prisma.projectMilestone.findUnique({
+        where: { id: params.id },
+        include: { tags: { include: { tag: true } } },
+      })
       audit(
         auth.userId,
         'MILESTONE_UPDATED',

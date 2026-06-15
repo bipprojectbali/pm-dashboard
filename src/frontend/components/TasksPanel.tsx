@@ -253,7 +253,7 @@ export function TasksPanel({
   const [mine, setMine] = useState(false)
   const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
   const [tagFilter, setTagFilter] = useState<string | null>(null)
-  const [phaseFilter, setPhaseFilter] = useLocalStorage<string | null>({ key: 'pm:tasks:phase-filter', defaultValue: null })
+  const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
   const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(
@@ -638,6 +638,12 @@ export function TasksPanel({
     sortBy,
     sortDir,
   ])
+
+  // Reset filter yang project-scoped saat berpindah project
+  useEffect(() => {
+    setPhaseFilter(null)
+    setTagFilter(null)
+  }, [activeProjectId])
 
   return (
     <Stack gap="md">

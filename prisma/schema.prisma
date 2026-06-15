@@ -234,7 +234,8 @@ model ProjectMilestone {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tags    MilestoneTag[]
 
   @@index([projectId])
   @@index([dueAt])
@@ -353,8 +354,9 @@ model Tag {
   color     String   @default("blue")
   createdAt DateTime @default(now())
 
-  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks   TaskTag[]
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks      TaskTag[]
+  milestones MilestoneTag[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -371,6 +373,18 @@ model TaskTag {
   @@id([taskId, tagId])
   @@index([tagId])
   @@map("task_tag")
+}
+
+model MilestoneTag {
+  milestoneId String
+  tagId       String
+
+  milestone ProjectMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  tag       Tag              @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([milestoneId, tagId])
+  @@index([tagId])
+  @@map("milestone_tag")
 }
 
 model TaskDependency {

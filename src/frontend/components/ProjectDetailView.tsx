@@ -46,7 +46,7 @@ import { MembersSection } from './MembersSection'
 import { MilestonesSection } from './MilestonesSection'
 import { PhasesSection } from './PhasesSection'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
-import type { ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus } from './ProjectsPanel'
+import type { MemberRole, ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus } from './ProjectsPanel'
 import { RetroTab } from './RetroTab'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 import { UserAvatar } from './shared/UserAvatar'
@@ -152,6 +152,7 @@ export function ProjectDetailView({
   })
 
   const project = detailQ.data?.project
+  const myRole: MemberRole | null = (detailQ.data?.myRole as MemberRole) ?? null
   const canWrite = detailQ.data?.canWrite ?? false
 
   useHotkeys([['Escape', onBack]])
@@ -251,7 +252,7 @@ export function ProjectDetailView({
         </Alert>
       ) : (
         <>
-          <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} />
+          <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} myRole={myRole} />
 
           <Tabs
             value={tab}
@@ -368,23 +369,23 @@ export function ProjectDetailView({
             <Tabs.Panel value="team" pt="md">
               <MembersSection
                 projectId={project.id}
-                myRole={project.myRole}
+                myRole={myRole}
                 systemRole={systemRole}
                 ownerId={project.ownerId}
               />
             </Tabs.Panel>
             <Tabs.Panel value="milestones" pt="md">
-              <MilestonesSection projectId={project.id} canManage={computeCanManage(project.myRole, systemRole)} />
+              <MilestonesSection projectId={project.id} canManage={computeCanManage(myRole, systemRole)} />
             </Tabs.Panel>
             <Tabs.Panel value="phases" pt="md">
-              <PhasesSection projectId={project.id} canManage={computeCanManage(project.myRole, systemRole)} />
+              <PhasesSection projectId={project.id} canManage={computeCanManage(myRole, systemRole)} />
             </Tabs.Panel>
             <Tabs.Panel value="extensions" pt="md">
               <ExtensionsSection
                 projectId={project.id}
                 currentEndAt={project.endsAt}
                 startsAt={project.startsAt}
-                canExtend={computeCanManage(project.myRole, systemRole)}
+                canExtend={computeCanManage(myRole, systemRole)}
               />
             </Tabs.Panel>
             <Tabs.Panel value="retro" pt="md">
@@ -421,10 +422,12 @@ function ProjectHeader({
   project,
   systemRole,
   canWrite,
+  myRole,
 }: {
   project: ProjectDetail
   systemRole: string | null
   canWrite: boolean
+  myRole: string | null
 }) {
   const { overdue, daysOver } = computeOverdue(project)
   const extended =
@@ -449,9 +452,9 @@ function ProjectHeader({
             <Badge color={PRIORITY_COLOR[project.priority]} variant="dot" size="sm">
               {project.priority}
             </Badge>
-            {project.myRole ? (
-              <Badge color={ROLE_COLOR[project.myRole] ?? 'gray'} variant="light" size="sm">
-                {project.myRole}
+            {myRole ? (
+              <Badge color={ROLE_COLOR[myRole] ?? 'gray'} variant="light" size="sm">
+                {myRole}
               </Badge>
             ) : isSystemAdmin(systemRole) ? (
               <Badge color="gray" variant="outline" size="sm">

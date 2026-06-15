@@ -7,18 +7,32 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-06-15
+
 ### Ditambahkan
-- **Phase tabs + Phase assignment di Tasks** — integrasi fase ke tampilan dan form task:
-  - Baris pill interaktif (Semua / nama fase dengan jumlah task / Tanpa Fase) menggantikan dropdown filter di TasksPanel — klik pill untuk filter, klik lagi untuk clear
-  - Select "Fase" di form Create Task (hanya muncul jika project punya fase)
-  - Select "Fase" di sidebar edit TaskDetailView — ubah fase langsung dari detail task
-  - Kolom "Fase" di tabel task (hanya ketika dalam scope project) dengan Badge warna indigo
-  - Backend `POST /api/tasks` dan `PATCH /api/tasks/:id` sekarang menerima `phaseId`
-- **Phase summary + Stepper + Template** — tiga peningkatan pada fitur ProjectPhase:
-  - Field `summary` (nullable) untuk kesimpulan fase — diisi saat menutup fase via modal "Selesaikan Fase" (ACTIVE → COMPLETED)
-  - Tampilan `<Stepper>` vertikal menggantikan list card — progres PLANNING → ACTIVE → COMPLETED terbaca visual dengan warna per status
-  - Tombol "Gunakan Template Standar" di empty state — buat 4 fase preset sekaligus (Planning, Development, Testing, Release)
-  - Edit fase via modal; aksi per fase: "Mulai Fase" (PLANNING→ACTIVE), "Selesaikan Fase" (ACTIVE→COMPLETED+summary)
+- **Milestone Tags** — m2m antara `ProjectMilestone` dan `Tag` via model `MilestoneTag`.
+  - Schema: tabel `milestone_tag` (milestoneId, tagId, cascade delete on both sides), migration `20260615000000_add_milestone_tags`.
+  - HTTP API: `GET /api/projects/:id/milestones` + `GET /api/milestones` kini include `tags[]`; `POST /api/projects/:id/milestones` dan `PATCH /api/milestones/:id` menerima `tagIds[]` (replace-set).
+  - MCP: `milestone_list`, `milestone_create`, `milestone_update` include/manage tags.
+  - Frontend: `MilestoneEditModal` dengan tag multi-select; badge tag di `MilestonesSection`.
+  - Tests: `tests/integration/milestones.test.ts` — 19 test case (CRUD + tag replace + cascade delete).
+- **Chat AI tool `query_effort`** — tool ke-5 yang melengkapi `CHAT_TOOLS`. Mode: `task` (detail estimasi vs aktual satu task), `user` (ringkasan open task per user), `overbudget` (task yang melebihi atau di bawah estimasi berdasarkan timeline closedAt−startsAt).
+- **Runtime Permission Config** — konfigurasi role yang bisa buat project, dll. disimpan di `app_settings` dan bisa diubah tanpa redeploy.
+
+### Diubah
+- **File-health refactor (15 file)** — 15 file besar di-split menjadi sub-modul sesuai batas FILE-HEALTH.md:
+  - `src/lib/admin-overview.ts` (547 baris) → `admin-overview/{kpis,health,load,risks,analytics,shared}.ts`
+  - `src/lib/chat.ts` (453 baris) → `chat/{context,rag,stream,embedding,search,upsert,types,...}.ts`
+  - `src/lib/chat-tools.ts` (532 baris) → `chat-tools/{schemas,types,users,tasks,projects,github,effort}.ts`
+  - `src/lib/retro.ts` (353 baris) → `retro/{compute,render,types}.ts`
+  - `src/lib/routes-metadata.ts` (553 baris) → `routes-metadata/{admin,auth,frontend,misc,projects,tasks,types,user}.ts`
+  - Route handlers: `admin.route.ts`, `events.route.ts`, `me.route.ts`, `projects.route.ts`, `qc.route.ts`, `settings.route.ts`, `tasks.route.ts`, `webhooks.route.ts` masing-masing dipecah ke sub-direktori.
+  - `src/frontend/routes/dev.tsx` (3521 baris) → 17 komponen di `src/frontend/components/dev/`.
+- **Fix tasks role-check** — 3 gap kontrol akses di endpoint task diperbaiki berdasarkan audit permissions.
+
+### Ditambahkan (sebelumnya di Unreleased)
+- **Phase tabs + Phase assignment di Tasks** — baris pill interaktif filter fase, kolom fase di tabel, `phaseId` di create/update task.
+- **Phase summary + Stepper + Template** — field `summary` saat menutup fase, tampilan Stepper vertikal, template 4 fase preset.
 
 ## [0.7.4] - 2026-06-12
 

@@ -70,4 +70,26 @@ export const CHAT_TOOLS: AnthropicTool[] = [
       },
     },
   },
+  {
+    name: 'query_effort',
+    description:
+      'Effort tracking dari pm-watch ActivityWatch: mode=task (detail satu task), mode=user (phantom work per user — ' +
+      'aktivitas yang tidak terlacak ke task), mode=overbudget (task yang melebihi/di bawah estimasi). ' +
+      'Pakai untuk: "siapa paling banyak phantom work", "task mana yang overbudget", "berapa actual hours task X".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: ['task', 'user', 'overbudget'], description: 'Mode query effort.' },
+        taskId: { type: 'string', description: 'Wajib untuk mode=task.' },
+        verdict: {
+          type: 'string',
+          enum: ['over', 'under', 'on', 'missing-estimate', 'no-assignee', 'no-activity'],
+          description: 'Filter verdict untuk mode=overbudget. Default "over".',
+        },
+        sinceDays: { type: 'number', description: 'Window hari untuk mode=user. Default 7.' },
+        limit: { type: 'number', description: '1-50, default 20.' },
+      },
+      required: ['mode'],
+    },
+  },
 ]

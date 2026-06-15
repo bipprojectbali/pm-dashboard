@@ -173,7 +173,3 @@ export function computeProgressPercent(task: {
   }
   return task.progressPercent
 }
-
-export function writeAuditLog(userId: string | null, action: string, detail: string | null, ip: string): void {
-  prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
-}

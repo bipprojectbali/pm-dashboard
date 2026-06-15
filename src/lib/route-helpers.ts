@@ -157,6 +157,10 @@ export function computeActualHours(task: {
   return Math.round(((end - start) / 3_600_000) * 100) / 100
 }
 
+export function writeAuditLog(userId: string | null, action: string, detail: string | null, ip: string): void {
+  prisma.auditLog.create({ data: { userId, action, detail, ip } }).catch(() => {})
+}
+
 export function computeProgressPercent(task: {
   progressPercent: number | null
   status: string

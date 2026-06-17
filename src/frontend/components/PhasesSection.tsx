@@ -144,7 +144,13 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
 
   const handleTemplate = async () => {
     for (const t of TEMPLATE_PHASES) {
-      await create.mutateAsync({ title: t.title, description: t.description, status: 'PLANNING', startsAt: null, endsAt: null })
+      await create.mutateAsync({
+        title: t.title,
+        description: t.description,
+        status: 'PLANNING',
+        startsAt: null,
+        endsAt: null,
+      })
     }
     invalidate()
   }
@@ -179,12 +185,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
               key={phase.id}
               label={
                 <Group gap={6} wrap="nowrap">
-                  <Text
-                    size="sm"
-                    fw={500}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => openDetailModal(phase)}
-                  >
+                  <Text size="sm" fw={500} style={{ cursor: 'pointer' }} onClick={() => openDetailModal(phase)}>
                     {phase.title}
                   </Text>
                   <Badge size="xs" color={PHASE_STATUS_COLOR[phase.status]} variant="light">

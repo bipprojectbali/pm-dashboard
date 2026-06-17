@@ -9,8 +9,8 @@ import {
   Select,
   Stack,
   Text,
-  TextInput,
   Textarea,
+  TextInput,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { modals } from '@mantine/modals'
@@ -104,7 +104,13 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
   )
 }
 
-export function CompletePhaseModal({ phaseName, onConfirm }: { phaseName: string; onConfirm: (summary: string) => void }) {
+export function CompletePhaseModal({
+  phaseName,
+  onConfirm,
+}: {
+  phaseName: string
+  onConfirm: (summary: string) => void
+}) {
   const [summary, setSummary] = useState('')
   return (
     <Stack gap="sm">

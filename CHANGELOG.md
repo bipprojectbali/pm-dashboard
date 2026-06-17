@@ -7,6 +7,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.11] - 2026-06-17
+
+### Diperbaiki
+- Kontrol edit, hapus, dan ubah status fase kini tampil untuk semua fase (sebelumnya tersembunyi karena hanya fase aktif yang me-render isi `Stepper.Step`). Aksi dipindah ke menu kebab di label fase sehingga selalu tampil.
+
+### Ditambahkan
+- Modal detail fase read-only yang bisa dibuka untuk fase berstatus apa pun (termasuk COMPLETED), menampilkan status, jumlah task, periode, deskripsi, dan kesimpulan. Dapat diakses semua user, bukan hanya pengelola proyek.
+
 ## [0.7.9] - 2026-06-15
 
 ### Ditambahkan

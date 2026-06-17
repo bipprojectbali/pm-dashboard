@@ -226,8 +226,8 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
                   </Text>
                 )}
                 {phase.status === 'COMPLETED' && (
-                  <Card withBorder radius="sm" p="xs" bg="green.0">
-                    <Text size="xs" fw={600} mb={2}>
+                  <Card withBorder radius="sm" p="xs" bg="var(--mantine-color-green-light)">
+                    <Text size="xs" fw={600} mb={2} c="var(--mantine-color-green-light-color)">
                       Kesimpulan
                     </Text>
                     <Text size="xs" c={phase.summary ? undefined : 'dimmed'}>

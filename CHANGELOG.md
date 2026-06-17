@@ -7,6 +7,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.12] - 2026-06-17
+
+### Diperbaiki
+- Kartu "Kesimpulan" pada fase COMPLETED kini menyesuaikan dark/light mode (sebelumnya latar hijau terang `green.0` membuat teks nyaris tak terbaca di dark mode). Beralih ke variabel tema Mantine `green-light` agar kontras di kedua tema.
+
 ## [0.7.11] - 2026-06-17
 
 ### Diperbaiki

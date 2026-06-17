@@ -85,8 +85,8 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
       {phase.status === 'COMPLETED' && (
         <>
           <Divider />
-          <Card withBorder radius="sm" p="sm" bg="green.0">
-            <Text size="xs" fw={600} mb={4}>
+          <Card withBorder radius="sm" p="sm" bg="var(--mantine-color-green-light)">
+            <Text size="xs" fw={600} mb={4} c="var(--mantine-color-green-light-color)">
               Kesimpulan
             </Text>
             <Text size="sm" c={phase.summary ? undefined : 'dimmed'}>

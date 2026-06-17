@@ -1,52 +1,19 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Select,
-  Stack,
-  Stepper,
-  Text,
-  TextInput,
-  Textarea,
-  Tooltip,
-} from '@mantine/core'
+import { Badge, Button, Card, Group, Stack, Stepper, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { TbEdit, TbPlayerPlay, TbPlus, TbStack2, TbTrash } from 'react-icons/tb'
+import { TbPlus, TbStack2 } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
-
-type PhaseStatus = 'PLANNING' | 'ACTIVE' | 'COMPLETED'
-
-interface ProjectPhase {
-  id: string
-  projectId: string
-  title: string
-  description: string | null
-  summary: string | null
-  status: PhaseStatus
-  order: number
-  startsAt: string | null
-  endsAt: string | null
-  createdAt: string
-  updatedAt: string
-  _count: { tasks: number }
-}
-
-const PHASE_STATUS_COLOR: Record<PhaseStatus, string> = {
-  PLANNING: 'gray',
-  ACTIVE: 'blue',
-  COMPLETED: 'green',
-}
-
-const STATUS_OPTIONS = [
-  { value: 'PLANNING', label: 'Planning' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'COMPLETED', label: 'Completed' },
-]
+import {
+  CompletePhaseModal,
+  EditPhaseModal,
+  formatPhaseDate,
+  PHASE_STATUS_COLOR,
+  PhaseActionsMenu,
+  PhaseDetailModal,
+  type ProjectPhase,
+} from './PhaseModals'
 
 const TEMPLATE_PHASES = [
   { title: 'Planning', description: 'Perencanaan scope, requirements, dan timeline' },
@@ -62,124 +29,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(err.error || `HTTP ${res.status}`)
   }
   return res.json()
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function CompletePhaseModal({ phaseName, onConfirm }: { phaseName: string; onConfirm: (summary: string) => void }) {
-  const [summary, setSummary] = useState('')
-  return (
-    <Stack gap="sm">
-      <Text size="sm">
-        Fase <b>"{phaseName}"</b> akan ditandai selesai.
-      </Text>
-      <Textarea
-        label="Kesimpulan (opsional)"
-        placeholder="Apa yang dicapai, pelajaran yang dipetik…"
-        value={summary}
-        onChange={(e) => setSummary(e.currentTarget.value)}
-        autosize
-        minRows={3}
-        data-autofocus
-      />
-      <Group justify="flex-end" gap="xs">
-        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
-          Batal
-        </Button>
-        <Button
-          color="green"
-          size="xs"
-          onClick={() => {
-            onConfirm(summary)
-            modals.closeAll()
-          }}
-        >
-          Tandai Selesai
-        </Button>
-      </Group>
-    </Stack>
-  )
-}
-
-function EditPhaseModal({
-  phase,
-  onSubmit,
-}: {
-  phase: ProjectPhase
-  onSubmit: (data: Record<string, unknown>) => void
-}) {
-  const [title, setTitle] = useState(phase.title)
-  const [description, setDescription] = useState(phase.description ?? '')
-  const [status, setStatus] = useState<PhaseStatus>(phase.status)
-  const [startsAt, setStartsAt] = useState<Date | null>(phase.startsAt ? new Date(phase.startsAt) : null)
-  const [endsAt, setEndsAt] = useState<Date | null>(phase.endsAt ? new Date(phase.endsAt) : null)
-
-  const submit = () => {
-    if (!title.trim()) return
-    onSubmit({
-      title: title.trim(),
-      description: description.trim() || null,
-      status,
-      startsAt: startsAt ? startsAt.toISOString() : null,
-      endsAt: endsAt ? endsAt.toISOString() : null,
-    })
-    modals.closeAll()
-  }
-
-  return (
-    <Stack gap="sm">
-      <TextInput
-        label="Nama fase"
-        value={title}
-        onChange={(e) => setTitle(e.currentTarget.value)}
-        required
-        data-autofocus
-      />
-      <Textarea
-        label="Deskripsi (opsional)"
-        placeholder="Tujuan atau scope fase ini"
-        value={description}
-        onChange={(e) => setDescription(e.currentTarget.value)}
-        autosize
-        minRows={2}
-      />
-      <Select
-        label="Status"
-        data={STATUS_OPTIONS}
-        value={status}
-        onChange={(v) => setStatus((v as PhaseStatus) ?? 'PLANNING')}
-      />
-      <Group grow>
-        <DateInput
-          highlightToday
-          label="Mulai"
-          placeholder="Opsional"
-          value={startsAt}
-          onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
-          clearable
-        />
-        <DateInput
-          highlightToday
-          label="Selesai"
-          placeholder="Opsional"
-          value={endsAt}
-          onChange={(v) => setEndsAt(v ? new Date(v as unknown as string) : null)}
-          clearable
-        />
-      </Group>
-      <Group justify="flex-end" gap="xs">
-        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
-          Batal
-        </Button>
-        <Button size="xs" onClick={submit} disabled={!title.trim()}>
-          Simpan
-        </Button>
-      </Group>
-    </Stack>
-  )
 }
 
 export function PhasesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
@@ -253,6 +102,10 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     return phases.filter((p) => p.status === 'COMPLETED').length
   }, [phases])
 
+  const openDetailModal = (phase: ProjectPhase) => {
+    modals.open({ title: phase.title, children: <PhaseDetailModal phase={phase} /> })
+  }
+
   const openCompleteModal = (phase: ProjectPhase) => {
     modals.open({
       title: 'Selesaikan Fase',
@@ -269,6 +122,23 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     modals.open({
       title: 'Edit Fase',
       children: <EditPhaseModal phase={phase} onSubmit={(data) => update.mutate({ id: phase.id, body: data })} />,
+    })
+  }
+
+  const openDeleteModal = (phase: ProjectPhase) => {
+    modals.openConfirmModal({
+      title: 'Hapus Fase',
+      children: (
+        <Text size="sm">
+          Hapus fase <b>"{phase.title}"</b>?
+          {phase._count.tasks > 0
+            ? ` ${phase._count.tasks} task di fase ini akan kehilangan fase-nya (tidak terhapus).`
+            : ' Tindakan ini tidak bisa dibatalkan.'}
+        </Text>
+      ),
+      labels: { confirm: 'Hapus', cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => remove.mutate(phase.id),
     })
   }
 
@@ -309,7 +179,12 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
               key={phase.id}
               label={
                 <Group gap={6} wrap="nowrap">
-                  <Text size="sm" fw={500}>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => openDetailModal(phase)}
+                  >
                     {phase.title}
                   </Text>
                   <Badge size="xs" color={PHASE_STATUS_COLOR[phase.status]} variant="light">
@@ -318,12 +193,26 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
                   <Badge size="xs" variant="default" color="gray">
                     {phase._count.tasks} task
                   </Badge>
+                  {canManage ? (
+                    <PhaseActionsMenu
+                      phase={phase}
+                      onView={() => openDetailModal(phase)}
+                      onStart={() => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } })}
+                      onComplete={() => openCompleteModal(phase)}
+                      onEdit={() => openEditModal(phase)}
+                      onDelete={() => openDeleteModal(phase)}
+                    />
+                  ) : (
+                    <Button size="compact-xs" variant="subtle" color="gray" onClick={() => openDetailModal(phase)}>
+                      Detail
+                    </Button>
+                  )}
                 </Group>
               }
               description={
                 phase.startsAt || phase.endsAt ? (
                   <Text size="xs" c="dimmed">
-                    {formatDate(phase.startsAt) ?? '?'} – {formatDate(phase.endsAt) ?? '?'}
+                    {formatPhaseDate(phase.startsAt) ?? '?'} – {formatPhaseDate(phase.endsAt) ?? '?'}
                   </Text>
                 ) : undefined
               }
@@ -344,51 +233,6 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
                       {phase.summary || '—'}
                     </Text>
                   </Card>
-                )}
-                {canManage && (
-                  <Group gap={4}>
-                    {phase.status === 'PLANNING' && (
-                      <Button
-                        size="compact-xs"
-                        variant="light"
-                        color="blue"
-                        leftSection={<TbPlayerPlay size={11} />}
-                        loading={update.isPending}
-                        onClick={() => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } })}
-                      >
-                        Mulai Fase
-                      </Button>
-                    )}
-                    {phase.status === 'ACTIVE' && (
-                      <Button
-                        size="compact-xs"
-                        variant="light"
-                        color="green"
-                        onClick={() => openCompleteModal(phase)}
-                      >
-                        Selesaikan Fase
-                      </Button>
-                    )}
-                    <Tooltip label="Edit fase">
-                      <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => openEditModal(phase)}>
-                        <TbEdit size={13} />
-                      </ActionIcon>
-                    </Tooltip>
-                    <Tooltip label="Hapus fase">
-                      <ActionIcon
-                        size="sm"
-                        variant="subtle"
-                        color="red"
-                        loading={remove.isPending}
-                        onClick={() => {
-                          if (confirm(`Hapus fase "${phase.title}"? Task di fase ini akan kehilangan fase-nya.`))
-                            remove.mutate(phase.id)
-                        }}
-                      >
-                        <TbTrash size={13} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
                 )}
               </Stack>
             </Stepper.Step>

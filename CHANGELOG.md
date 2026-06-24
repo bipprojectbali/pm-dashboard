@@ -12,6 +12,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 ### Ditambahkan
 - **Bulk add member** — MultiSelect dengan opsi "Pilih Semua" di dropdown memungkinkan menambahkan banyak member sekaligus. Tombol Add menampilkan jumlah (`Add (3)`) saat lebih dari satu dipilih; semua ditambahkan paralel lewat `Promise.all`.
 - **Bulk delete member** — checkbox per member (non-owner) dengan "Pilih semua" + indeterminate state. Tombol "Hapus (N)" muncul saat ada yang dipilih; konfirmasi via `confirm()`, kemudian hapus paralel lewat `Promise.all` dan invalidate query.
+- **Edit Kesimpulan fase** — kartu Kesimpulan pada fase COMPLETED kini collapsible (chevron toggle). Ikon pensil saat expanded membuka modal `size="lg"` dengan Textarea pre-filled. Teks Kesimpulan dan Deskripsi mendukung newline (`whiteSpace: pre-wrap`). Modal Detail dan modal Selesaikan Fase juga diperlebar ke `size="lg"`.
 
 ## [0.7.14] - 2026-06-24
 

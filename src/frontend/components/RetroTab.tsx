@@ -29,6 +29,7 @@ import {
   TbTrendingUp,
   TbUsers,
 } from 'react-icons/tb'
+import { toLocalDateStr } from '../lib/dates'
 
 interface RetroTaskRow {
   id: string
@@ -94,7 +95,7 @@ const WINDOWS: { label: string; days: number }[] = [
 
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
-  return new Date(iso).toISOString().slice(0, 10)
+  return toLocalDateStr(new Date(iso))
 }
 
 export function RetroTab({ projectId }: { projectId: string }) {

@@ -27,6 +27,7 @@ export const milestonesReadonly: ToolModule = {
         if (!includeCompleted) where.completedAt = null
         const milestones = await prisma.projectMilestone.findMany({
           where,
+          include: { tags: { include: { tag: true } } },
           orderBy: [{ projectId: 'asc' }, { order: 'asc' }, { dueAt: 'asc' }],
           take: limit,
         })
@@ -51,9 +52,10 @@ export const milestonesTools: ToolModule = {
           description: z.string().optional(),
           dueAt: z.string().optional(),
           order: z.number().int().optional(),
+          tagIds: z.array(z.string()).optional(),
         },
       },
-      async ({ projectId, title, description, dueAt, order }) => {
+      async ({ projectId, title, description, dueAt, order, tagIds }) => {
         let nextOrder = order
         if (nextOrder === undefined) {
           const last = await prisma.projectMilestone.findFirst({
@@ -63,7 +65,7 @@ export const milestonesTools: ToolModule = {
           })
           nextOrder = (last?.order ?? -1) + 1
         }
-        const milestone = await prisma.projectMilestone.create({
+        const created = await prisma.projectMilestone.create({
           data: {
             projectId,
             title,
@@ -71,6 +73,16 @@ export const milestonesTools: ToolModule = {
             dueAt: dueAt ? new Date(dueAt) : null,
             order: nextOrder,
           },
+        })
+        if (tagIds?.length) {
+          await prisma.milestoneTag.createMany({
+            data: tagIds.map((tagId) => ({ milestoneId: created.id, tagId })),
+            skipDuplicates: true,
+          })
+        }
+        const milestone = await prisma.projectMilestone.findUnique({
+          where: { id: created.id },
+          include: { tags: { include: { tag: true } } },
         })
         await audit(null, 'MCP_MILESTONE_CREATED', `${projectId} ← ${title}`)
         return jsonText({ ok: true, milestone })
@@ -89,13 +101,27 @@ export const milestonesTools: ToolModule = {
           dueAt: z.string().nullable().optional(),
           completed: z.boolean().optional(),
           order: z.number().int().optional(),
+          tagIds: z.array(z.string()).nullable().optional(),
         },
       },
-      async ({ milestoneId, dueAt, completed, ...rest }) => {
+      async ({ milestoneId, dueAt, completed, tagIds, ...rest }) => {
         const data: Record<string, unknown> = { ...rest }
         if (dueAt !== undefined) data.dueAt = dueAt ? new Date(dueAt) : null
         if (completed !== undefined) data.completedAt = completed ? new Date() : null
-        const milestone = await prisma.projectMilestone.update({ where: { id: milestoneId }, data })
+        await prisma.projectMilestone.update({ where: { id: milestoneId }, data })
+        if (tagIds !== undefined) {
+          await prisma.milestoneTag.deleteMany({ where: { milestoneId } })
+          if (tagIds && tagIds.length) {
+            await prisma.milestoneTag.createMany({
+              data: tagIds.map((tagId) => ({ milestoneId, tagId })),
+              skipDuplicates: true,
+            })
+          }
+        }
+        const milestone = await prisma.projectMilestone.findUnique({
+          where: { id: milestoneId },
+          include: { tags: { include: { tag: true } } },
+        })
         await audit(null, 'MCP_MILESTONE_UPDATED', `${milestoneId} ${Object.keys(data).join(',')}`)
         return jsonText({ ok: true, milestone })
       },

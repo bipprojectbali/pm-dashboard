@@ -15,17 +15,6 @@ enum Role {
   SUPER_ADMIN
 }
 
-enum AgentStatus {
-  PENDING
-  APPROVED
-  REVOKED
-}
-
-enum WebhookTokenStatus {
-  ACTIVE
-  DISABLED
-  REVOKED
-}
 
 enum ProjectMemberRole {
   OWNER
@@ -47,6 +36,12 @@ enum ProjectPriority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum ProjectVisibility {
+  PRIVATE
+  INTERNAL
+  PUBLIC
 }
 
 enum TaskKind {
@@ -87,31 +82,40 @@ enum GithubEventKind {
   PR_REVIEWED
 }
 
+enum PhaseStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
 model User {
-  id          String   @id @default(uuid())
-  name        String
-  email       String   @unique
-  password    String
-  role        Role     @default(USER)
-  blocked     Boolean  @default(false)
-  preferences Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String   @default("")
+  role          Role     @default(USER)
+  blocked       Boolean  @default(false)
+  preferences   Json?
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   sessions           Session[]
+  accounts           Account[]
   auditLogs          AuditLog[]
-  agents             Agent[]
-  webhookTokens      WebhookToken[]
   ownedProjects      Project[]       @relation("ProjectOwner")
   projectMemberships ProjectMember[]
   projectExtensions  ProjectExtension[] @relation("ProjectExtensionAuthor")
   reportedTasks      Task[]          @relation("TaskReporter")
   assignedTasks      Task[]          @relation("TaskAssignee")
+  deletedTasks       Task[]          @relation("TaskDeletedBy")
   taskComments       TaskComment[]   @relation("TaskCommentAuthor")
   taskStatusChanges  TaskStatusChange[] @relation("TaskStatusChangeAuthor")
   notifications      Notification[]     @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
   matchedGithubEvents    ProjectGithubEvent[] @relation("GithubEventMatchedUser")
+  createdEvents          Event[]              @relation("EventCreatedBy")
 
   @@map("user")
 }
@@ -122,11 +126,48 @@ model Session {
   userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }
 
 model AuditLog {
@@ -145,64 +186,6 @@ model AuditLog {
   @@map("audit_log")
 }
 
-model Agent {
-  id          String      @id @default(uuid())
-  agentId     String      @unique
-  hostname    String
-  osUser      String
-  status      AgentStatus @default(PENDING)
-  claimedById String?
-  lastSeenAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  claimedBy   User?               @relation(fields: [claimedById], references: [id], onDelete: SetNull)
-  events      ActivityEvent[]
-  requestLogs WebhookRequestLog[]
-
-  @@index([status])
-  @@index([claimedById])
-  @@map("agent")
-}
-
-model ActivityEvent {
-  id        String   @id @default(uuid())
-  agentId   String
-  bucketId  String
-  eventId   Int
-  timestamp DateTime
-  duration  Float
-  data      Json
-  createdAt DateTime @default(now())
-
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  @@unique([agentId, bucketId, eventId])
-  @@index([agentId])
-  @@index([timestamp])
-  @@index([bucketId])
-  @@map("activity_event")
-}
-
-model WebhookToken {
-  id          String             @id @default(uuid())
-  name        String
-  tokenHash   String             @unique
-  tokenPrefix String
-  status      WebhookTokenStatus @default(ACTIVE)
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-  createdById String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-
-  createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  requestLogs WebhookRequestLog[]
-
-  @@index([status])
-  @@index([createdById])
-  @@map("webhook_token")
-}
 
 model Project {
   id             String          @id @default(uuid())
@@ -211,6 +194,8 @@ model Project {
   ownerId        String
   status         ProjectStatus   @default(ACTIVE)
   priority       ProjectPriority @default(MEDIUM)
+  visibility     ProjectVisibility @default(INTERNAL)
+  isSelf         Boolean         @default(false)
   startsAt       DateTime?
   endsAt         DateTime?
   originalEndAt  DateTime?
@@ -224,14 +209,17 @@ model Project {
   tasks        Task[]
   extensions   ProjectExtension[]
   milestones   ProjectMilestone[]
+  phases       ProjectPhase[]
   tags         Tag[]
   githubEvents ProjectGithubEvent[]
   githubLogs   GithubWebhookLog[]
+  events       Event[]
 
   @@index([ownerId])
   @@index([archivedAt])
   @@index([status])
   @@index([endsAt])
+  @@index([isSelf])
   @@map("project")
 }
 
@@ -246,11 +234,33 @@ model ProjectMilestone {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tags    MilestoneTag[]
 
   @@index([projectId])
   @@index([dueAt])
   @@map("project_milestone")
+}
+
+model ProjectPhase {
+  id          String      @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  summary     String?
+  status      PhaseStatus @default(PLANNING)
+  order       Int         @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@map("project_phase")
 }
 
 model ProjectExtension {
@@ -300,13 +310,20 @@ model Task {
   dueAt           DateTime?
   estimateHours   Float?
   progressPercent Int?
+  kanbanOrder     Int          @default(0)
+  phaseId         String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   closedAt        DateTime?
+  deletedAt       DateTime?
+  deletedById     String?
+  deleteReason    String?
 
   project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase         ProjectPhase?       @relation(fields: [phaseId], references: [id], onDelete: SetNull)
   reporter      User                @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   assignee      User?               @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  deletedBy     User?               @relation("TaskDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
   comments      TaskComment[]
   evidence      TaskEvidence[]
   tags          TaskTag[]
@@ -321,6 +338,12 @@ model Task {
   @@index([reporterId])
   @@index([assigneeId])
   @@index([createdAt])
+  @@index([status, kanbanOrder])
+  @@index([deletedAt])
+  @@index([projectId, status])
+  @@index([dueAt])
+  @@index([priority])
+  @@index([phaseId])
   @@map("task")
 }
 
@@ -331,8 +354,9 @@ model Tag {
   color     String   @default("blue")
   createdAt DateTime @default(now())
 
-  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks   TaskTag[]
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks      TaskTag[]
+  milestones MilestoneTag[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -349,6 +373,18 @@ model TaskTag {
   @@id([taskId, tagId])
   @@index([tagId])
   @@map("task_tag")
+}
+
+model MilestoneTag {
+  milestoneId String
+  tagId       String
+
+  milestone ProjectMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  tag       Tag              @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([milestoneId, tagId])
+  @@index([tagId])
+  @@map("milestone_tag")
 }
 
 model TaskDependency {
@@ -447,25 +483,6 @@ model Notification {
   @@map("notification")
 }
 
-model WebhookRequestLog {
-  id         String   @id @default(uuid())
-  tokenId    String?
-  agentId    String?
-  statusCode Int
-  reason     String?
-  ip         String?
-  eventsIn   Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  token WebhookToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
-  agent Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
-
-  @@index([tokenId])
-  @@index([agentId])
-  @@index([createdAt])
-  @@index([statusCode])
-  @@map("webhook_request_log")
-}
 
 model ProjectGithubEvent {
   id             String          @id @default(uuid())
@@ -509,4 +526,102 @@ model GithubWebhookLog {
   @@index([createdAt])
   @@index([statusCode])
   @@map("github_webhook_log")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("app_setting")
+}
+
+model DailySnapshot {
+  id        String   @id @default(uuid())
+  date      DateTime @unique // midnight WIB stored as UTC
+  kpi       Json     // { totalTasks, openTasks, closedToday, overdueCount, staleCount, velocity7d, totalProjects, activeProjects }
+  projects  Json     // [{ id, name, status, score, grade, openTasks, overdueTasks, blockedTasks, daysUntilDue, pastDue }]
+  team      Json     // [{ userId, name, open, overdue, closed7d, estimateHours, overloaded }]
+  risks     Json     // { severity, pastDueProjects, overdueTasks, staleTasks }
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@map("daily_snapshot")
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  location    String?
+  projectId   String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project   Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?          @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  tags      EventTagLink[]
+
+  @@index([startsAt])
+  @@index([projectId])
+  @@map("event")
+}
+
+model EventTag {
+  id    String @id @default(uuid())
+  name  String @unique
+  color String @default("blue")
+
+  events EventTagLink[]
+
+  @@map("event_tag")
+}
+
+model EventTagLink {
+  eventId String
+  tagId   String
+
+  event Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag   EventTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, tagId])
+  @@index([tagId])
+  @@map("event_tag_link")
+}
+
+model ChatDocument {
+  id        String                   @id @default(uuid())
+  type      String                   // 'task' | 'project' | 'user' | 'event' | 'comment' | 'github_project' | 'effort_user' | 'effort_task' | 'ghost_task' | 'milestone' | 'extension' | 'dependency' | 'evidence' | 'audit_recent' | 'agent_status' | 'report_history' | 'project_retro'
+  entityId  String
+  projectId String?
+  title     String
+  content   String
+  tags      String                   @default("")
+  embedding Unsupported("vector(1536)")?
+  syncedAt  DateTime                 @default(now())
+
+  @@unique([type, entityId])
+  @@index([type])
+  @@index([syncedAt])
+  @@index([projectId])
+  @@index([type, syncedAt])
+  @@map("chat_document")
+}
+
+model ReportHistory {
+  id        String   @id @default(uuid())
+  sentAt    DateTime
+  ok        Boolean
+  message   String
+  trigger   String
+  markdown  String?
+  createdAt DateTime @default(now())
+
+  @@index([sentAt])
+  @@index([trigger])
+  @@map("report_history")
 }

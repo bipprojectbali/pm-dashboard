@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS base
+FROM oven/bun:1.3.14 AS base
 WORKDIR /app
 
 # Install dependencies
@@ -21,12 +21,18 @@ FROM base AS runner
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 
-ENV NODE_ENV=production
+ARG GIT_COMMIT=""
+ARG BUILT_AT=""
+ENV NODE_ENV=production \
+    GIT_COMMIT=${GIT_COMMIT} \
+    BUILT_AT=${BUILT_AT}
 EXPOSE 3000
 
 CMD ["bun", "src/index.tsx"]

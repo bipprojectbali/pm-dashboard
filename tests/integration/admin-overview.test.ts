@@ -96,14 +96,13 @@ describe('admin overview cockpit endpoints: auth gating', () => {
 })
 
 describe('GET /api/admin/overview/kpis', () => {
-  test('returns users, projects, tasks, agents, velocity blocks', async () => {
+  test('returns users, projects, tasks, velocity blocks', async () => {
     const res = await get('/api/admin/overview/kpis', adminToken)
     const body = await res.json()
     expect(body.users.total).toBeGreaterThanOrEqual(3)
     expect(body.projects.active).toBeGreaterThanOrEqual(1)
     expect(body.tasks.overdueOpen).toBeGreaterThanOrEqual(1)
     expect(body.velocity).toBeDefined()
-    expect(body.agents).toBeDefined()
     expect(Array.isArray(body.recentAudit)).toBe(true)
   })
 })

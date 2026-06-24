@@ -173,13 +173,6 @@ async function cleanupAuditLogs() {
   if (count > 0) console.log(`[Audit] Cleaned up ${count} logs older than ${env.AUDIT_LOG_RETENTION_DAYS} days`)
 }
 
-async function cleanupWebhookLogs() {
-  const cutoff = new Date(Date.now() - env.WEBHOOK_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.webhookRequestLog.deleteMany({ where: { createdAt: { lt: cutoff } } })
-  if (count > 0)
-    console.log(`[Webhook] Cleaned up ${count} request logs older than ${env.WEBHOOK_LOG_RETENTION_DAYS} days`)
-}
-
 async function sweepDueTasks() {
   const { dueSoon, overdue } = await runDueSoonSweep()
   if (dueSoon || overdue) console.log(`[Notifications] dueSoon=${dueSoon} overdue=${overdue}`)
@@ -187,11 +180,64 @@ async function sweepDueTasks() {
 
 // Run on startup, then periodically
 cleanupAuditLogs().catch(console.error)
-cleanupWebhookLogs().catch(console.error)
 sweepDueTasks().catch(console.error)
 setInterval(() => cleanupAuditLogs().catch(console.error), 24 * 60 * 60 * 1000)
-setInterval(() => cleanupWebhookLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
+
+import { appLog } from './lib/applog'
+// ─── Daily AI Report Cron ─────────────────────────────
+import { runCronAtStartup, runCronIfScheduled } from './lib/report-cron'
+
+// Startup: kirim jika server restart dalam 5 menit setelah jadwal (one-shot)
+runCronAtStartup().catch((e) => appLog('error', `Cron startup: ${e instanceof Error ? e.message : String(e)}`))
+
+// Bun.cron: fires di exact UTC minute boundary setiap menit.
+// No-overlap guarantee built-in — handler tidak akan dipanggil lagi
+// selama Promise sebelumnya belum settle, sehingga tidak ada double-send
+// meski send butuh waktu > 60 detik.
+;(Bun as any).cron('* * * * *', () =>
+  runCronIfScheduled().catch((e) => appLog('error', `Cron: ${e instanceof Error ? e.message : String(e)}`)),
+)
+
+// ─── Chat Knowledge Base Sync ─────────────────────────
+import { syncChatDocuments } from './lib/chat-documents'
+import { isExtensionEnabled } from './lib/extensions'
+
+// Startup: full sync saat server start (background, tidak block).
+// Skip kalau extension chat OFF — data tidak ke-prune, hanya tidak refresh.
+;(async () => {
+  if (!(await isExtensionEnabled('chat'))) {
+    appLog('info', 'Chat sync startup: skipped (extension disabled)')
+    return
+  }
+  try {
+    await syncChatDocuments({ full: true })
+  } catch (e) {
+    appLog('error', `Chat sync startup: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})()
+
+// Incremental sync setiap 10 menit
+;(Bun as any).cron('*/10 * * * *', async () => {
+  if (!(await isExtensionEnabled('chat'))) return
+  try {
+    await syncChatDocuments({})
+  } catch (e) {
+    appLog('error', `Chat sync: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})
+
+// ─── Auto-purge Trash ─────────────────────────────────
+// Setiap hari jam 03:00 UTC, hapus permanen task yang sudah di-trash > 30 hari
+;(Bun as any).cron('0 3 * * *', async () => {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const { count } = await prisma.task.deleteMany({ where: { deletedAt: { not: null, lt: cutoff } } })
+    if (count > 0) appLog('info', `Auto-purge trash: ${count} task dihapus permanen (>30 hari)`)
+  } catch (e) {
+    appLog('error', `Auto-purge trash gagal: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})
 
 // ─── Elysia App ────────────────────────────────────────
 import { createApp } from './app'
@@ -227,6 +273,6 @@ const app = createApp()
     // undefined → lanjut ke Elysia route matching
   })
 
-  .listen(env.PORT)
+  .listen({ port: env.PORT, idleTimeout: 255 })
 
 console.log(`Server running at http://localhost:${app.server!.port}`)

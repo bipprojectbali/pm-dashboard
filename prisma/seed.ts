@@ -1770,6 +1770,19 @@ async function seedAuditLogs(users: { id: string; email: string }[]) {
 // ──────────────────────────────────────────────────────────────
 async function main() {
   const start = Date.now()
+
+  // Guard: jika ada user dengan email non-seed (bukan *@example.com),
+  // berarti data sudah di-sync dari STG — jangan overwrite.
+  const seedEmails = ['superadmin@example.com', 'admin@example.com', 'user@example.com']
+  const existingUsers = await prisma.user.findMany({ select: { email: true }, take: 20 })
+  const hasRealData = existingUsers.some((u) => !seedEmails.includes(u.email))
+  if (hasRealData) {
+    console.log('⚠  Data STG terdeteksi (ada user non-seed). Seed dibatalkan.')
+    console.log('   Jalankan dengan FORCE_SEED=1 untuk override.')
+    if (!process.env.FORCE_SEED) return
+    console.log('   FORCE_SEED=1 diset — melanjutkan seed...')
+  }
+
   await wipe()
   const users = await seedUsers()
   const projects = await seedProjects(users)

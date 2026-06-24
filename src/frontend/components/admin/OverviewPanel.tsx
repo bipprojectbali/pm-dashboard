@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Alert,
   Badge,
+  Button,
   Card,
   Group,
   Progress,
@@ -19,11 +20,12 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   TbActivity,
   TbAlertTriangle,
+  TbCalendarEvent,
+  TbFileReport,
   TbFlame,
   TbHeartbeat,
   TbInfoCircle,
   TbListCheck,
-  TbPlugConnected,
   TbRefresh,
   TbShieldCheck,
   TbTarget,
@@ -32,6 +34,7 @@ import {
 } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
 import { SectionSkeleton } from '@/frontend/components/shared/LoadingState'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import type { Role } from '@/frontend/hooks/useAuth'
 import { type AnalyticsData, AnalyticsSection } from './AnalyticsSection'
 
@@ -39,12 +42,6 @@ interface AdminUser {
   id: string
   role: Role
   blocked: boolean
-}
-
-interface AgentRow {
-  id: string
-  status: 'PENDING' | 'APPROVED' | 'REVOKED'
-  lastSeenAt: string | null
 }
 
 interface ProjectRow {
@@ -64,7 +61,7 @@ interface AuditLogEntry {
   action: string
   detail: string | null
   createdAt: string
-  user: { name: string; email: string } | null
+  user: { name: string; email: string; image?: string | null } | null
 }
 
 type RiskSeverity = 'none' | 'low' | 'medium' | 'high'
@@ -75,8 +72,6 @@ interface RiskReport {
     overdueTasks: number
     staleTasks: number
     pastDueProjects: number
-    pendingAgents: number
-    offlineAgents: number
     missingEnv: number
   }
   overdueTasks: Array<{
@@ -98,8 +93,6 @@ interface RiskReport {
     projectId: string
   }>
   pastDueProjects: Array<{ id: string; name: string; priority: string; owner: string; daysOverdue: number | null }>
-  pendingAgents: Array<{ id: string; agentId: string; hostname: string; osUser: string }>
-  offlineAgents: Array<{ id: string; agentId: string; hostname: string; lastSeenAt: string }>
   missingEnv: string[]
 }
 
@@ -126,6 +119,7 @@ interface LoadRow {
   email: string | null
   name: string
   role: string | null
+  image?: string | null
   open: number
   estimateHours: number
   highPriority: number
@@ -134,7 +128,15 @@ interface LoadRow {
   overloaded: boolean
 }
 
-const LIVE_THRESHOLD_MS = 5 * 60 * 1000
+interface UpcomingEvent {
+  id: string
+  title: string
+  startsAt: string
+  endsAt: string | null
+  location: string | null
+  tags: Array<{ tagId: string; tag: { name: string; color: string } }>
+  project: { id: string; name: string } | null
+}
 
 const SEVERITY_COLOR: Record<RiskSeverity, string> = {
   none: 'teal',
@@ -208,13 +210,6 @@ export function OverviewPanel() {
     refetchInterval: 30_000,
   })
 
-  const agentsQ = useQuery({
-    queryKey: ['admin', 'overview', 'agents'],
-    queryFn: () =>
-      fetch('/api/admin/agents', { credentials: 'include' }).then((r) => r.json()) as Promise<{ agents: AgentRow[] }>,
-    refetchInterval: 30_000,
-  })
-
   const auditQ = useQuery({
     queryKey: ['admin', 'overview', 'audit'],
     queryFn: () =>
@@ -259,23 +254,28 @@ export function OverviewPanel() {
     refetchInterval: 60_000,
   })
 
-  const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || agentsQ.isLoading || auditQ.isLoading
+  const eventsQ = useQuery<{ events: UpcomingEvent[] }>({
+    queryKey: ['events', 'badge'],
+    queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
+  })
+
+  const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || auditQ.isLoading
   const fetching =
     usersQ.isFetching ||
     projectsQ.isFetching ||
     tasksQ.isFetching ||
-    agentsQ.isFetching ||
     auditQ.isFetching ||
     risksQ.isFetching ||
     healthQ.isFetching ||
     loadQ.isFetching ||
-    analyticsQ.isFetching
+    analyticsQ.isFetching ||
+    eventsQ.isFetching
 
   const stats = useMemo(() => {
     const users = usersQ.data?.users ?? []
     const projects = projectsQ.data?.projects ?? []
     const tasks = tasksQ.data?.tasks ?? []
-    const agents = agentsQ.data?.agents ?? []
     const now = Date.now()
 
     const blocked = users.filter((u) => u.blocked).length
@@ -284,10 +284,6 @@ export function OverviewPanel() {
     const overdueTasks = tasks.filter(
       (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < now,
     ).length
-    const liveAgents = agents.filter(
-      (a) => a.status === 'APPROVED' && a.lastSeenAt && now - new Date(a.lastSeenAt).getTime() < LIVE_THRESHOLD_MS,
-    ).length
-    const pendingAgents = agents.filter((a) => a.status === 'PENDING').length
 
     return {
       totalUsers: users.length,
@@ -296,21 +292,19 @@ export function OverviewPanel() {
       totalProjects: projects.length,
       openTasks,
       overdueTasks,
-      liveAgents,
-      pendingAgents,
     }
-  }, [usersQ.data, projectsQ.data, tasksQ.data, agentsQ.data])
+  }, [usersQ.data, projectsQ.data, tasksQ.data])
 
   const refetchAll = () => {
     usersQ.refetch()
     projectsQ.refetch()
     tasksQ.refetch()
-    agentsQ.refetch()
     auditQ.refetch()
     risksQ.refetch()
     healthQ.refetch()
     loadQ.refetch()
     analyticsQ.refetch()
+    eventsQ.refetch()
   }
 
   const logs = auditQ.data?.logs ?? []
@@ -320,24 +314,24 @@ export function OverviewPanel() {
       usersQ.dataUpdatedAt,
       projectsQ.dataUpdatedAt,
       tasksQ.dataUpdatedAt,
-      agentsQ.dataUpdatedAt,
       auditQ.dataUpdatedAt,
       risksQ.dataUpdatedAt,
       healthQ.dataUpdatedAt,
       loadQ.dataUpdatedAt,
       analyticsQ.dataUpdatedAt,
+      eventsQ.dataUpdatedAt,
     ].filter((t) => t > 0)
     return updates.length ? Math.min(...updates) : 0
   }, [
     usersQ.dataUpdatedAt,
     projectsQ.dataUpdatedAt,
     tasksQ.dataUpdatedAt,
-    agentsQ.dataUpdatedAt,
     auditQ.dataUpdatedAt,
     risksQ.dataUpdatedAt,
     healthQ.dataUpdatedAt,
     loadQ.dataUpdatedAt,
     analyticsQ.dataUpdatedAt,
+    eventsQ.dataUpdatedAt,
   ])
 
   const freshness = useFreshness(lastFetchedAt)
@@ -357,6 +351,17 @@ export function OverviewPanel() {
               updated {freshness}
             </Text>
           )}
+          <Button
+            leftSection={<TbFileReport size={16} />}
+            size="xs"
+            variant="light"
+            color="violet"
+            onClick={() => {
+              window.location.href = '/admin/report'
+            }}
+          >
+            Laporan Lengkap
+          </Button>
           <Tooltip label="Refresh all">
             <ActionIcon variant="subtle" onClick={refetchAll} loading={fetching}>
               <TbRefresh size={16} />
@@ -398,17 +403,87 @@ export function OverviewPanel() {
           loading={loading}
           info="Task yang belum CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED). Sub-label menghitung yang sudah lewat dueAt. Klik untuk membuka tab Triase Task."
         />
-        <KpiCard
-          label="Agent Aktif"
-          value={stats.liveAgents}
-          sub={stats.pendingAgents > 0 ? `${stats.pendingAgents} menunggu approval` : 'semua disetujui'}
-          subColor={stats.pendingAgents > 0 ? 'orange' : undefined}
-          icon={TbPlugConnected}
-          color="teal"
-          loading={loading}
-          info="Agent pm-watch yang APPROVED dan mengirim heartbeat <5 menit terakhir. Pending approval perlu di-assign ke user di Konsol Dev → Agents."
-        />
       </SimpleGrid>
+
+      {/* Events Mendatang — tampil sebelum Red Flags */}
+      {(() => {
+        const events = eventsQ.data?.events ?? []
+        const todayKey = new Date().toISOString().slice(0, 10)
+        const weekKey = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        const todayEvents = events.filter((e) => e.startsAt.slice(0, 10) === todayKey)
+        const weekEvents = events.filter((e) => {
+          const k = e.startsAt.slice(0, 10)
+          return k > todayKey && k <= weekKey
+        })
+        const shown = [...todayEvents, ...weekEvents].slice(0, 6)
+        if (!eventsQ.data && eventsQ.isLoading) return null
+        if (shown.length === 0) return null
+        return (
+          <Card withBorder radius="md" p="md">
+            <Group justify="space-between" mb="sm">
+              <Group gap="xs">
+                <TbCalendarEvent size={16} />
+                <Title order={5}>Events Mendatang</Title>
+                {todayEvents.length > 0 && (
+                  <Badge size="xs" color="red" variant="filled">
+                    {todayEvents.length} hari ini
+                  </Badge>
+                )}
+                {weekEvents.length > 0 && (
+                  <Badge size="xs" color="blue" variant="light">
+                    {weekEvents.length} minggu ini
+                  </Badge>
+                )}
+              </Group>
+              <Text
+                size="xs"
+                c="blue"
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate({ to: '/pm', search: { tab: 'events' } })}
+              >
+                Lihat semua →
+              </Text>
+            </Group>
+            <Stack gap={4}>
+              {shown.map((e) => {
+                const isToday = e.startsAt.slice(0, 10) === todayKey
+                return (
+                  <Group
+                    key={e.id}
+                    gap="sm"
+                    wrap="nowrap"
+                    style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 8px' }}
+                    onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
+                  >
+                    <TbCalendarEvent
+                      size={13}
+                      color={`var(--mantine-color-${isToday ? 'red' : 'blue'}-5)`}
+                      style={{ flexShrink: 0 }}
+                    />
+                    <Text size="sm" truncate style={{ flex: 1 }}>
+                      {e.title}
+                    </Text>
+                    {e.tags.slice(0, 2).map((t) => (
+                      <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">
+                        {t.tag.name}
+                      </Badge>
+                    ))}
+                    <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                      {isToday
+                        ? new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                        : new Date(e.startsAt).toLocaleDateString('id-ID', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                          })}
+                    </Text>
+                  </Group>
+                )
+              })}
+            </Stack>
+          </Card>
+        )
+      })()}
 
       {risksQ.isLoading ? (
         <SectionSkeleton height={220} />
@@ -492,6 +567,15 @@ export function OverviewPanel() {
               <Badge color={ACTION_COLOR[log.action] ?? 'gray'} variant="light" size="sm">
                 {log.action}
               </Badge>
+              {log.user && (
+                <UserAvatar
+                  name={log.user.name}
+                  image={log.user.image}
+                  size={20}
+                  color="blue"
+                  style={{ flexShrink: 0 }}
+                />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text size="sm" lineClamp={1}>
                   <Text component="span" fw={500}>
@@ -513,35 +597,6 @@ export function OverviewPanel() {
         </Stack>
       </Card>
 
-      {stats.pendingAgents > 0 && (
-        <Card withBorder padding="md" radius="md">
-          <Group gap="sm">
-            <ThemeIcon variant="light" color="orange" size="lg" radius="md">
-              <TbAlertTriangle size={18} />
-            </ThemeIcon>
-            <div style={{ flex: 1 }}>
-              <Group gap={4} wrap="nowrap">
-                <Text size="sm" fw={500}>
-                  {stats.pendingAgents} agent{stats.pendingAgents > 1 ? 's' : ''} menunggu persetujuan
-                </Text>
-                <Tooltip
-                  multiline
-                  w={320}
-                  withArrow
-                  label="Agent pm-watch status PENDING. Event yang dikirim sebelum approval akan di-reject sampai agent di-assign ke user. Approve di Dev Console → Agents (hanya SUPER_ADMIN)."
-                >
-                  <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-                    <TbInfoCircle size={14} />
-                  </ThemeIcon>
-                </Tooltip>
-              </Group>
-              <Text size="xs" c="dimmed">
-                Approve di Dev Console → Agents panel (SUPER_ADMIN only).
-              </Text>
-            </div>
-          </Group>
-        </Card>
-      )}
     </Stack>
   )
 }
@@ -617,8 +672,7 @@ function KpiCard({
 
 function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: ReturnType<typeof useNavigate> }) {
   const s = risks.summary
-  const nothing =
-    s.overdueTasks + s.staleTasks + s.pastDueProjects + s.pendingAgents + s.offlineAgents + s.missingEnv === 0
+  const nothing = s.overdueTasks + s.staleTasks + s.pastDueProjects + s.missingEnv === 0
 
   if (nothing) {
     return (
@@ -645,7 +699,7 @@ function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: Ret
             multiline
             w={320}
             withArrow
-            label="Ringkasan isu yang butuh perhatian saat ini: tugas lewat tenggat, tugas IN_PROGRESS yang mandek, proyek telat, agent pm-watch yang belum disetujui atau offline, dan variabel env wajib yang belum diisi. Severity dihitung otomatis (high/medium/low/none) dari kombinasi sinyal tersebut."
+            label="Ringkasan isu yang butuh perhatian saat ini: tugas lewat tenggat, tugas IN_PROGRESS yang mandek, proyek telat, dan variabel env wajib yang belum diisi. Severity dihitung otomatis (high/medium/low/none) dari kombinasi sinyal tersebut."
           >
             <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
               <TbInfoCircle size={14} />
@@ -658,8 +712,6 @@ function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: Ret
         <RiskStat label="Overdue tasks" value={s.overdueTasks} color={s.overdueTasks > 0 ? 'red' : 'gray'} />
         <RiskStat label="Stale IN_PROGRESS" value={s.staleTasks} color={s.staleTasks > 0 ? 'orange' : 'gray'} />
         <RiskStat label="Past-due projects" value={s.pastDueProjects} color={s.pastDueProjects > 0 ? 'red' : 'gray'} />
-        <RiskStat label="Pending agents" value={s.pendingAgents} color={s.pendingAgents > 0 ? 'orange' : 'gray'} />
-        <RiskStat label="Offline agents" value={s.offlineAgents} color={s.offlineAgents > 0 ? 'yellow' : 'gray'} />
         <RiskStat label="Missing env" value={s.missingEnv} color={s.missingEnv > 0 ? 'red' : 'gray'} />
       </SimpleGrid>
 
@@ -837,14 +889,17 @@ function TeamLoadSection({ rows }: { rows: LoadRow[] }) {
       <Stack gap={8}>
         {rows.map((r) => (
           <Group key={r.userId ?? 'none'} gap="sm" wrap="nowrap">
-            <div style={{ minWidth: 160, flex: '0 0 160px' }}>
-              <Text size="sm" fw={500} truncate>
-                {r.name}
-              </Text>
-              <Text size="xs" c="dimmed" truncate>
-                {r.role ?? '—'}
-              </Text>
-            </div>
+            <Group gap="xs" wrap="nowrap" style={{ minWidth: 160, flex: '0 0 160px' }}>
+              <UserAvatar name={r.name} image={r.image} size={28} color="blue" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <Text size="sm" fw={500} truncate>
+                  {r.name}
+                </Text>
+                <Text size="xs" c="dimmed" truncate>
+                  {r.role ?? '—'}
+                </Text>
+              </div>
+            </Group>
             <div style={{ flex: 1, minWidth: 0 }}>
               <Progress
                 value={(r.open / maxOpen) * 100}

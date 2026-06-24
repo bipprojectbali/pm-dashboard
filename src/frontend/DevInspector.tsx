@@ -112,7 +112,7 @@ export function DevInspector({ children }: { children: React.ReactNode }) {
   // Hotkey: Ctrl+Shift+Cmd+C (macOS) / Ctrl+Shift+Alt+C (Windows/Linux)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'c' && e.ctrlKey && e.shiftKey && (e.metaKey || e.altKey)) {
+      if (e.key?.toLowerCase() === 'c' && e.ctrlKey && e.shiftKey && (e.metaKey || e.altKey)) {
         e.preventDefault()
         setActive((prev) => !prev)
       }

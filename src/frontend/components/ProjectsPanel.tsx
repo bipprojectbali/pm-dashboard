@@ -1,15 +1,16 @@
 import {
   ActionIcon,
   Alert,
+  Avatar,
   Badge,
   Box,
   Button,
   Card,
-  Checkbox,
   Divider,
   Group,
   Kbd,
   Modal,
+  Popover,
   Progress,
   SegmentedControl,
   Select,
@@ -24,35 +25,34 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useHotkeys } from '@mantine/hooks'
+import { useHotkeys, useLocalStorage } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import type { EChartsOption } from 'echarts'
-import { useMemo, useState } from 'react'
+import { Gantt, type GanttTask } from 'mantine-gantt'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TbAlertTriangle,
   TbArrowsSort,
   TbCalendarEvent,
-  TbCalendarPlus,
   TbChecks,
   TbClock,
   TbFilterX,
   TbFlag,
   TbFolder,
-  TbHistory,
+  TbLayoutGrid,
+  TbLayoutList,
   TbPencil,
   TbPlus,
   TbRefresh,
   TbSearch,
   TbTarget,
-  TbTrash,
-  TbUser,
   TbUsers,
   TbX,
 } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
+import { toLocalDateStr } from '../lib/dates'
 import { notifyError, notifySuccess } from '../lib/notify'
-import { EChart } from './charts/EChart'
+import { UserAvatar } from './shared/UserAvatar'
 
 export type MemberRole = 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
 export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -62,6 +62,7 @@ export interface ProjectUser {
   id: string
   name: string
   email: string
+  image?: string | null
 }
 
 interface TaskStats {
@@ -73,27 +74,7 @@ interface TaskStats {
   total: number
 }
 
-export interface ProjectListItem {
-  id: string
-  name: string
-  description: string | null
-  ownerId: string
-  status: ProjectStatus
-  priority: ProjectPriority
-  startsAt: string | null
-  endsAt: string | null
-  originalEndAt: string | null
-  archivedAt: string | null
-  githubRepo: string | null
-  createdAt: string
-  updatedAt: string
-  owner: ProjectUser
-  _count: { members: number; tasks: number; milestones: number }
-  myRole: MemberRole | null
-  joinedAt: string | null
-  taskStats?: TaskStats
-  milestoneStats?: { done: number; total: number }
-}
+export type ProjectVisibility = 'PRIVATE' | 'INTERNAL' | 'PUBLIC'
 
 interface ProjectMember {
   id: string
@@ -103,39 +84,34 @@ interface ProjectMember {
   user: ProjectUser & { role: string }
 }
 
-export interface ProjectDetail extends ProjectListItem {
-  members: ProjectMember[]
-}
-
-interface UserOption {
+export interface ProjectListItem {
   id: string
   name: string
-  email: string
-  role: string
-}
-
-interface ProjectExtension {
-  id: string
-  previousEndAt: string | null
-  newEndAt: string
-  reason: string | null
-  createdAt: string
-  extendedBy: ProjectUser | null
-}
-
-interface ProjectMilestone {
-  id: string
-  projectId: string
-  title: string
   description: string | null
-  dueAt: string | null
-  completedAt: string | null
-  order: number
+  ownerId: string
+  status: ProjectStatus
+  priority: ProjectPriority
+  visibility: ProjectVisibility
+  startsAt: string | null
+  endsAt: string | null
+  originalEndAt: string | null
+  archivedAt: string | null
+  githubRepo: string | null
   createdAt: string
   updatedAt: string
+  owner: ProjectUser
+  members: ProjectMember[]
+  _count: { members: number; tasks: number; milestones: number; phases: number }
+  myRole: MemberRole | null
+  canWrite: boolean
+  joinedAt: string | null
+  taskStats?: TaskStats
+  milestoneStats?: { done: number; total: number }
 }
 
-const ROLE_COLOR: Record<MemberRole, string> = {
+export type ProjectDetail = ProjectListItem
+
+const _ROLE_COLOR: Record<MemberRole, string> = {
   OWNER: 'red',
   PM: 'violet',
   MEMBER: 'blue',
@@ -148,6 +124,23 @@ const STATUS_COLOR: Record<ProjectStatus, string> = {
   ON_HOLD: 'yellow',
   COMPLETED: 'green',
   CANCELLED: 'dark',
+}
+
+const STATUS_ACCENT: Record<ProjectStatus, string> = {
+  DRAFT: 'rgba(134,142,150,0.35)',
+  ACTIVE: 'rgba(34,139,230,0.45)',
+  ON_HOLD: 'rgba(250,176,5,0.45)',
+  COMPLETED: 'rgba(64,192,87,0.45)',
+  CANCELLED: 'rgba(73,80,87,0.35)',
+}
+const _OVERDUE_ACCENT = 'rgba(250,82,82,0.55)'
+
+const STATUS_BG: Record<ProjectStatus, string> = {
+  DRAFT: 'rgba(134,142,150,0.05)',
+  ACTIVE: 'rgba(34,139,230,0.05)',
+  ON_HOLD: 'rgba(250,176,5,0.05)',
+  COMPLETED: 'rgba(64,192,87,0.05)',
+  CANCELLED: 'rgba(73,80,87,0.04)',
 }
 
 const PRIORITY_COLOR: Record<ProjectPriority, string> = {
@@ -239,7 +232,7 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: 'name', label: 'Name (A→Z)' },
 ]
 
-const ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
+const _ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
   { value: 'OWNER', label: 'Owner' },
   { value: 'PM', label: 'PM' },
   { value: 'MEMBER', label: 'Member' },
@@ -247,6 +240,16 @@ const ROLE_FILTER_OPTIONS: Array<{ value: MemberRole; label: string }> = [
 ]
 
 const PRIORITY_RANK: Record<ProjectPriority, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
+
+// Status group order: active work first, then on-hold, draft, done, cancelled
+const STATUS_GROUP_ORDER: ProjectStatus[] = ['ACTIVE', 'ON_HOLD', 'DRAFT', 'COMPLETED', 'CANCELLED']
+const STATUS_GROUP_LABEL: Record<ProjectStatus, string> = {
+  ACTIVE: 'Aktif',
+  ON_HOLD: 'Ditunda',
+  DRAFT: 'Draft',
+  COMPLETED: 'Selesai',
+  CANCELLED: 'Dibatalkan',
+}
 
 function sortProjects(list: ProjectListItem[], key: SortKey): ProjectListItem[] {
   const out = [...list]
@@ -277,14 +280,46 @@ export function ProjectsPanel() {
   const role = session.data?.user?.role
   const canCreateProject = role === 'ADMIN' || role === 'SUPER_ADMIN'
   const [createOpen, setCreateOpen] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null)
-  const [priorityFilter, setPriorityFilter] = useState<ProjectPriority | null>(null)
-  const [roleFilter, setRoleFilter] = useState<MemberRole | null>(null)
+  const [scope, setScope] = useLocalStorage<'mine' | 'all'>({ key: 'pm:projects:scope', defaultValue: 'all' })
+  const [statusFilter, setStatusFilter] = useLocalStorage<ProjectStatus | null>({
+    key: 'pm:projects:statusFilter',
+    defaultValue: null,
+  })
+  const [priorityFilter, setPriorityFilter] = useLocalStorage<ProjectPriority | null>({
+    key: 'pm:projects:priorityFilter',
+    defaultValue: null,
+  })
+  const [roleFilter, setRoleFilter] = useLocalStorage<MemberRole | null>({
+    key: 'pm:projects:roleFilter',
+    defaultValue: null,
+  })
+  const [ownerFilter, setOwnerFilter] = useLocalStorage<string | null>({
+    key: 'pm:projects:ownerFilter',
+    defaultValue: null,
+  })
+  const [userFilter, setUserFilter] = useLocalStorage<string | null>({
+    key: 'pm:projects:userFilter',
+    defaultValue: null,
+  })
+  const [userFilterMode, setUserFilterMode] = useLocalStorage<'avatar' | 'dropdown'>({
+    key: 'pm:projects:userFilterMode',
+    defaultValue: 'avatar',
+  })
   const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<SortKey>('updated')
-  const [view, setView] = useState<'cards' | 'timeline'>('cards')
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
+  const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({
+    key: 'pm:projects:view',
+    defaultValue: 'grid',
+  })
+  const [groupByStatus, setGroupByStatus] = useLocalStorage<boolean>({
+    key: 'pm:projects:group-by-status',
+    defaultValue: true,
+  })
+  const [density, setDensity] = useLocalStorage<'comfortable' | 'compact'>({
+    key: 'pm:projects:density',
+    defaultValue: 'comfortable',
+  })
 
   const openProject = (id: string, detailTab: 'overview' | 'settings' = 'overview') => {
     navigate({
@@ -295,9 +330,8 @@ export function ProjectsPanel() {
   }
 
   const projectsQ = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<{ projects: ProjectListItem[] }>('/api/projects'),
-    refetchInterval: 30_000,
+    queryKey: ['projects', scope],
+    queryFn: () => api<{ projects: ProjectListItem[] }>(`/api/projects?scope=${scope}`),
   })
 
   const create = useMutation({
@@ -350,6 +384,9 @@ export function ProjectsPanel() {
     if (statusFilter) list = list.filter((p) => p.status === statusFilter)
     if (priorityFilter) list = list.filter((p) => p.priority === priorityFilter)
     if (roleFilter) list = list.filter((p) => p.myRole === roleFilter)
+    if (ownerFilter) list = list.filter((p) => p.ownerId === ownerFilter)
+    if (userFilter)
+      list = list.filter((p) => p.ownerId === userFilter || p.members.some((m) => m.userId === userFilter))
     if (derivedFilter === 'overdue') {
       list = list.filter((p) => computeOverdue(p).overdue)
     } else if (derivedFilter === 'atRisk') {
@@ -363,13 +400,55 @@ export function ProjectsPanel() {
       list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description?.toLowerCase().includes(q) ?? false))
     }
     return sortProjects(list, sort)
-  }, [projects, statusFilter, priorityFilter, roleFilter, derivedFilter, search, sort])
+  }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, userFilter, derivedFilter, search, sort])
 
-  const hasActiveFilters = !!(statusFilter || priorityFilter || roleFilter || derivedFilter || search.trim())
+  const _ownerOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
+    }
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [projects])
+
+  const userOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
+      for (const m of p.members) {
+        if (!seen.has(m.userId)) seen.set(m.userId, m.user.name || m.user.email || m.userId)
+      }
+    }
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [projects])
+
+  const userList = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; image?: string | null }>()
+    for (const p of projects) {
+      if (!seen.has(p.ownerId))
+        seen.set(p.ownerId, { id: p.ownerId, name: p.owner.name || p.owner.email || p.ownerId, image: p.owner.image })
+      for (const m of p.members) {
+        if (!seen.has(m.userId))
+          seen.set(m.userId, { id: m.userId, name: m.user.name || m.user.email || m.userId, image: m.user.image })
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [projects])
+
+  const hasActiveFilters = !!(
+    statusFilter ||
+    priorityFilter ||
+    roleFilter ||
+    ownerFilter ||
+    userFilter ||
+    derivedFilter ||
+    search.trim()
+  )
   const clearFilters = () => {
     setStatusFilter(null)
     setPriorityFilter(null)
     setRoleFilter(null)
+    setOwnerFilter(null)
+    setUserFilter(null)
     setDerivedFilter(null)
     setSearch('')
   }
@@ -501,17 +580,14 @@ export function ProjectsPanel() {
         <Card withBorder padding="sm" radius="md">
           <Stack gap="xs">
             <Group gap="xs" wrap="wrap" justify="flex-end">
-              <Select
+              <SegmentedControl
                 size="xs"
-                w={150}
-                placeholder="Any status"
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as ProjectStatus | null)}
-                data={STATUS_OPTIONS.map((s) => ({
-                  value: s.value,
-                  label: `${s.label} · ${statusCounts[s.value]}`,
-                }))}
-                clearable
+                value={scope}
+                onChange={(v) => setScope(v as 'mine' | 'all')}
+                data={[
+                  { value: 'mine', label: 'Proyek saya' },
+                  { value: 'all', label: 'Semua proyek' },
+                ]}
               />
               <Select
                 size="xs"
@@ -522,15 +598,27 @@ export function ProjectsPanel() {
                 data={PRIORITY_OPTIONS}
                 clearable
               />
-              <Select
-                size="xs"
-                w={130}
-                placeholder="Any role"
-                value={roleFilter}
-                onChange={(v) => setRoleFilter(v as MemberRole | null)}
-                data={ROLE_FILTER_OPTIONS}
-                clearable
-              />
+              {userFilterMode === 'dropdown' && (
+                <Group gap={4} wrap="nowrap" align="center">
+                  <Select
+                    size="xs"
+                    w={180}
+                    placeholder="Any user"
+                    value={userFilter}
+                    onChange={setUserFilter}
+                    data={userOptions}
+                    leftSection={<TbUsers size={12} />}
+                    searchable
+                    clearable
+                    nothingFoundMessage="No users"
+                  />
+                  <Tooltip label="Tampilkan sebagai avatar" withArrow>
+                    <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setUserFilterMode('avatar')}>
+                      <TbLayoutGrid size={13} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              )}
               <Select
                 size="xs"
                 w={190}
@@ -549,16 +637,59 @@ export function ProjectsPanel() {
                   { value: 'compact', label: 'Dense' },
                 ]}
               />
-              <SegmentedControl
-                size="xs"
-                value={view}
-                onChange={(v) => setView(v as 'cards' | 'timeline')}
-                data={[
-                  { value: 'cards', label: 'Cards' },
-                  { value: 'timeline', label: 'Timeline' },
-                ]}
-              />
+              <Group gap={2}>
+                <Tooltip label="Grid view">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'grid' ? 'filled' : 'subtle'}
+                    color={view === 'grid' ? 'blue' : 'gray'}
+                    onClick={() => setView('grid')}
+                  >
+                    <TbLayoutGrid size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="List view">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'list' ? 'filled' : 'subtle'}
+                    color={view === 'list' ? 'blue' : 'gray'}
+                    onClick={() => setView('list')}
+                  >
+                    <TbLayoutList size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Timeline">
+                  <ActionIcon
+                    size="sm"
+                    variant={view === 'timeline' ? 'filled' : 'subtle'}
+                    color={view === 'timeline' ? 'blue' : 'gray'}
+                    onClick={() => setView('timeline')}
+                  >
+                    <TbCalendarEvent size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+              <Tooltip label={groupByStatus ? 'Matikan pengelompokan' : 'Kelompokkan per status'}>
+                <ActionIcon
+                  size="sm"
+                  variant={groupByStatus ? 'filled' : 'subtle'}
+                  color={groupByStatus ? 'blue' : 'gray'}
+                  onClick={() => setGroupByStatus(!groupByStatus)}
+                >
+                  <TbTarget size={14} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
+            {userFilterMode === 'avatar' && userList.length > 0 && (
+              <Box py={16} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+                <UserFilterStrip
+                  users={userList}
+                  value={userFilter}
+                  onChange={setUserFilter}
+                  onSwitchMode={() => setUserFilterMode('dropdown')}
+                />
+              </Box>
+            )}
             {hasActiveFilters && (
               <Group justify="space-between" gap="xs">
                 <Text size="xs" c="dimmed">
@@ -593,7 +724,7 @@ export function ProjectsPanel() {
             <Text size="sm" c="dimmed" ta="center" maw={360}>
               {projects.length === 0
                 ? canCreateProject
-                  ? 'Create your first project to start organizing tasks and tracking ActivityWatch focus.'
+                  ? 'Create your first project to start organizing tasks and tracking team progress.'
                   : 'You have not been added to any project yet. Ask an admin to invite you.'
                 : hasActiveFilters
                   ? 'Try clearing filters or searching by a different keyword.'
@@ -613,27 +744,21 @@ export function ProjectsPanel() {
       ) : view === 'timeline' ? (
         <ProjectsGanttView projects={filtered} onSelect={(p) => openProject(p.id)} />
       ) : (
-        <SimpleGrid
-          cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }}
-          spacing="md"
-        >
-          {filtered.map((p) => (
-            <ProjectCard
-              key={p.id}
-              project={p}
-              density={density}
-              isSystemAdmin={canCreateProject}
-              onOpen={() => openProject(p.id)}
-              onEdit={() => openProject(p.id, 'settings')}
-            />
-          ))}
-        </SimpleGrid>
+        <ProjectsGrid
+          filtered={filtered}
+          view={view}
+          density={density}
+          groupByStatus={groupByStatus}
+          canCreateProject={canCreateProject}
+          openProject={openProject}
+        />
       )}
 
       <CreateProjectModal
         opened={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={(body) => create.mutate(body)}
+        onReset={() => create.reset()}
         loading={create.isPending}
         error={create.error?.message}
       />
@@ -686,6 +811,117 @@ function PortfolioStat({
   )
 }
 
+function ProjectListRow({
+  project: p,
+  isSystemAdmin: isAdmin,
+  onOpen,
+  onEdit,
+}: {
+  project: ProjectListItem
+  isSystemAdmin: boolean
+  onOpen?: () => void
+  onEdit: () => void
+}) {
+  const { overdue, daysOver } = computeOverdue(p)
+  const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
+  const taskDone =
+    p.taskStats && p.taskStats.total > 0 ? Math.round((p.taskStats.closed / p.taskStats.total) * 100) : null
+  const [_hover, setHover] = useState(false)
+
+  return (
+    <Card
+      withBorder
+      padding="sm"
+      radius="md"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        cursor: onOpen ? 'pointer' : 'default',
+        transition: 'box-shadow 120ms ease',
+      }}
+      onClick={onOpen}
+    >
+      <Group gap="sm" wrap="nowrap" justify="space-between">
+        {/* Left: name + badges */}
+        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          <Text fw={600} size="sm" truncate style={{ minWidth: 0, flex: '0 1 auto', maxWidth: 260 }}>
+            {p.name}
+          </Text>
+          <Group gap={4} wrap="nowrap" visibleFrom="sm">
+            <Badge color={STATUS_COLOR[p.status]} variant="light" size="xs">
+              {p.status.replace('_', ' ')}
+            </Badge>
+            <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
+              {p.priority}
+            </Badge>
+            {overdue && (
+              <Badge color="red" variant="filled" size="xs">
+                Overdue {daysOver}d
+              </Badge>
+            )}
+          </Group>
+        </Group>
+
+        {/* Middle: progress + dates */}
+        <Group gap="lg" wrap="nowrap" visibleFrom="md" style={{ flexShrink: 0 }}>
+          {taskDone !== null && (
+            <Group gap={6} wrap="nowrap">
+              <Box style={{ width: 80 }}>
+                <Progress value={taskDone} size="xs" color={taskDone === 100 ? 'green' : 'blue'} />
+              </Box>
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {taskDone}%
+              </Text>
+            </Group>
+          )}
+          {(p.startsAt || p.endsAt) && (
+            <Group gap={4} wrap="nowrap">
+              <TbCalendarEvent size={12} color="var(--mantine-color-dimmed)" />
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {formatDate(p.endsAt) ?? '—'}
+              </Text>
+            </Group>
+          )}
+          <Group gap={4} wrap="nowrap">
+            <TbUsers size={12} color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">
+              {p._count.members}
+            </Text>
+          </Group>
+          <Text size="xs" c="dimmed" truncate style={{ maxWidth: 120 }}>
+            {p.owner.name}
+          </Text>
+        </Group>
+
+        {/* Right: edit action */}
+        {canEdit && (
+          <Tooltip label="Edit project">
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              style={{ flexShrink: 0 }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}
+            >
+              <TbPencil size={14} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </Group>
+    </Card>
+  )
+}
+
+const _STATUS_DOT: Record<string, string> = {
+  ACTIVE: 'var(--mantine-color-blue-5)',
+  DRAFT: 'var(--mantine-color-gray-5)',
+  ON_HOLD: 'var(--mantine-color-yellow-5)',
+  COMPLETED: 'var(--mantine-color-green-5)',
+  CANCELLED: 'var(--mantine-color-red-5)',
+}
+
 function ProjectCard({
   project: p,
   density,
@@ -707,29 +943,29 @@ function ProjectCard({
   const compact = density === 'compact'
   const [hover, setHover] = useState(false)
 
+  const statusBg = overdue ? 'rgba(250,82,82,0.06)' : STATUS_BG[p.status]
+  const pad = compact ? 'sm' : 'md'
+
   return (
     <Card
       withBorder
-      padding={compact ? 'sm' : 'lg'}
+      padding={0}
       radius="md"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         cursor: onOpen ? 'pointer' : 'default',
-        borderColor: overdue
-          ? 'var(--mantine-color-red-6)'
-          : hover && onOpen
-            ? 'var(--mantine-color-blue-5)'
-            : undefined,
+        background: statusBg,
         transform: hover && onOpen ? 'translateY(-1px)' : undefined,
-        boxShadow: hover && onOpen ? '0 4px 12px rgba(0,0,0,0.08)' : undefined,
+        boxShadow: hover && onOpen ? '0 4px 16px rgba(0,0,0,0.10)' : undefined,
         transition: 'all 120ms ease',
       }}
       onClick={onOpen}
     >
-      <Stack gap="xs">
+      {/* ── Header ── */}
+      <Card.Section inheritPadding py={compact ? 'xs' : 'sm'} px={pad}>
         <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <Text fw={600} size={compact ? 'sm' : 'md'} lineClamp={1} style={{ flex: 1 }}>
+          <Text fw={700} size={compact ? 'sm' : 'md'} lineClamp={1} style={{ flex: 1 }}>
             {p.name}
           </Text>
           {canEdit && (
@@ -748,142 +984,211 @@ function ProjectCard({
           )}
         </Group>
 
-        <Group gap={4} wrap="wrap">
-          <Badge color={STATUS_COLOR[p.status]} variant="light" size="xs">
+        <Group gap={4} wrap="wrap" mt={4}>
+          <Badge variant="default" size="xs" style={{ border: 'none' }}>
             {p.status.replace('_', ' ')}
           </Badge>
-          <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
+          <Badge
+            variant="default"
+            size="xs"
+            style={{ border: 'none' }}
+            leftSection={
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: `var(--mantine-color-${PRIORITY_COLOR[p.priority]}-6)`,
+                  flexShrink: 0,
+                }}
+              />
+            }
+          >
             {p.priority}
           </Badge>
           {p.myRole ? (
-            <Badge color={ROLE_COLOR[p.myRole]} variant="light" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               {p.myRole}
             </Badge>
           ) : isAdmin ? (
-            <Badge color="gray" variant="outline" size="xs">
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
               ADMIN VIEW
             </Badge>
-          ) : null}
+          ) : (
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              READ-ONLY
+            </Badge>
+          )}
+          {p.visibility === 'PRIVATE' && (
+            <Badge variant="default" size="xs" style={{ border: 'none' }}>
+              PRIVATE
+            </Badge>
+          )}
           {overdue && (
-            <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={10} />}>
+            <Badge
+              variant="default"
+              size="xs"
+              style={{ border: 'none' }}
+              leftSection={<TbAlertTriangle size={10} color="var(--mantine-color-red-6)" />}
+            >
               Overdue {daysOver}d
             </Badge>
           )}
           {health && (
             <Tooltip label="Derived from task-completion pace vs. time elapsed">
-              <Badge color={health.color} variant="dot" size="xs">
-                {health.label}
+              <Badge
+                variant="default"
+                size="xs"
+                style={{ border: 'none' }}
+                leftSection={
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: `var(--mantine-color-${health.color}-6)`,
+                      flexShrink: 0,
+                    }}
+                  />
+                }
+              >
+                {health.label.toUpperCase()}
               </Badge>
             </Tooltip>
           )}
           {extended && (
             <Tooltip label={`Original deadline: ${formatDate(p.originalEndAt)}`}>
-              <Badge color="grape" variant="light" size="xs">
+              <Badge variant="default" size="xs" style={{ border: 'none' }}>
                 Extended
               </Badge>
             </Tooltip>
           )}
         </Group>
+      </Card.Section>
 
+      {/* ── Body ── */}
+      <Card.Section inheritPadding px={pad} pb={compact ? 'xs' : 'sm'}>
         {!compact && (
-          <Text size="xs" c="dimmed" lineClamp={2} mih={32}>
+          <Text size="xs" c="dimmed" lineClamp={2} mb="xs">
             {p.description || 'No description'}
           </Text>
         )}
 
         {(p.startsAt || p.endsAt) && (
-          <Group gap={4}>
-            <TbCalendarEvent size={12} />
+          <Group gap={4} mb={6}>
+            <TbCalendarEvent size={12} color="var(--mantine-color-dimmed)" />
             <Text size="xs" c="dimmed">
               {formatDate(p.startsAt)} → {formatDate(p.endsAt)}
             </Text>
           </Group>
         )}
 
-        {timeProgress !== null && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Text size="xs" c="dimmed">
-                Timeline
-              </Text>
-              <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
-                {timeProgress}%
-              </Text>
-            </Group>
-            <Progress
-              value={timeProgress}
-              size="xs"
-              mt={2}
-              color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'blue'}
-            />
-          </div>
-        )}
-
-        {p.taskStats && p.taskStats.total > 0 && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Group gap={4}>
-                <TbChecks size={12} />
+        <Stack gap={6}>
+          {timeProgress !== null && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
                 <Text size="xs" c="dimmed">
-                  Tasks
+                  Timeline
+                </Text>
+                <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
+                  {timeProgress}%
                 </Text>
               </Group>
-              <Tooltip
-                label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}
-              >
-                <Text size="xs" c="dimmed">
-                  {p.taskStats.closed}/{p.taskStats.total} ·{' '}
-                  {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
-                </Text>
-              </Tooltip>
-            </Group>
-            <Progress.Root size="xs" mt={2}>
-              <Tooltip label={`Closed · ${p.taskStats.closed}`}>
-                <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="green" />
-              </Tooltip>
-              <Tooltip label={`Ready for QC · ${p.taskStats.readyForQc}`}>
-                <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="teal" />
-              </Tooltip>
-              <Tooltip label={`In progress · ${p.taskStats.inProgress}`}>
-                <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="blue" />
-              </Tooltip>
-              <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
-                <Progress.Section
-                  value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100}
-                  color="gray"
-                />
-              </Tooltip>
-            </Progress.Root>
-          </div>
-        )}
+              <Progress
+                value={timeProgress}
+                size="xs"
+                color={overdue ? 'red' : timeProgress > 80 ? 'orange' : 'indigo'}
+                style={{ opacity: 0.7 }}
+              />
+            </div>
+          )}
 
-        {p.milestoneStats && p.milestoneStats.total > 0 && (
-          <div>
-            <Group justify="space-between" gap={4}>
-              <Group gap={4}>
-                <TbFlag size={12} />
+          {p.taskStats && p.taskStats.total > 0 && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
+                <Group gap={4}>
+                  <TbChecks size={12} color="var(--mantine-color-dimmed)" />
+                  <Text size="xs" c="dimmed">
+                    Tasks
+                  </Text>
+                </Group>
+                <Tooltip
+                  label={`${p.taskStats.closed} closed · ${p.taskStats.inProgress} in progress · ${p.taskStats.readyForQc} QC · ${p.taskStats.open + p.taskStats.reopened} open`}
+                >
+                  <Text size="xs" c="dimmed">
+                    {p.taskStats.closed}/{p.taskStats.total} ·{' '}
+                    {Math.round((p.taskStats.closed / p.taskStats.total) * 100)}%
+                  </Text>
+                </Tooltip>
+              </Group>
+              <Progress.Root size="xs" style={{ opacity: 0.7 }}>
+                <Tooltip label={`Closed · ${p.taskStats.closed}`}>
+                  <Progress.Section value={(p.taskStats.closed / p.taskStats.total) * 100} color="teal" />
+                </Tooltip>
+                <Tooltip label={`Ready for QC · ${p.taskStats.readyForQc}`}>
+                  <Progress.Section value={(p.taskStats.readyForQc / p.taskStats.total) * 100} color="cyan" />
+                </Tooltip>
+                <Tooltip label={`In progress · ${p.taskStats.inProgress}`}>
+                  <Progress.Section value={(p.taskStats.inProgress / p.taskStats.total) * 100} color="indigo" />
+                </Tooltip>
+                <Tooltip label={`Open / Reopened · ${p.taskStats.open + p.taskStats.reopened}`}>
+                  <Progress.Section
+                    value={((p.taskStats.open + p.taskStats.reopened) / p.taskStats.total) * 100}
+                    color="gray"
+                  />
+                </Tooltip>
+              </Progress.Root>
+            </div>
+          )}
+
+          {p.milestoneStats && p.milestoneStats.total > 0 && (
+            <div>
+              <Group justify="space-between" gap={4} mb={2}>
+                <Group gap={4}>
+                  <TbFlag size={12} color="var(--mantine-color-dimmed)" />
+                  <Text size="xs" c="dimmed">
+                    Milestones
+                  </Text>
+                </Group>
                 <Text size="xs" c="dimmed">
-                  Milestones
+                  {p.milestoneStats.done}/{p.milestoneStats.total}
                 </Text>
               </Group>
-              <Text size="xs" c="dimmed">
-                {p.milestoneStats.done}/{p.milestoneStats.total}
-              </Text>
-            </Group>
-            <Progress value={(p.milestoneStats.done / p.milestoneStats.total) * 100} size="xs" mt={2} color="grape" />
-          </div>
-        )}
+              <Progress
+                value={(p.milestoneStats.done / p.milestoneStats.total) * 100}
+                size="xs"
+                color="violet"
+                style={{ opacity: 0.7 }}
+              />
+            </div>
+          )}
+        </Stack>
+      </Card.Section>
 
-        <Group gap="md" mt={compact ? 0 : 'xs'} justify="space-between" wrap="nowrap">
-          <Group gap={10} wrap="nowrap">
-            <Tooltip label={`${p._count.members} members`}>
-              <Group gap={3} wrap="nowrap">
-                <TbUsers size={12} />
-                <Text size="xs" c="dimmed">
-                  {p._count.members}
-                </Text>
-              </Group>
-            </Tooltip>
+      {/* ── Footer ── */}
+      <Card.Section
+        inheritPadding
+        px={pad}
+        py="xs"
+        style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+      >
+        <Group justify="space-between" wrap="nowrap">
+          <Avatar.Group spacing="sm">
+            {p.members.slice(0, 4).map((m) => (
+              <Tooltip key={m.userId} label={`${m.user.name} · ${m.role}`} withArrow>
+                <UserAvatar name={m.user.name} image={m.user.image} size={22} color="blue" />
+              </Tooltip>
+            ))}
+            {p.members.length > 4 && (
+              <Tooltip label={`${p.members.length - 4} more members`} withArrow>
+                <Avatar size={22} radius="xl" color="gray">
+                  +{p.members.length - 4}
+                </Avatar>
+              </Tooltip>
+            )}
+          </Avatar.Group>
+
+          <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
             <Tooltip label={`${p._count.tasks} tasks`}>
               <Group gap={3} wrap="nowrap">
                 <TbFolder size={12} />
@@ -892,17 +1197,23 @@ function ProjectCard({
                 </Text>
               </Group>
             </Tooltip>
+            <Tooltip label={`Owner: ${p.owner.name}`}>
+              <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+                <UserAvatar
+                  name={p.owner.name}
+                  image={p.owner.image}
+                  size={18}
+                  color="blue"
+                  style={{ flexShrink: 0 }}
+                />
+                <Text size="xs" c="dimmed" truncate style={{ maxWidth: 90 }}>
+                  {p.owner.name.split(' ')[0]}
+                </Text>
+              </Group>
+            </Tooltip>
           </Group>
-          <Tooltip label={`Owner: ${p.owner.name}`}>
-            <Group gap={3} wrap="nowrap" style={{ minWidth: 0 }}>
-              <TbUser size={12} />
-              <Text size="xs" c="dimmed" truncate>
-                {p.owner.name}
-              </Text>
-            </Group>
-          </Tooltip>
         </Group>
-      </Stack>
+      </Card.Section>
     </Card>
   )
 }
@@ -911,6 +1222,7 @@ function CreateProjectModal({
   opened,
   onClose,
   onSubmit,
+  onReset,
   loading,
   error,
 }: {
@@ -924,6 +1236,7 @@ function CreateProjectModal({
     startsAt?: string | null
     endsAt?: string | null
   }) => void
+  onReset: () => void
   loading: boolean
   error?: string
 }) {
@@ -1017,10 +1330,14 @@ function CreateProjectModal({
             label="Nama proyek"
             placeholder="mis. Redesign Website Acme"
             value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              if (error) onReset()
+            }}
             required
             data-autofocus
             size="md"
+            error={error?.includes('sudah ada') ? error : undefined}
           />
           <Textarea
             label="Deskripsi"
@@ -1089,6 +1406,7 @@ function CreateProjectModal({
           </Group>
           <Group grow>
             <DateInput
+              highlightToday
               label="Mulai"
               placeholder="Opsional"
               value={startsAt}
@@ -1097,6 +1415,7 @@ function CreateProjectModal({
               leftSection={<TbClock size={14} />}
             />
             <DateInput
+              highlightToday
               label="Selesai"
               placeholder="Opsional"
               value={endsAt}
@@ -1134,7 +1453,7 @@ function CreateProjectModal({
           </Group>
         </Stack>
 
-        {error && (
+        {error && !error.includes('sudah ada') && (
           <Alert color="red" variant="light" icon={<TbAlertTriangle size={16} />} radius="md">
             {error}
           </Alert>
@@ -1207,441 +1526,222 @@ function PillButton({
   )
 }
 
-const MEMBER_ROLE_OPTIONS: Array<{ value: MemberRole; label: string }> = [
-  { value: 'OWNER', label: 'Owner' },
-  { value: 'PM', label: 'PM' },
-  { value: 'MEMBER', label: 'Member' },
-  { value: 'VIEWER', label: 'Viewer' },
+function ProjectsGrid({
+  filtered,
+  view,
+  density,
+  groupByStatus,
+  canCreateProject,
+  openProject,
+}: {
+  filtered: ProjectListItem[]
+  view: 'grid' | 'list' | 'timeline'
+  density: 'comfortable' | 'compact'
+  groupByStatus: boolean
+  canCreateProject: boolean
+  openProject: (id: string, tab?: 'overview' | 'settings') => void
+}) {
+  const renderItems = (items: ProjectListItem[]) =>
+    view === 'list' ? (
+      <Stack gap="xs">
+        {items.map((p) => (
+          <ProjectListRow
+            key={p.id}
+            project={p}
+            isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)}
+            onEdit={() => openProject(p.id, 'settings')}
+          />
+        ))}
+      </Stack>
+    ) : (
+      <SimpleGrid
+        cols={density === 'compact' ? { base: 1, sm: 2, md: 3, lg: 4 } : { base: 1, sm: 2, md: 3 }}
+        spacing="md"
+      >
+        {items.map((p) => (
+          <ProjectCard
+            key={p.id}
+            project={p}
+            density={density}
+            isSystemAdmin={canCreateProject}
+            onOpen={() => openProject(p.id)}
+            onEdit={() => openProject(p.id, 'settings')}
+          />
+        ))}
+      </SimpleGrid>
+    )
+
+  if (!groupByStatus) return renderItems(filtered)
+
+  const groups = STATUS_GROUP_ORDER.map((status) => ({
+    status,
+    items: filtered.filter((p) => p.status === status),
+  })).filter((g) => g.items.length > 0)
+
+  return (
+    <Stack gap="xl">
+      {groups.map((g) => (
+        <Stack key={g.status} gap="sm">
+          <Group gap={8} align="center">
+            <Box
+              style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_ACCENT[g.status], flexShrink: 0 }}
+            />
+            <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+              {STATUS_GROUP_LABEL[g.status]}
+            </Text>
+            <Text size="xs" c="dimmed">
+              · {g.items.length}
+            </Text>
+          </Group>
+          {renderItems(g.items)}
+        </Stack>
+      ))}
+    </Stack>
+  )
+}
+
+const THIS_YEAR = new Date().getFullYear()
+
+function fmtGanttDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const base = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
+  return d.getFullYear() !== THIS_YEAR ? `${base} '${String(d.getFullYear()).slice(2)}` : base
+}
+
+// Muted status colors for project Gantt bars
+const PROJECT_GANTT_COLOR: Record<ProjectStatus, string> = {
+  DRAFT: '#6c757d',
+  ACTIVE: '#4a7abf',
+  ON_HOLD: '#c49a28',
+  COMPLETED: '#3a8f6a',
+  CANCELLED: '#868e96',
+}
+const PROJECT_GANTT_OVERDUE = '#a84444'
+
+type ProjViewMode = 'day' | 'week' | 'month'
+
+const PROJ_COL_WIDTH: Record<ProjViewMode, number> = { day: 44, week: 28, month: 18 }
+const PROJ_EFFECTIVE_DAY_PX: Record<ProjViewMode, number> = {
+  day: 44,
+  week: Math.max(28 / 2, 14),
+  month: Math.max(18 / 6, 7),
+}
+
+const PROJ_VIEW_OPTIONS: Array<{ value: ProjViewMode; label: string }> = [
+  { value: 'day', label: 'Hari' },
+  { value: 'week', label: 'Minggu' },
+  { value: 'month', label: 'Bulan' },
 ]
 
-export function MembersSection({
-  projectId,
-  myRole,
-  systemRole,
-  ownerId,
-}: {
-  projectId: string
-  myRole: MemberRole | null
-  systemRole?: string | null
-  ownerId: string
-}) {
-  const qc = useQueryClient()
-  const [addUserId, setAddUserId] = useState<string | null>(null)
-  const [addRole, setAddRole] = useState<MemberRole>('MEMBER')
+const ROW_H = 52
+const HDR_H = 56
 
-  const detailQ = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => api<{ project: ProjectDetail; myRole: MemberRole | null }>(`/api/projects/${projectId}`),
-  })
-  const usersQ = useQuery({
-    queryKey: ['users'],
-    queryFn: () => api<{ users: UserOption[] }>('/api/users'),
-  })
-
-  const addMember = useMutation({
-    mutationFn: (body: { userId: string; role: MemberRole }) =>
-      api(`/api/projects/${projectId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setAddUserId(null)
-      setAddRole('MEMBER')
-      notifySuccess({ message: 'Member ditambahkan.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const changeRole = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: MemberRole }) =>
-      api(`/api/projects/${projectId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      }),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: `Role member diubah ke ${vars.role}.` })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const removeMember = useMutation({
-    mutationFn: (userId: string) => api(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Member dikeluarkan.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const isSysAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
-  const canManage = isSysAdmin || myRole === 'OWNER' || myRole === 'PM'
-  const canRemove = canManage
-  const canGrantOwner = systemRole === 'SUPER_ADMIN' || myRole === 'OWNER'
-
-  const members = detailQ.data?.project.members ?? []
-  const memberUserIds = new Set(members.map((m) => m.userId))
-  const userOptions = useMemo(
-    () =>
-      (usersQ.data?.users ?? [])
-        .filter((u) => !memberUserIds.has(u.id))
-        .map((u) => ({ value: u.id, label: `${u.name} · ${u.email}` })),
-    [usersQ.data, memberUserIds],
-  )
-  const roleOptions = canGrantOwner ? MEMBER_ROLE_OPTIONS : MEMBER_ROLE_OPTIONS.filter((r) => r.value !== 'OWNER')
-
-  return (
-    <Stack gap="xs">
-      {detailQ.isLoading ? (
-        <Text size="xs" c="dimmed">
-          Loading members…
-        </Text>
-      ) : (
-        <Stack gap={6}>
-          {members.map((m) => {
-            const isOwner = m.userId === ownerId
-            return (
-              <Group key={m.id} justify="space-between" wrap="nowrap">
-                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <TbUser size={14} />
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={500} truncate>
-                      {m.user.name}
-                    </Text>
-                    <Text size="xs" c="dimmed" truncate>
-                      {m.user.email}
-                    </Text>
-                  </Stack>
-                </Group>
-                <Group gap="xs" wrap="nowrap">
-                  {canManage && !isOwner ? (
-                    <Select
-                      size="xs"
-                      data={roleOptions}
-                      value={m.role}
-                      onChange={(v) => v && changeRole.mutate({ userId: m.userId, role: v as MemberRole })}
-                      w={110}
-                      allowDeselect={false}
-                    />
-                  ) : (
-                    <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">
-                      {m.role}
-                    </Badge>
-                  )}
-                  {canRemove && !isOwner && (
-                    <Tooltip label="Remove member">
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remove ${m.user.name} from this project?`)) {
-                            removeMember.mutate(m.userId)
-                          }
-                        }}
-                      >
-                        <TbTrash size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
-              </Group>
-            )
-          })}
-        </Stack>
-      )}
-
-      {canManage && (
-        <Group gap="xs" align="flex-end" wrap="nowrap">
-          <Select
-            label="Add member"
-            placeholder={userOptions.length === 0 ? 'All users added' : 'Select user'}
-            data={userOptions}
-            value={addUserId}
-            onChange={setAddUserId}
-            searchable
-            disabled={userOptions.length === 0}
-            style={{ flex: 1 }}
-          />
-          <Select
-            label="Role"
-            data={roleOptions}
-            value={addRole}
-            onChange={(v) => v && setAddRole(v as MemberRole)}
-            w={110}
-            allowDeselect={false}
-          />
-          <Button
-            leftSection={<TbPlus size={14} />}
-            disabled={!addUserId || addMember.isPending}
-            loading={addMember.isPending}
-            onClick={() => addUserId && addMember.mutate({ userId: addUserId, role: addRole })}
-          >
-            Add
-          </Button>
-        </Group>
-      )}
-
-      {(addMember.error || changeRole.error || removeMember.error) && (
-        <Text size="xs" c="red">
-          {(addMember.error as Error | null)?.message ??
-            (changeRole.error as Error | null)?.message ??
-            (removeMember.error as Error | null)?.message}
-        </Text>
-      )}
-    </Stack>
-  )
-}
-
-export function ExtensionsSection({
-  projectId,
-  currentEndAt,
-  startsAt,
-  canExtend,
-}: {
-  projectId: string
-  currentEndAt: string | null
-  startsAt: string | null
-  canExtend: boolean
-}) {
-  const qc = useQueryClient()
-  const [extendOpen, setExtendOpen] = useState(false)
-
-  const historyQ = useQuery({
-    queryKey: ['project-extensions', projectId],
-    queryFn: () => api<{ extensions: ProjectExtension[] }>(`/api/projects/${projectId}/extensions`),
-  })
-
-  const extend = useMutation({
-    mutationFn: (body: { newEndAt: string; reason: string | null }) =>
-      api(`/api/projects/${projectId}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-extensions', projectId] })
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setExtendOpen(false)
-      notifySuccess({ message: 'Deadline diperpanjang.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const extensions = historyQ.data?.extensions ?? []
-
-  return (
-    <Stack gap="xs">
-      <Group justify="space-between">
-        <Group gap="xs">
-          <TbHistory size={14} />
-          <Text size="sm" c="dimmed">
-            {extensions.length === 0 ? 'No extensions recorded' : `${extensions.length} extension(s)`}
-          </Text>
-        </Group>
-        {canExtend && (
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<TbCalendarPlus size={14} />}
-            onClick={() => setExtendOpen(true)}
-          >
-            Extend deadline
-          </Button>
-        )}
-      </Group>
-
-      {extensions.length > 0 && (
-        <Stack gap={6}>
-          {extensions.map((e) => (
-            <Card key={e.id} withBorder padding="xs" radius="sm">
-              <Stack gap={2}>
-                <Group gap="xs" wrap="wrap">
-                  <Text size="xs" fw={500}>
-                    {formatDate(e.previousEndAt)} → {formatDate(e.newEndAt)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    by {e.extendedBy?.name ?? 'system'} · {new Date(e.createdAt).toLocaleString()}
-                  </Text>
-                </Group>
-                {e.reason && (
-                  <Text size="xs" c="dimmed">
-                    {e.reason}
-                  </Text>
-                )}
-              </Stack>
-            </Card>
-          ))}
-        </Stack>
-      )}
-
-      <ExtendDeadlineModal
-        opened={extendOpen}
-        onClose={() => setExtendOpen(false)}
-        currentEndAt={currentEndAt}
-        startsAt={startsAt}
-        onSubmit={(body) => extend.mutate(body)}
-        loading={extend.isPending}
-        error={extend.error?.message}
-      />
-    </Stack>
-  )
-}
-
-const STATUS_BAR_COLOR: Record<ProjectStatus, string> = {
-  DRAFT: '#868e96',
-  ACTIVE: '#228be6',
-  ON_HOLD: '#fab005',
-  COMPLETED: '#40c057',
-  CANCELLED: '#495057',
-}
-
-function ProjectsGanttView({
+export function ProjectsGanttView({
   projects,
   onSelect,
 }: {
   projects: ProjectListItem[]
   onSelect: (p: ProjectListItem) => void
 }) {
+  const now = useMemo(() => new Date(), [])
   const withDates = useMemo(() => projects.filter((p) => p.startsAt && p.endsAt), [projects])
-
-  const milestonesQ = useQuery({
-    queryKey: ['milestones', 'all'],
-    queryFn: () => api<{ milestones: ProjectMilestone[] }>('/api/milestones'),
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const isSyncingRef = useRef(false)
+  const [viewMode, setViewMode] = useLocalStorage<ProjViewMode>({
+    key: 'pm:projects:gantt-view',
+    defaultValue: 'week',
   })
 
-  const option = useMemo<EChartsOption>(() => {
-    const now = Date.now()
-    const categories = withDates.map((p) => p.name)
-    const idxById = new Map<string, number>(withDates.map((p, i) => [p.id, i]))
-    const milestonePoints = (milestonesQ.data?.milestones ?? [])
-      .filter((m) => m.dueAt && idxById.has(m.projectId))
-      .map((m) => ({
-        name: m.title,
-        value: [new Date(m.dueAt as string).getTime(), idxById.get(m.projectId) as number],
-        milestone: m,
-        itemStyle: { color: m.completedAt ? '#40c057' : '#7950f2' },
-      }))
-    const data = withDates.map((p, idx) => {
-      const start = new Date(p.startsAt as string).getTime()
-      const end = new Date(p.endsAt as string).getTime()
-      const overdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
-      const taskPct = computeTaskProgress(p)
-      const timePct = computeTimeProgress(p)
-      const color = overdue ? '#fa5252' : STATUS_BAR_COLOR[p.status]
-      return {
-        name: p.name,
-        value: [idx, start, end],
-        projectId: p.id,
-        status: p.status,
-        priority: p.priority,
-        overdue,
-        taskPct,
-        timePct,
-        itemStyle: { color },
-      }
-    })
+  const ganttTasks = useMemo<GanttTask[]>(
+    () =>
+      withDates.map((p) => {
+        const start = new Date(p.startsAt as string)
+        const end = new Date(p.endsAt as string)
+        const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+        const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+        const duration = Math.max(1, Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86_400_000) + 1)
+        const isOverdue = end < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+        const slipped = !!(p.originalEndAt && p.endsAt && p.originalEndAt !== p.endsAt)
+        return {
+          id: p.id,
+          label: p.name,
+          startDate: toLocalDateStr(start),
+          duration,
+          progress: computeTaskProgress(p) ?? 0,
+          color: isOverdue ? PROJECT_GANTT_OVERDUE : slipped ? '#b86d2a' : PROJECT_GANTT_COLOR[p.status],
+          dependencies: [],
+        }
+      }),
+    [withDates, now],
+  )
 
-    type BarData = (typeof data)[number]
-
+  const { tlStart, tlEnd } = useMemo(() => {
+    if (withDates.length === 0) return { tlStart: undefined, tlEnd: undefined }
+    const toMidnight = (ms: number) => {
+      const d = new Date(ms)
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    }
+    const allMs = withDates.flatMap((p) => [
+      new Date(p.startsAt as string).getTime(),
+      new Date(p.endsAt as string).getTime(),
+    ])
     return {
-      grid: { left: 160, right: 24, top: 12, bottom: 48, containLabel: false },
-      xAxis: {
-        type: 'time',
-        position: 'bottom',
-        splitLine: { show: true },
-      },
-      yAxis: {
-        type: 'category',
-        data: categories,
-        inverse: true,
-        axisLabel: { width: 140, overflow: 'truncate', fontSize: 11 },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: unknown) => {
-          const p = params as { data: BarData }
-          const d = p.data
-          const start = new Date(d.value[1]).toLocaleDateString()
-          const end = new Date(d.value[2]).toLocaleDateString()
-          const parts = [
-            `<b>${d.name}</b>`,
-            `${start} → ${end}`,
-            `Status: ${d.status.replace('_', ' ')} · Priority: ${d.priority}`,
-          ]
-          if (d.taskPct !== null) parts.push(`Tasks: ${d.taskPct}%`)
-          if (d.timePct !== null) parts.push(`Time: ${d.timePct}%`)
-          if (d.overdue) parts.push('<span style="color:#fa5252">Overdue</span>')
-          return parts.join('<br/>')
-        },
-      },
-      series: [
-        {
-          type: 'scatter',
-          name: 'Milestones',
-          data: milestonePoints,
-          symbol: 'diamond',
-          symbolSize: 12,
-          z: 10,
-          tooltip: {
-            formatter: (params: unknown) => {
-              const p = params as { data: { milestone: ProjectMilestone } }
-              const m = p.data.milestone
-              const done = !!m.completedAt
-              return [
-                `<b>${m.title}</b>`,
-                `Due: ${m.dueAt ? new Date(m.dueAt).toLocaleDateString() : '—'}`,
-                done ? '<span style="color:#40c057">Completed</span>' : 'Pending',
-              ].join('<br/>')
-            },
-          },
-        },
-        {
-          type: 'custom',
-          encode: { x: [1, 2], y: 0 },
-          data,
-          renderItem: (_params: unknown, apiRef: unknown) => {
-            const api = apiRef as {
-              value: (i: number) => number
-              coord: (pt: [number, number]) => [number, number]
-              size: (v: [number, number]) => [number, number]
-              style: (opts?: Record<string, unknown>) => Record<string, unknown>
-              visual: (key: string) => string
-            }
-            const yIdx = api.value(0)
-            const start = api.coord([api.value(1), yIdx])
-            const end = api.coord([api.value(2), yIdx])
-            const height = api.size([0, 1])[1] * 0.5
-            const width = Math.max(2, end[0] - start[0])
-            const color = api.visual('color') || '#228be6'
-            return {
-              type: 'rect',
-              shape: { x: start[0], y: start[1] - height / 2, width, height },
-              style: { fill: color, opacity: 0.9 },
-            }
-          },
-          markLine: {
-            symbol: 'none',
-            silent: true,
-            label: { formatter: 'Today', position: 'insideEndTop', color: '#fa5252' },
-            lineStyle: { color: '#fa5252', type: 'dashed', width: 1 },
-            data: [{ xAxis: now }],
-          },
-        },
-      ],
-      dataZoom: [
-        { type: 'slider', xAxisIndex: 0, height: 18, bottom: 8, filterMode: 'weakFilter' },
-        { type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' },
-      ],
-    } as unknown as EChartsOption
-  }, [withDates, milestonesQ.data])
+      tlStart: toMidnight(Math.min(...allMs) - 14 * 86_400_000),
+      tlEnd: toMidnight(Math.max(...allMs) + 14 * 86_400_000),
+    }
+  }, [withDates])
+
+  const scrollToToday = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      if (!tlStart) return
+      const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+      if (!body) return
+      const daysSinceStart = Math.floor((now.getTime() - tlStart.getTime()) / 86_400_000)
+      const todayPx = daysSinceStart * PROJ_EFFECTIVE_DAY_PX[viewMode]
+      body.scrollTo({ left: Math.max(0, todayPx - body.clientWidth / 2), behavior })
+    },
+    [tlStart, viewMode, now],
+  )
+
+  // Auto-scroll on first render — instant agar tidak glide
+  useEffect(() => {
+    if (!tlStart) return
+    let attempts = 0
+    const tryScroll = () => {
+      const content = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
+      if (!content || content.offsetWidth < 200) {
+        if (++attempts < 40) {
+          setTimeout(tryScroll, 80)
+          return
+        }
+        return
+      }
+      scrollToToday('instant')
+    }
+    setTimeout(tryScroll, 80)
+  }, [tlStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync vertical scroll: list ↔ gantt body
+  const syncFromGantt = useCallback(() => {
+    if (isSyncingRef.current) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body || !listRef.current) return
+    isSyncingRef.current = true
+    listRef.current.scrollTop = body.scrollTop
+    isSyncingRef.current = false
+  }, [])
+
+  const syncFromList = useCallback(() => {
+    if (isSyncingRef.current) return
+    const body = wrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
+    if (!body || !listRef.current) return
+    isSyncingRef.current = true
+    body.scrollTop = listRef.current.scrollTop
+    isSyncingRef.current = false
+  }, [])
 
   if (withDates.length === 0) {
     return (
@@ -1657,270 +1757,364 @@ function ProjectsGanttView({
     )
   }
 
-  const height = Math.max(240, withDates.length * 36 + 80)
+  const totalH = Math.max(320, withDates.length * ROW_H + HDR_H + 8)
 
   return (
     <Card withBorder padding="sm" radius="md">
-      <EChart
-        option={option}
-        height={height}
-        onEvents={{
-          click: (params: unknown) => {
-            const p = params as { data?: { projectId?: string } }
-            const id = p?.data?.projectId
-            if (!id) return
-            const proj = projects.find((x) => x.id === id)
-            if (proj) onSelect(proj)
-          },
-        }}
-      />
+      <Stack gap="xs">
+        {/* Toolbar */}
+        <Group justify="space-between">
+          <Group gap="xs">
+            <Text size="xs" c="dimmed">
+              {withDates.length} proyek
+            </Text>
+            {projects.length > withDates.length && (
+              <Tooltip label={`${projects.length - withDates.length} proyek tanpa tanggal tidak ditampilkan`} withArrow>
+                <Badge size="xs" variant="default" style={{ border: 'none' }}>
+                  +{projects.length - withDates.length} tanpa jadwal
+                </Badge>
+              </Tooltip>
+            )}
+          </Group>
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Scroll ke hari ini" withArrow>
+              <ActionIcon variant="light" size="sm" color="red" onClick={() => scrollToToday()}>
+                <TbCalendarEvent size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <SegmentedControl
+              size="xs"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as ProjViewMode)}
+              data={PROJ_VIEW_OPTIONS}
+            />
+          </Group>
+        </Group>
+
+        {/* Legend */}
+        <Group gap={6} wrap="wrap">
+          {(Object.entries(PROJECT_GANTT_COLOR) as [ProjectStatus, string][]).map(([status, color]) => (
+            <Badge
+              key={status}
+              size="xs"
+              variant="default"
+              style={{ border: 'none' }}
+              leftSection={
+                <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+              }
+            >
+              {status.replace('_', ' ')}
+            </Badge>
+          ))}
+          <Badge
+            size="xs"
+            variant="default"
+            style={{ border: 'none' }}
+            leftSection={
+              <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#b86d2a', flexShrink: 0 }} />
+            }
+          >
+            Slipped
+          </Badge>
+          <Badge
+            size="xs"
+            variant="default"
+            style={{ border: 'none' }}
+            leftSection={
+              <div
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  backgroundColor: PROJECT_GANTT_OVERDUE,
+                  flexShrink: 0,
+                }}
+              />
+            }
+          >
+            Overdue
+          </Badge>
+        </Group>
+
+        {/* Gantt + custom sidebar */}
+        <div
+          style={{
+            display: 'flex',
+            height: totalH,
+            border: '1px solid var(--mantine-color-default-border)',
+            borderRadius: 'var(--mantine-radius-md)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Left sidebar — project names */}
+          <div
+            style={{
+              width: 200,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRight: '1px solid var(--mantine-color-default-border)',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                height: HDR_H,
+                flexShrink: 0,
+                borderBottom: '1px solid var(--mantine-color-default-border)',
+                display: 'flex',
+                alignItems: 'flex-end',
+                padding: '0 12px 8px',
+              }}
+            >
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
+                Proyek
+              </Text>
+            </div>
+            {/* Rows */}
+            <div ref={listRef} onScroll={syncFromList} style={{ flex: 1, overflowY: 'scroll', scrollbarWidth: 'none' }}>
+              {withDates.map((p) => {
+                const isOverdue =
+                  new Date(p.endsAt as string) < now && p.status !== 'COMPLETED' && p.status !== 'CANCELLED'
+                return (
+                  <Tooltip
+                    key={p.id}
+                    label={`${p.status.replace('_', ' ')} · ${p.priority}`}
+                    withArrow
+                    position="right"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSelect(p)}
+                      style={{
+                        height: ROW_H,
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 10px',
+                        gap: 8,
+                        border: 'none',
+                        borderBottom: '1px solid var(--mantine-color-default-border)',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        textAlign: 'left',
+                        font: 'inherit',
+                        color: 'inherit',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--mantine-color-default-hover)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: isOverdue ? PROJECT_GANTT_OVERDUE : PROJECT_GANTT_COLOR[p.status],
+                          flexShrink: 0,
+                        }}
+                      />
+                      <Stack gap={1} style={{ minWidth: 0, flex: 1 }}>
+                        <Text size="xs" fw={500} truncate style={{ minWidth: 0 }} title={p.name}>
+                          {p.name}
+                        </Text>
+                        <Text size="10px" c="dimmed" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtGanttDate(p.startsAt)} → {fmtGanttDate(p.endsAt)}
+                        </Text>
+                      </Stack>
+                    </button>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Gantt timeline */}
+          <div ref={wrapperRef} style={{ flex: 1, overflow: 'hidden' }} onScroll={syncFromGantt}>
+            <Gantt
+              key={ganttTasks.map((t) => t.id).join(',')}
+              tasks={ganttTasks}
+              viewMode={viewMode}
+              startDate={tlStart}
+              endDate={tlEnd}
+              columnWidth={PROJ_COL_WIDTH[viewMode]}
+              rowHeight={ROW_H}
+              taskListWidth={0}
+              showTodayMarker
+              showTitle
+              styles={{ taskList: { display: 'none' } }}
+              onTaskClick={(t) => {
+                const proj = projects.find((p) => p.id === t.id)
+                if (proj) onSelect(proj)
+              }}
+            />
+          </div>
+        </div>
+      </Stack>
     </Card>
   )
 }
 
-export function MilestonesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
-  const qc = useQueryClient()
-  const [title, setTitle] = useState('')
-  const [dueAt, setDueAt] = useState<Date | null>(null)
+const MAX_AVATAR_VISIBLE = 14
+const AVATAR_SIZE = 36
 
-  const milestonesQ = useQuery({
-    queryKey: ['milestones', projectId],
-    queryFn: () => api<{ milestones: ProjectMilestone[] }>(`/api/projects/${projectId}/milestones`),
-  })
-
-  const create = useMutation({
-    mutationFn: (body: { title: string; dueAt: string | null }) =>
-      api(`/api/projects/${projectId}/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setTitle('')
-      setDueAt(null)
-      notifySuccess({ message: 'Milestone dibuat.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
-      api(`/api/milestones/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Milestone diperbarui.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const remove = useMutation({
-    mutationFn: (id: string) => api(`/api/milestones/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['milestones', projectId] })
-      qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      notifySuccess({ message: 'Milestone dihapus.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const milestones = milestonesQ.data?.milestones ?? []
-  const now = Date.now()
-
-  return (
-    <Stack gap="xs">
-      {milestonesQ.isLoading ? (
-        <Text size="xs" c="dimmed">
-          Loading…
-        </Text>
-      ) : milestones.length === 0 ? (
-        <Text size="xs" c="dimmed">
-          No milestones yet.
-        </Text>
-      ) : (
-        <Stack gap={6}>
-          {milestones.map((m) => {
-            const done = !!m.completedAt
-            const overdue = !done && m.dueAt && new Date(m.dueAt).getTime() < now
-            return (
-              <Group key={m.id} justify="space-between" wrap="nowrap" gap="xs">
-                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <Checkbox
-                    checked={done}
-                    disabled={!canManage || update.isPending}
-                    onChange={(e) => update.mutate({ id: m.id, body: { completed: e.currentTarget.checked } })}
-                  />
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text
-                      size="sm"
-                      fw={500}
-                      truncate
-                      td={done ? 'line-through' : undefined}
-                      c={done ? 'dimmed' : undefined}
-                    >
-                      {m.title}
-                    </Text>
-                    <Group gap={4}>
-                      {m.dueAt && (
-                        <Text size="xs" c={overdue ? 'red' : 'dimmed'}>
-                          Due {formatDate(m.dueAt)}
-                        </Text>
-                      )}
-                      {overdue && (
-                        <Badge size="xs" color="red" variant="light">
-                          Overdue
-                        </Badge>
-                      )}
-                      {done && (
-                        <Text size="xs" c="dimmed">
-                          · Done {formatDate(m.completedAt)}
-                        </Text>
-                      )}
-                    </Group>
-                  </Stack>
-                </Group>
-                {canManage && (
-                  <Tooltip label="Delete">
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm(`Delete milestone "${m.title}"?`)) remove.mutate(m.id)
-                      }}
-                    >
-                      <TbTrash size={14} />
-                    </ActionIcon>
-                  </Tooltip>
-                )}
-              </Group>
-            )
-          })}
-        </Stack>
-      )}
-
-      {canManage && (
-        <Group gap="xs" align="flex-end" wrap="nowrap">
-          <TextInput
-            label="Add milestone"
-            placeholder="e.g. MVP launch"
-            value={title}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            style={{ flex: 1 }}
-          />
-          <DateInput
-            label="Due"
-            value={dueAt}
-            onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
-            clearable
-            w={160}
-          />
-          <Button
-            leftSection={<TbPlus size={14} />}
-            disabled={!title.trim() || create.isPending}
-            loading={create.isPending}
-            onClick={() => create.mutate({ title: title.trim(), dueAt: dueAt ? dueAt.toISOString() : null })}
-          >
-            Add
-          </Button>
-        </Group>
-      )}
-
-      {(create.error || update.error || remove.error) && (
-        <Text size="xs" c="red">
-          {(create.error as Error | null)?.message ??
-            (update.error as Error | null)?.message ??
-            (remove.error as Error | null)?.message}
-        </Text>
-      )}
-    </Stack>
-  )
-}
-
-function ExtendDeadlineModal({
-  opened,
-  onClose,
-  currentEndAt,
-  startsAt,
-  onSubmit,
-  loading,
-  error,
+function UserFilterStrip({
+  users,
+  value,
+  onChange,
+  onSwitchMode,
 }: {
-  opened: boolean
-  onClose: () => void
-  currentEndAt: string | null
-  startsAt: string | null
-  onSubmit: (body: { newEndAt: string; reason: string | null }) => void
-  loading: boolean
-  error?: string
+  users: Array<{ id: string; name: string; image?: string | null }>
+  value: string | null
+  onChange: (id: string | null) => void
+  onSwitchMode: () => void
 }) {
-  const [newEnd, setNewEnd] = useState<Date | null>(currentEndAt ? new Date(currentEndAt) : null)
-  const [reason, setReason] = useState('')
-  const [initKey, setInitKey] = useState<string | null>(null)
+  const [overflowOpen, setOverflowOpen] = useState(false)
+  const visible = users.slice(0, MAX_AVATAR_VISIBLE)
+  const overflowUsers = users.slice(MAX_AVATAR_VISIBLE)
 
-  const key = currentEndAt ?? '__null__'
-  if (opened && key !== initKey) {
-    setInitKey(key)
-    setNewEnd(currentEndAt ? new Date(currentEndAt) : null)
-    setReason('')
-  }
-  if (!opened && initKey !== null) setInitKey(null)
-
-  const startDate = startsAt ? new Date(startsAt) : null
-  const sameAsCurrent = newEnd && currentEndAt && newEnd.getTime() === new Date(currentEndAt).getTime()
-  const beforeStart = newEnd && startDate && newEnd < startDate
-  const invalid = !newEnd || sameAsCurrent || beforeStart
+  const activeUser = value ? users.find((u) => u.id === value) : null
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Extend deadline" size="md">
-      <Stack gap="sm">
-        <Text size="sm" c="dimmed">
-          Current deadline: <b>{formatDate(currentEndAt)}</b>
+    <Group justify="space-between" align="center" wrap="nowrap" gap="md">
+      {/* Left: label + active user name */}
+      <Group gap={6} align="center" style={{ flexShrink: 0, minWidth: 80 }}>
+        <Text size="xs" c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.06em' }}>
+          Anggota
         </Text>
-        <DateInput
-          label="New deadline"
-          value={newEnd}
-          onChange={(v) => setNewEnd(v ? new Date(v as unknown as string) : null)}
-          clearable
-          leftSection={<TbCalendarEvent size={14} />}
-          error={beforeStart ? 'Must be after project start' : sameAsCurrent ? 'Same as current deadline' : undefined}
-        />
-        <Textarea
-          label="Reason (optional)"
-          placeholder="e.g. Scope expanded to include payment gateway integration"
-          value={reason}
-          onChange={(e) => setReason(e.currentTarget.value)}
-          autosize
-          minRows={2}
-          maxRows={5}
-        />
-        {error && (
-          <Text size="sm" c="red">
-            {error}
+        {activeUser && (
+          <Text size="xs" c="blue" fw={500} truncate style={{ maxWidth: 100 }}>
+            · {activeUser.name.split(' ')[0]}
           </Text>
         )}
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={Boolean(invalid) || loading}
-            loading={loading}
-            onClick={() => newEnd && onSubmit({ newEndAt: newEnd.toISOString(), reason: reason.trim() || null })}
-          >
-            Save extension
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+      </Group>
+
+      {/* Center: avatar list */}
+      <Group gap={14} wrap="wrap" style={{ flex: 1 }}>
+        {/* "Semua" button */}
+        <Tooltip label="Semua anggota" withArrow>
+          <UnstyledButton onClick={() => onChange(null)}>
+            <Avatar
+              size={AVATAR_SIZE}
+              radius="xl"
+              variant={!value ? 'filled' : 'default'}
+              color="blue"
+              style={{
+                outline: !value ? '2px solid var(--mantine-color-blue-5)' : 'none',
+                outlineOffset: 2,
+                cursor: 'pointer',
+                transition: 'transform 0.1s, opacity 0.1s',
+                transform: !value ? 'scale(1.08)' : 'scale(1)',
+              }}
+            >
+              <TbUsers size={16} />
+            </Avatar>
+          </UnstyledButton>
+        </Tooltip>
+
+        {visible.map((u) => {
+          const isActive = value === u.id
+          const isDimmed = !!value && !isActive
+          return (
+            <Tooltip key={u.id} label={u.name} withArrow>
+              <UnstyledButton
+                onClick={() => onChange(isActive ? null : u.id)}
+                style={{
+                  transition: 'transform 0.1s',
+                  transform: isActive ? 'scale(1.12)' : 'scale(1)',
+                }}
+              >
+                <UserAvatar
+                  image={u.image}
+                  name={u.name}
+                  size={AVATAR_SIZE}
+                  color="blue"
+                  style={{
+                    outline: isActive
+                      ? '2px solid var(--mantine-color-blue-5)'
+                      : '2px solid var(--mantine-color-cyan-5)',
+                    outlineOffset: 2,
+                    opacity: isDimmed ? 0.32 : 1,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.1s, outline 0.1s',
+                  }}
+                />
+              </UnstyledButton>
+            </Tooltip>
+          )
+        })}
+
+        {/* Overflow popover */}
+        {overflowUsers.length > 0 && (
+          <Popover opened={overflowOpen} onChange={setOverflowOpen} withArrow shadow="md" position="bottom-start">
+            <Popover.Target>
+              <Tooltip label={`+${overflowUsers.length} anggota lainnya`} withArrow disabled={overflowOpen}>
+                <UnstyledButton onClick={() => setOverflowOpen((o) => !o)}>
+                  <Avatar
+                    size={AVATAR_SIZE}
+                    radius="xl"
+                    color="gray"
+                    variant="light"
+                    style={{ cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    +{overflowUsers.length}
+                  </Avatar>
+                </UnstyledButton>
+              </Tooltip>
+            </Popover.Target>
+            <Popover.Dropdown p="sm">
+              <Stack gap={8}>
+                <Text size="xs" c="dimmed" fw={700} tt="uppercase">
+                  Anggota lainnya
+                </Text>
+                <Group gap={8} wrap="wrap" style={{ maxWidth: 280 }}>
+                  {overflowUsers.map((u) => {
+                    const isActive = value === u.id
+                    return (
+                      <Tooltip key={u.id} label={u.name} withArrow>
+                        <UnstyledButton
+                          onClick={() => {
+                            onChange(isActive ? null : u.id)
+                            setOverflowOpen(false)
+                          }}
+                          style={{ transform: isActive ? 'scale(1.12)' : 'scale(1)', transition: 'transform 0.1s' }}
+                        >
+                          <UserAvatar
+                            image={u.image}
+                            name={u.name}
+                            size={AVATAR_SIZE}
+                            color="blue"
+                            style={{
+                              outline: isActive
+                                ? '2px solid var(--mantine-color-blue-5)'
+                                : '2px solid var(--mantine-color-default-border)',
+                              outlineOffset: 2,
+                              opacity: value && !isActive ? 0.35 : 1,
+                              cursor: 'pointer',
+                              transition: 'opacity 0.1s',
+                            }}
+                          />
+                        </UnstyledButton>
+                      </Tooltip>
+                    )
+                  })}
+                </Group>
+              </Stack>
+            </Popover.Dropdown>
+          </Popover>
+        )}
+      </Group>
+
+      {/* Right: mode toggle */}
+      <Tooltip label="Ganti ke dropdown" withArrow>
+        <ActionIcon size="sm" variant="subtle" color="gray" onClick={onSwitchMode} style={{ flexShrink: 0 }}>
+          <TbLayoutList size={12} />
+        </ActionIcon>
+      </Tooltip>
+    </Group>
   )
 }

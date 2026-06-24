@@ -32,8 +32,11 @@ import {
 import { EChart } from '@/frontend/components/charts/EChart'
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
+import { toLocalDateStr } from '@/frontend/lib/dates'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 
 interface AdminUser {
   id: string
@@ -51,7 +54,7 @@ interface AuditLogEntry {
   detail: string | null
   ip: string | null
   createdAt: string
-  user: { name: string; email: string } | null
+  user: { name: string; email: string; image?: string | null } | null
 }
 
 const actionBadge: Record<string, { color: string; label: string }> = {
@@ -94,7 +97,7 @@ function downloadCsv(rows: AuditLogEntry[]) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `audit-logs-${toLocalDateStr(new Date())}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -114,14 +117,34 @@ export function AuditLogsPanel() {
       fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()) as Promise<{ users: AdminUser[] }>,
   })
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['admin', 'logs', 'audit', actionFilter, userFilter],
+  // Stats + trend chart: always last 14 days, not affected by windowFilter
+  const { data: statsData } = useQuery({
+    queryKey: ['admin', 'logs', 'audit-stats'],
     queryFn: () => {
-      const params = new URLSearchParams({ limit: '500' })
+      const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+      return fetch(`/api/admin/logs/audit?limit=500&since=${encodeURIComponent(since14d)}`, {
+        credentials: 'include',
+      }).then((r) => r.json()) as Promise<{ logs: AuditLogEntry[] }>
+    },
+    staleTime: 60_000,
+  })
+
+  // Table data: server-side filtered + paginated
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['admin', 'logs', 'audit', actionFilter, userFilter, windowFilter, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String((page - 1) * PAGE_SIZE) })
       if (actionFilter) params.set('action', actionFilter)
       if (userFilter) params.set('userId', userFilter)
+      if (windowFilter !== 'all') {
+        const since = new Date(Date.now() - Number(windowFilter) * 24 * 60 * 60 * 1000).toISOString()
+        params.set('since', since)
+      }
       return fetch(`/api/admin/logs/audit?${params}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
         logs: AuditLogEntry[]
+        total: number
+        limit: number
+        offset: number
       }>
     },
   })
@@ -136,25 +159,20 @@ export function AuditLogsPanel() {
     onError: (err) => notifyError(err),
   })
 
-  const allLogs = data?.logs ?? []
-
-  const filteredLogs = useMemo(() => {
-    if (windowFilter === 'all') return allLogs
-    const days = Number(windowFilter)
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-    return allLogs.filter((l) => new Date(l.createdAt).getTime() >= cutoff)
-  }, [allLogs, windowFilter])
+  const pagedLogs = data?.logs ?? []
+  const total = data?.total ?? 0
+  const allStatsLogs = statsData?.logs ?? []
 
   const stats = useMemo(() => {
     const now = Date.now()
     const cutoff24 = now - 24 * 60 * 60 * 1000
-    const last24 = allLogs.filter((l) => new Date(l.createdAt).getTime() >= cutoff24)
+    const last24 = allStatsLogs.filter((l) => new Date(l.createdAt).getTime() >= cutoff24)
     const loginOk = last24.filter((l) => l.action === 'LOGIN').length
     const loginFail = last24.filter((l) => l.action === 'LOGIN_FAILED').length
     const loginBlocked = last24.filter((l) => l.action === 'LOGIN_BLOCKED').length
     const uniqueUsers = new Set(last24.map((l) => l.userId).filter(Boolean)).size
     return { loginOk, loginFail, loginBlocked, uniqueUsers }
-  }, [allLogs])
+  }, [allStatsLogs])
 
   const trendOption = useMemo<EChartsOption>(() => {
     const days: Array<{ key: string; label: string; ok: number; fail: number; blocked: number }> = []
@@ -162,13 +180,13 @@ export function AuditLogsPanel() {
       const d = new Date()
       d.setHours(0, 0, 0, 0)
       d.setDate(d.getDate() - i)
-      days.push({ key: d.toISOString().slice(0, 10), label: d.toISOString().slice(5, 10), ok: 0, fail: 0, blocked: 0 })
+      days.push({ key: toLocalDateStr(d), label: toLocalDateStr(d).slice(5), ok: 0, fail: 0, blocked: 0 })
     }
     const index = new Map(days.map((d, i) => [d.key, i]))
-    for (const l of allLogs) {
+    for (const l of allStatsLogs) {
       const d = new Date(l.createdAt)
       d.setHours(0, 0, 0, 0)
-      const i = index.get(d.toISOString().slice(0, 10))
+      const i = index.get(toLocalDateStr(d))
       if (i === undefined) continue
       if (l.action === 'LOGIN') days[i].ok++
       else if (l.action === 'LOGIN_FAILED') days[i].fail++
@@ -207,14 +225,14 @@ export function AuditLogsPanel() {
         },
       ],
     }
-  }, [allLogs])
+  }, [allStatsLogs])
 
-  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedLogs = filteredLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   useEffect(() => {
     setPage(1)
-  }, [])
+  }, [actionFilter, userFilter, windowFilter])
 
   const userOptions = (usersData?.users ?? []).map((u) => ({ value: u.id, label: `${u.name} (${u.email})` }))
   const actionOptions = Object.entries(actionBadge).map(([key, val]) => ({ value: key, label: val.label }))
@@ -242,8 +260,8 @@ export function AuditLogsPanel() {
           />
         </Group>
         <Group gap="sm">
-          <Tooltip label="Ekspor CSV">
-            <ActionIcon variant="subtle" color="blue" onClick={() => downloadCsv(filteredLogs)}>
+          <Tooltip label="Ekspor CSV (halaman ini)">
+            <ActionIcon variant="subtle" color="blue" onClick={() => downloadCsv(pagedLogs)}>
               <TbDownload size={16} />
             </ActionIcon>
           </Tooltip>
@@ -351,96 +369,106 @@ export function AuditLogsPanel() {
           leftSection={<TbFileText size={14} />}
         />
         <Text size="xs" c="dimmed" ml="auto">
-          {filteredLogs.length} entri
+          {total} entri
         </Text>
       </Group>
 
       <Card withBorder radius="md" p={0}>
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th w={180}>Waktu</Table.Th>
-              <Table.Th>User</Table.Th>
-              <Table.Th>Action</Table.Th>
-              <Table.Th>Detail</Table.Th>
-              <Table.Th w={120}>IP</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
+        <Table.ScrollContainer minWidth={900}>
+          <Table highlightOnHover layout="fixed">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <EmptyRow icon={TbFileText} title="Memuat audit log…" />
-                </Table.Td>
+                <Table.Th style={stickyFirstHeader(180)}>Waktu</Table.Th>
+                <Table.Th style={{ width: 220 }}>User</Table.Th>
+                <Table.Th style={{ width: 160 }}>Action</Table.Th>
+                <Table.Th style={{ width: 220 }}>Detail</Table.Th>
+                <Table.Th style={{ width: 130 }}>IP</Table.Th>
               </Table.Tr>
-            )}
-            {filteredLogs.length === 0 && !isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <EmptyRow
-                    icon={TbFileText}
-                    title="Belum ada audit log"
-                    message={
-                      actionFilter || userFilter || windowFilter !== 'all'
-                        ? 'Tidak ada log yang cocok dengan filter. Perluas window atau reset filter.'
-                        : 'Audit log akan muncul saat ada aktivitas login, role change, atau block/unblock.'
-                    }
-                  />
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {pagedLogs.map((log) => {
-              const badge = actionBadge[log.action] ?? { color: 'gray', label: log.action }
-              return (
-                <Table.Tr key={log.id}>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="dimmed">
-                      {new Date(log.createdAt).toLocaleString('id-ID', { hour12: false })}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {log.user ? (
-                      <div>
-                        <Text size="sm" fw={500}>
-                          {log.user.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {log.user.email}
-                        </Text>
-                      </div>
-                    ) : (
-                      <Text size="sm" c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={badge.color} variant="light" size="sm">
-                      {badge.label}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed" ff="monospace">
-                      {log.detail ?? '—'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" ff="monospace" c="dimmed">
-                      {log.ip ?? '—'}
-                    </Text>
+            </Table.Thead>
+            <Table.Tbody>
+              {isLoading && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <EmptyRow icon={TbFileText} title="Memuat audit log…" />
                   </Table.Td>
                 </Table.Tr>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
+              )}
+              {pagedLogs.length === 0 && !isLoading && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <EmptyRow
+                      icon={TbFileText}
+                      title="Belum ada audit log"
+                      message={
+                        actionFilter || userFilter || windowFilter !== 'all'
+                          ? 'Tidak ada log yang cocok dengan filter. Perluas window atau reset filter.'
+                          : 'Audit log akan muncul saat ada aktivitas login, role change, atau block/unblock.'
+                      }
+                    />
+                  </Table.Td>
+                </Table.Tr>
+              )}
+              {pagedLogs.map((log) => {
+                const badge = actionBadge[log.action] ?? { color: 'gray', label: log.action }
+                return (
+                  <Table.Tr key={log.id}>
+                    <Table.Td style={stickyFirstCell(180)}>
+                      <Text size="xs" ff="monospace" c="dimmed">
+                        {new Date(log.createdAt).toLocaleString('id-ID', { hour12: false })}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {log.user ? (
+                        <Group gap="xs" wrap="nowrap">
+                          <UserAvatar
+                            name={log.user.name}
+                            image={log.user.image}
+                            size={24}
+                            color="blue"
+                            style={{ flexShrink: 0 }}
+                          />
+                          <Stack gap={0} style={{ minWidth: 0 }}>
+                            <Text size="sm" fw={500} truncate>
+                              {log.user.name}
+                            </Text>
+                            <Text size="xs" c="dimmed" truncate>
+                              {log.user.email}
+                            </Text>
+                          </Stack>
+                        </Group>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          —
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={badge.color} variant="light" size="sm">
+                        {badge.label}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed" ff="monospace">
+                        {log.detail ?? '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="dimmed">
+                        {log.ip ?? '—'}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       </Card>
 
-      {filteredLogs.length > PAGE_SIZE && (
+      {total > PAGE_SIZE && (
         <Group justify="space-between">
           <Text size="xs" c="dimmed">
-            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredLogs.length)} dari{' '}
-            {filteredLogs.length}
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, total)} dari {total}
           </Text>
           <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
         </Group>

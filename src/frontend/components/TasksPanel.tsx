@@ -3,48 +3,120 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Divider,
   Group,
   Modal,
-  MultiSelect,
-  NumberInput,
   Pagination,
   Progress,
+  ScrollArea,
   SegmentedControl,
   Select,
-  SimpleGrid,
   Stack,
   Switch,
   Table,
   Text,
-  Textarea,
   TextInput,
   Title,
   Tooltip,
 } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
-import type { EChartsOption } from 'echarts'
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   TbAlertTriangle,
   TbArrowLeft,
+  TbCalendarOff,
   TbChartBar,
   TbChevronRight,
   TbClock,
+  TbDownload,
   TbFilter,
+  TbInfoCircle,
   TbListCheck,
+  TbLock,
   TbPlus,
   TbRefresh,
   TbSearch,
+  TbSortAscending,
+  TbSortDescending,
   TbTag,
+  TbTrash,
   TbUserQuestion,
   TbX,
 } from 'react-icons/tb'
+
+// Modal kecil untuk input alasan hapus — dipakai oleh confirmDeleteOne & confirmDeleteSelected
+function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) => void; label: string }) {
+  const [reason, setReason] = useState('')
+  return (
+    <Stack gap="sm">
+      <Text size="sm">{label}</Text>
+      <TextInput
+        placeholder="Tulis alasan penghapusan..."
+        value={reason}
+        onChange={(e) => setReason(e.currentTarget.value)}
+        autoFocus
+      />
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
+          Batal
+        </Button>
+        <Button
+          color="red"
+          size="xs"
+          disabled={reason.trim().length < 3}
+          onClick={() => {
+            onConfirm(reason.trim())
+            modals.closeAll()
+          }}
+        >
+          Hapus
+        </Button>
+      </Group>
+    </Stack>
+  )
+}
+
+function PhasePill({
+  label,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string
+  count?: number
+  active: boolean
+  color: string
+  onClick: () => void
+}) {
+  return (
+    <Badge
+      color={color}
+      variant={active ? 'filled' : 'light'}
+      size="sm"
+      style={{ cursor: 'pointer', userSelect: 'none', ...(active ? { color: 'white' } : {}) }}
+      onClick={onClick}
+    >
+      {label}
+      {count !== undefined ? ` · ${count}` : ''}
+    </Badge>
+  )
+}
+
+import { DatePickerInput } from '@mantine/dates'
+import { useLocalStorage } from '@mantine/hooks'
+import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useSession } from '../hooks/useAuth'
+import { downloadTasksCsv, type ExportTaskRow } from '../lib/csv'
 import { notifyError, notifySuccess } from '../lib/notify'
-import { EChart } from './charts/EChart'
+import { CreateTaskModal } from './CreateTaskModal'
+import { TaskDashboardOverlay } from './TaskDashboardOverlay'
+import { TaskDetailView } from './TaskDetailView'
+import { TasksGanttView } from './TasksGanttView'
+import { TasksKanbanView } from './TasksKanbanView'
+import { TasksTrashView } from './TasksTrashView'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -55,6 +127,7 @@ interface TaskUser {
   name: string
   email: string
   role: string
+  image?: string | null
 }
 
 interface TaskTag {
@@ -82,7 +155,9 @@ interface TaskListItem {
   updatedAt: string
   closedAt: string | null
   project: { id: string; name: string }
+  phase: { id: string; title: string } | null
   tags: TaskTag[]
+  blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }
 
@@ -97,6 +172,7 @@ interface ProjectOption {
   id: string
   name: string
   myRole: 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER' | null
+  canWrite?: boolean
 }
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
@@ -120,6 +196,26 @@ const KIND_COLOR: Record<TaskKind, string> = {
   QC: 'teal',
 }
 
+const STICKY_COL_HEADER: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 3,
+  background: 'var(--mantine-color-body)',
+  minWidth: 280,
+  width: 280,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
+
+const STICKY_COL_CELL: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  background: 'var(--mantine-color-body)',
+  minWidth: 280,
+  width: 280,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
@@ -133,31 +229,40 @@ export function TasksPanel({
   projectId,
   onProjectChange,
   onBackToProjects,
+  canWriteOverride,
 }: {
   projectId?: string
   onProjectChange?: (id: string | null) => void
   onBackToProjects?: () => void
+  canWriteOverride?: boolean
 }) {
   const qc = useQueryClient()
-  const navigate = useNavigate()
+
   const session = useSession()
   const systemRole = session.data?.user?.role ?? null
   const isAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
-  const openTask = (id: string) => {
-    navigate({
-      to: '/pm',
-      search: projectId ? { tab: 'tasks', projectId, taskId: id } : { tab: 'tasks', taskId: id },
-    })
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
+  const openTask = (id: string) => setDrawerTaskId(id)
+  const closeTask = () => {
+    setDrawerTaskId(null)
+    qc.invalidateQueries({ queryKey: ['tasks'] })
   }
   const [createOpen, setCreateOpen] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [kind, setKind] = useState<string | null>(null)
   const [mine, setMine] = useState(false)
-  const [showCharts, setShowCharts] = useState(true)
+  const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
   const [tagFilter, setTagFilter] = useState<string | null>(null)
-  const [view, setView] = useState<'table' | 'gantt' | 'kanban'>('table')
+  const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
+  const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | null>(null)
+  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(
+    null,
+  )
+  const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
+  const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 25
 
@@ -170,6 +275,7 @@ export function TasksPanel({
 
   const changeProject = (id: string | null) => {
     setTagFilter(null)
+    setPhaseFilter(null)
     onProjectChange?.(id)
   }
 
@@ -179,18 +285,52 @@ export function TasksPanel({
     enabled: !!activeProjectId,
   })
 
+  const phasesQ = useQuery({
+    queryKey: ['phases', activeProjectId],
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string; _count: { tasks: number } }> }>(`/api/projects/${activeProjectId}/phases`),
+    enabled: !!activeProjectId,
+  })
+
   const params = new URLSearchParams()
   if (activeProjectId) params.set('projectId', activeProjectId)
   if (status) params.set('status', status)
   if (kind) params.set('kind', kind)
   if (mine) params.set('mine', '1')
   if (tagFilter) params.set('tagId', tagFilter)
+  if (phaseFilter) params.set('phaseId', phaseFilter)
+  // Server-side pagination + filters (list/table view only; kanban has its own per-column queries)
+  if (view !== 'kanban') {
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String((page - 1) * PAGE_SIZE))
+    if (search.trim()) params.set('search', search.trim())
+    if (priorityFilter) params.set('priority', priorityFilter)
+    if (quickFilter === 'overdue') params.set('overdueOnly', '1')
+    else if (quickFilter === 'unassigned') params.set('unassigned', '1')
+    else if (quickFilter === 'nodue') params.set('noDue', '1')
+    else if (quickFilter === 'blocked') params.set('blocked', '1')
+  }
   const query = params.toString()
 
   const tasksQ = useQuery({
     queryKey: ['tasks', query],
-    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks${query ? `?${query}` : ''}`),
-    refetchInterval: 30_000,
+    queryFn: () =>
+      api<{ tasks: TaskListItem[]; total: number; limit: number; offset: number }>(
+        `/api/tasks${query ? `?${query}` : ''}`,
+      ),
+    enabled: view !== 'kanban',
+  })
+
+  // Query khusus chart — hanya scope projectId, tanpa filter status/kind/mine/tag,
+  // limit 500 (max API). Chart harus mencerminkan data proyek, bukan hasil filter tabel.
+  const chartParams = new URLSearchParams()
+  if (activeProjectId) chartParams.set('projectId', activeProjectId)
+  chartParams.set('limit', '500')
+  const chartQuery = chartParams.toString()
+
+  const chartTasksQ = useQuery({
+    queryKey: ['tasks-chart', chartQuery],
+    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
+    staleTime: 60_000,
   })
 
   const create = useMutation({
@@ -204,6 +344,7 @@ export function TasksPanel({
       dueAt: string | null
       estimateHours: number | null
       tagIds: string[]
+      phaseId: string | null
     }) =>
       api<{ task: TaskListItem }>('/api/tasks', {
         method: 'POST',
@@ -218,35 +359,291 @@ export function TasksPanel({
     onError: (err) => notifyError(err),
   })
 
+  const bulkCreate = useMutation({
+    mutationFn: (body: {
+      projectId: string
+      tasks: Array<{
+        title: string
+        description: string
+        kind: string
+        priority: string
+        startsAt: string | null
+        dueAt: string | null
+        estimateHours: number | null
+        assigneeEmail: string | null
+        tagNames: string[]
+        phaseName: string | null
+      }>
+    }) =>
+      api<{ count: number; ids: string[] }>('/api/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      setCreateOpen(false)
+      notifySuccess({ message: `${res.count} task berhasil dibuat dari CSV.` })
+    },
+    onError: (err) => notifyError(err),
+  })
+
   const projects = projectsQ.data?.projects ?? []
-  const writableProjects = projects.filter((p) => isAdmin || (p.myRole !== null && p.myRole !== 'VIEWER'))
+  const writableProjects = projects.filter((p) => {
+    if (projectId && p.id === projectId && canWriteOverride !== undefined) return canWriteOverride
+    if (isAdmin) return true
+    if (typeof p.canWrite === 'boolean') return p.canWrite
+    return p.myRole !== null && p.myRole !== 'VIEWER'
+  })
+  const currentUserId = session.data?.user?.id ?? null
+  const leadProjectIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of projects) if (p.myRole === 'OWNER' || p.myRole === 'PM') set.add(p.id)
+    return set
+  }, [projects])
+  const canDeleteTask = useCallback(
+    (t: TaskListItem) => {
+      if (isAdmin) return true
+      if (currentUserId && t.reporter.id === currentUserId) return true
+      return leadProjectIds.has(t.projectId)
+    },
+    [isAdmin, currentUserId, leadProjectIds],
+  )
   const rawTasks = tasksQ.data?.tasks ?? []
+  const total = tasksQ.data?.total ?? 0
+  // Server-side handles: search, priority, overdue, unassigned, noDue, blocked.
+  // Client-side still handles: openOnly, dueDateRange, sortBy/sortDir (operates on current page only).
   const tasks = useMemo(() => {
-    const now = Date.now()
-    const q = search.trim().toLowerCase()
-    return rawTasks.filter((t) => {
-      if (quickFilter === 'overdue') {
-        if (t.status === 'CLOSED' || !t.dueAt || new Date(t.dueAt).getTime() >= now) return false
-      } else if (quickFilter === 'unassigned') {
-        if (t.assignee) return false
-      } else if (quickFilter === 'openOnly') {
+    const PRIO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }
+
+    let filtered = rawTasks.filter((t) => {
+      if (quickFilter === 'openOnly') {
         if (t.status === 'CLOSED') return false
       }
-      if (q) {
-        const hay = `${t.title} ${t.description}`.toLowerCase()
-        if (!hay.includes(q)) return false
+      const [dueFrom, dueTo] = dueDateRange
+      if (dueFrom || dueTo) {
+        if (!t.dueAt) return false
+        const due = new Date(t.dueAt).getTime()
+        if (dueFrom && due < new Date(dueFrom).getTime()) return false
+        if (dueTo) {
+          const endOfDay = new Date(dueTo)
+          endOfDay.setHours(23, 59, 59, 999)
+          if (due > endOfDay.getTime()) return false
+        }
       }
       return true
     })
-  }, [rawTasks, search, quickFilter])
+
+    if (sortBy) {
+      filtered = [...filtered].sort((a, b) => {
+        let va: number | string = 0
+        let vb: number | string = 0
+        if (sortBy === 'priority') {
+          va = PRIO[a.priority]
+          vb = PRIO[b.priority]
+        } else if (sortBy === 'title') {
+          va = a.title.toLowerCase()
+          vb = b.title.toLowerCase()
+        } else if (sortBy === 'dueAt') {
+          va = a.dueAt ? new Date(a.dueAt).getTime() : Infinity
+          vb = b.dueAt ? new Date(b.dueAt).getTime() : Infinity
+        } else if (sortBy === 'createdAt') {
+          va = new Date(a.createdAt).getTime()
+          vb = new Date(b.createdAt).getTime()
+        } else if (sortBy === 'updatedAt') {
+          va = new Date(a.updatedAt).getTime()
+          vb = new Date(b.updatedAt).getTime()
+        } else if (sortBy === 'estimateHours') {
+          va = a.estimateHours ?? Infinity
+          vb = b.estimateHours ?? Infinity
+        }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1
+        if (va > vb) return sortDir === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+
+    return filtered
+  }, [rawTasks, quickFilter, dueDateRange, sortBy, sortDir])
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
-  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
+
+  const handleExport = () => {
+    const rows: ExportTaskRow[] = tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      kind: t.kind,
+      status: t.status,
+      priority: t.priority,
+      startsAt: t.startsAt,
+      dueAt: t.dueAt,
+      estimateHours: t.estimateHours,
+      actualHours: t.actualHours,
+      progressPercent: t.progressPercent,
+      assigneeEmail: t.assignee?.email ?? null,
+      assigneeName: t.assignee?.name ?? null,
+      reporterEmail: t.reporter.email,
+      projectName: t.project.name,
+      phaseTitle: t.phase?.title ?? null,
+      tags: t.tags.map((tg) => tg.tag.name),
+      createdAt: t.createdAt,
+      closedAt: t.closedAt,
+    }))
+    const projectSlug = activeProject?.name.replace(/\s+/g, '-').toLowerCase() ?? 'all'
+    const statusSlug = status ?? 'all'
+    const date = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
+    downloadTasksCsv(rows, `tasks-${projectSlug}-${statusSlug}-${date}.csv`)
+  }
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  // API already returns the correct page; pagedTasks = tasks after client-side sort/filter
+  const pagedTasks = tasks
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set<string>()
+      for (const id of prev) if (taskById.has(id)) next.add(id)
+      return next.size === prev.size ? prev : next
+    })
+  }, [taskById])
+  const deletableTasks = useMemo(() => tasks.filter(canDeleteTask), [tasks, canDeleteTask])
+  const deletableIds = useMemo(() => deletableTasks.map((t) => t.id), [deletableTasks])
+  const deletableSelected = useMemo(
+    () =>
+      Array.from(selectedIds).filter((id) => {
+        const t = taskById.get(id)
+        return t ? canDeleteTask(t) : false
+      }),
+    [selectedIds, taskById, canDeleteTask],
+  )
+  const allDeletableSelected = deletableIds.length > 0 && deletableIds.every((id) => selectedIds.has(id))
+  const someDeletableSelected = deletableSelected.length > 0 && !allDeletableSelected
+  const toggleAllSelection = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allDeletableSelected) for (const id of deletableIds) next.delete(id)
+      else for (const id of deletableIds) next.add(id)
+      return next
+    })
+  }
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const [trashView, setTrashView] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _reasonRef = useRef('')
+
+  const deleteOne = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api(`/api/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      notifySuccess({ message: 'Task dipindahkan ke Trash.' })
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const deleteBulk = useMutation({
+    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
+      api<{ deleted: number; denied: number; deniedIds: string[] }>('/api/tasks/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, reason }),
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
+      clearSelection()
+      const tail = res.denied > 0 ? ` (${res.denied} ditolak)` : ''
+      notifySuccess({ message: `${res.deleted} task dipindahkan ke Trash${tail}.` })
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const confirmDeleteOne = (t: TaskListItem) => {
+    modals.open({
+      title: 'Hapus task ini?',
+      size: 'sm',
+      children: (
+        <DeleteReasonModal
+          label={`"${t.title}" akan dipindahkan ke Trash. Bisa di-restore dalam 30 hari.`}
+          onConfirm={(reason) => deleteOne.mutate({ id: t.id, reason })}
+        />
+      ),
+    })
+  }
+
+  const confirmDeleteSelected = () => {
+    const ids = deletableSelected
+    if (ids.length === 0) return
+    modals.open({
+      title: `Hapus ${ids.length} task terpilih?`,
+      size: 'sm',
+      children: (
+        <DeleteReasonModal
+          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
+          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
+        />
+      ),
+    })
+  }
+
+  const confirmDeleteByIds = (ids: string[]) => {
+    if (ids.length === 0) return
+    modals.open({
+      title: `Hapus ${ids.length} task terpilih?`,
+      size: 'sm',
+      children: (
+        <DeleteReasonModal
+          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
+          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
+        />
+      ),
+    })
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
-  }, [activeProjectId, status, kind, mine, tagFilter, search, quickFilter])
+  }, [
+    activeProjectId,
+    status,
+    kind,
+    mine,
+    tagFilter,
+    phaseFilter,
+    search,
+    quickFilter,
+    dueDateRange,
+    priorityFilter,
+    sortBy,
+    sortDir,
+  ])
+
+  // Reset filter yang project-scoped saat berpindah project
+  useEffect(() => {
+    setPhaseFilter(null)
+    setTagFilter(null)
+  }, [activeProjectId])
 
   return (
     <Stack gap="md">
@@ -292,27 +689,113 @@ export function TasksPanel({
               <TbChartBar size={16} />
             </ActionIcon>
           </Tooltip>
+          <Tooltip label={trashView ? 'Kembali ke task' : 'Lihat Trash'}>
+            <ActionIcon
+              variant={trashView ? 'filled' : 'light'}
+              color={trashView ? 'red' : 'gray'}
+              onClick={() => setTrashView((v) => !v)}
+            >
+              <TbTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
           <Tooltip label="Refresh">
             <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}>
               <TbRefresh size={16} />
             </ActionIcon>
           </Tooltip>
-          <Button
-            leftSection={<TbPlus size={16} />}
-            onClick={() => setCreateOpen(true)}
-            disabled={writableProjects.length === 0}
+          <Tooltip
+            label={
+              activeProjectId && canWriteOverride === false
+                ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
+                : writableProjects.length === 0
+                  ? 'Tidak ada proyek yang bisa ditulis'
+                  : ''
+            }
+            disabled={!((activeProjectId && canWriteOverride === false) || writableProjects.length === 0)}
           >
-            New Task
-          </Button>
+            <Button
+              leftSection={<TbPlus size={16} />}
+              onClick={() => setCreateOpen(true)}
+              disabled={writableProjects.length === 0 || (activeProjectId ? canWriteOverride === false : false)}
+            >
+              New Task
+            </Button>
+          </Tooltip>
         </Group>
       </Group>
 
-      {showCharts && tasks.length > 0 ? <TaskDashboardOverlay tasks={tasks} /> : null}
+      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0 ? (
+        <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
+      ) : null}
+
+      {activeProjectId && (phasesQ.data?.phases.length ?? 0) > 0 && (
+        <Card withBorder padding="xs" radius="md">
+          <Group gap={6} wrap="wrap" align="center">
+            <Group gap={4} align="center" mr={4}>
+              <Text size="xs" fw={600} c="dimmed">
+                Fase
+              </Text>
+              <Tooltip
+                label={
+                  <Stack gap={4}>
+                    <Text size="xs" fw={600}>Apa itu Fase?</Text>
+                    <Text size="xs">Fase adalah tahapan atau sprint dalam proyek — misalnya Planning, Development, Testing, Release. Setiap task bisa dimasukkan ke satu fase agar lebih mudah dilacak per tahapan.</Text>
+                    <Text size="xs" fw={600} mt={2}>Cara pakai filter ini</Text>
+                    <Text size="xs">• Klik fase untuk filter — klik lagi untuk reset</Text>
+                    <Text size="xs">• Angka di setiap pill = jumlah task dalam fase</Text>
+                    <Text size="xs">• "Tanpa Fase" = task yang belum masuk fase manapun</Text>
+                    <Text size="xs" c="dimmed" mt={2}>Kelola fase di tab Fase pada halaman detail proyek.</Text>
+                  </Stack>
+                }
+                withArrow
+                position="bottom-start"
+                multiline
+                w={300}
+              >
+                <TbInfoCircle size={12} style={{ color: 'var(--mantine-color-dimmed)', cursor: 'help' }} />
+              </Tooltip>
+            </Group>
+            <PhasePill
+              label="Semua"
+              active={phaseFilter === null}
+              color="blue"
+              onClick={() => setPhaseFilter(null)}
+            />
+            {phasesQ.data!.phases.map((p) => (
+              <PhasePill
+                key={p.id}
+                label={p.title}
+                count={p._count.tasks}
+                active={phaseFilter === p.id}
+                color={p.status === 'COMPLETED' ? 'green' : p.status === 'ACTIVE' ? 'blue' : 'gray'}
+                onClick={() => setPhaseFilter(phaseFilter === p.id ? null : p.id)}
+              />
+            ))}
+            <PhasePill
+              label="Tanpa Fase"
+              active={phaseFilter === 'none'}
+              color="gray"
+              onClick={() => setPhaseFilter(phaseFilter === 'none' ? null : 'none')}
+            />
+          </Group>
+        </Card>
+      )}
 
       <Card withBorder padding="sm" radius="md">
         <Stack gap="sm">
-          <Group gap="sm" wrap="wrap">
-            <TbFilter size={14} />
+          {/* ─── Scope ─── */}
+          <Divider
+            label={
+              <Group gap={4}>
+                <TbFilter size={11} />
+                <Text size="xs" c="dimmed" fw={600}>
+                  Scope
+                </Text>
+              </Group>
+            }
+            labelPosition="left"
+          />
+          <Group gap="sm" wrap="wrap" align="center">
             {activeProject ? (
               <Badge
                 color="blue"
@@ -344,6 +827,24 @@ export function TasksPanel({
                 w={220}
               />
             )}
+            <Switch
+              label="Assigned to me"
+              checked={mine}
+              onChange={(e) => setMine(e.currentTarget.checked)}
+              size="sm"
+            />
+          </Group>
+
+          {/* ─── Tipe Task ─── */}
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Tipe Task
+              </Text>
+            }
+            labelPosition="left"
+          />
+          <Group gap="sm" wrap="wrap" align="center">
             <Select
               placeholder="All kinds"
               data={['TASK', 'BUG', 'QC']}
@@ -351,7 +852,7 @@ export function TasksPanel({
               onChange={setKind}
               clearable
               size="xs"
-              w={140}
+              w={130}
             />
             <Select
               placeholder="All statuses"
@@ -362,6 +863,20 @@ export function TasksPanel({
               size="xs"
               w={160}
             />
+            <Select
+              placeholder="All priorities"
+              data={[
+                { value: 'CRITICAL', label: 'Critical' },
+                { value: 'HIGH', label: 'High' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'LOW', label: 'Low' },
+              ]}
+              value={priorityFilter}
+              onChange={setPriorityFilter}
+              clearable
+              size="xs"
+              w={140}
+            />
             {activeProjectId && tagsQ.data?.tags.length ? (
               <Select
                 placeholder="All tags"
@@ -371,36 +886,99 @@ export function TasksPanel({
                 onChange={setTagFilter}
                 clearable
                 size="xs"
-                w={160}
+                w={155}
               />
             ) : null}
+          </Group>
+
+          {/* ─── Urutan ─── */}
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Urutan
+              </Text>
+            }
+            labelPosition="left"
+          />
+          <Group gap="sm" wrap="wrap" align="center">
+            <Select
+              placeholder="Default order"
+              data={[
+                { value: 'dueAt', label: 'Due date' },
+                { value: 'priority', label: 'Priority' },
+                { value: 'title', label: 'Title (A–Z)' },
+                { value: 'createdAt', label: 'Created' },
+                { value: 'updatedAt', label: 'Updated' },
+                { value: 'estimateHours', label: 'Estimate hours' },
+              ]}
+              value={sortBy}
+              onChange={setSortBy}
+              clearable
+              size="xs"
+              w={170}
+            />
+            <Tooltip label={sortDir === 'asc' ? 'Ascending — klik untuk DESC' : 'Descending — klik untuk ASC'}>
+              <ActionIcon
+                variant="light"
+                size="sm"
+                disabled={!sortBy}
+                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              >
+                {sortDir === 'asc' ? <TbSortAscending size={14} /> : <TbSortDescending size={14} />}
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+
+          {/* ─── Tanggal ─── */}
+          <Divider
+            label={
+              <Text size="xs" c="dimmed" fw={600}>
+                Tanggal Due
+              </Text>
+            }
+            labelPosition="left"
+          />
+          <Group gap="sm" wrap="wrap" align="center">
+            <DatePickerInput
+              type="range"
+              placeholder="Semua due date"
+              value={dueDateRange}
+              onChange={(v) => setDueDateRange(v as [Date | null, Date | null])}
+              clearable
+              size="xs"
+              w={260}
+              valueFormat="DD MMM YYYY"
+              getDayProps={(raw) => {
+                const date = new Date(raw)
+                const t = new Date()
+                const isToday =
+                  date.getDate() === t.getDate() &&
+                  date.getMonth() === t.getMonth() &&
+                  date.getFullYear() === t.getFullYear()
+                if (!isToday) return {}
+                return {
+                  style: {
+                    backgroundColor: 'var(--mantine-color-orange-6)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    borderRadius: 4,
+                  },
+                }
+              }}
+            />
+          </Group>
+
+          {/* ─── Cari & Tampilan ─── */}
+          <Divider />
+          <Group gap="sm" wrap="wrap" align="center">
             <TextInput
-              placeholder="Search title or description"
+              placeholder="Cari judul atau deskripsi"
               leftSection={<TbSearch size={12} />}
               value={search}
               onChange={(e) => setSearch(e.currentTarget.value)}
               size="xs"
-              w={240}
+              w={230}
             />
-            <Switch
-              label="Assigned to me"
-              checked={mine}
-              onChange={(e) => setMine(e.currentTarget.checked)}
-              size="sm"
-            />
-            <SegmentedControl
-              size="xs"
-              value={view}
-              onChange={(v) => setView(v as 'table' | 'gantt' | 'kanban')}
-              data={[
-                { value: 'table', label: 'Table' },
-                { value: 'kanban', label: 'Kanban' },
-                { value: 'gantt', label: 'Gantt' },
-              ]}
-              ml="auto"
-            />
-          </Group>
-          <Group gap="xs" wrap="wrap">
             <Text size="xs" c="dimmed" fw={500}>
               Quick
             </Text>
@@ -437,25 +1015,89 @@ export function TasksPanel({
             >
               Unassigned
             </Badge>
-            {(quickFilter || search) && (
+            <Badge
+              color={quickFilter === 'blocked' ? 'gray' : 'gray'}
+              variant={quickFilter === 'blocked' ? 'filled' : 'light'}
+              size="sm"
+              leftSection={<TbLock size={10} />}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setQuickFilter(quickFilter === 'blocked' ? null : 'blocked')}
+            >
+              Blocked
+            </Badge>
+            <Badge
+              color={quickFilter === 'nodue' ? 'gray' : 'gray'}
+              variant={quickFilter === 'nodue' ? 'filled' : 'light'}
+              size="sm"
+              leftSection={<TbCalendarOff size={10} />}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setQuickFilter(quickFilter === 'nodue' ? null : 'nodue')}
+            >
+              No due date
+            </Badge>
+            {(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy || phaseFilter) && (
               <Button
                 variant="subtle"
                 color="gray"
                 size="compact-xs"
-                ml="auto"
                 onClick={() => {
                   setQuickFilter(null)
                   setSearch('')
+                  setDueDateRange([null, null])
+                  setPriorityFilter(null)
+                  setSortBy(null)
+                  setSortDir('asc')
+                  setPhaseFilter(null)
                 }}
               >
-                Clear
+                Clear all
               </Button>
             )}
+            <SegmentedControl
+              size="xs"
+              value={view}
+              onChange={(v) => setView(v as 'table' | 'gantt' | 'kanban')}
+              data={[
+                { value: 'table', label: 'Table' },
+                { value: 'kanban', label: 'Kanban' },
+                { value: 'gantt', label: 'Gantt' },
+              ]}
+              ml="auto"
+            />
+            <Tooltip
+              label={`Download CSV (${total > 0 ? `${total} task` : 'kosong'}${status ? ` · ${status}` : ' · semua status'} · halaman ini)`}
+              withArrow
+            >
+              <ActionIcon variant="light" color="teal" size="sm" onClick={handleExport} disabled={tasks.length === 0}>
+                <TbDownload size={14} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
         </Stack>
       </Card>
 
-      {tasks.length === 0 && !tasksQ.isLoading ? (
+      {trashView ? (
+        <TasksTrashView projectId={activeProjectId} />
+      ) : view === 'kanban' ? (
+        <TasksKanbanView
+          projectId={activeProjectId ?? null}
+          filters={{
+            kind: kind || null,
+            mine,
+            tagId: tagFilter || null,
+            phaseId: phaseFilter || null,
+            search: search.trim() || undefined,
+            priority: priorityFilter || null,
+          }}
+          canWrite={
+            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
+          }
+          onSelect={(id) => openTask(id)}
+          onDeleteOne={confirmDeleteOne}
+          onDeleteSelected={confirmDeleteByIds}
+          canDeleteTask={canDeleteTask}
+        />
+      ) : tasks.length === 0 && !tasksQ.isLoading ? (
         <Card withBorder p="xl" radius="md">
           <Stack align="center" gap="sm">
             <TbListCheck size={40} />
@@ -469,9 +1111,11 @@ export function TasksPanel({
             </Text>
             {writableProjects.length > 0 ? (
               <Group gap="xs">
-                <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
-                  New Task
-                </Button>
+                {activeProjectId && canWriteOverride === false ? null : (
+                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
+                    New Task
+                  </Button>
+                )}
                 {activeProject ? (
                   <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>
                     View all tasks
@@ -483,169 +1127,251 @@ export function TasksPanel({
         </Card>
       ) : view === 'gantt' ? (
         <TasksGanttView tasks={tasks} onSelect={(id) => openTask(id)} />
-      ) : view === 'kanban' ? (
-        <TasksKanbanView
-          tasks={tasks}
-          canWrite={writableProjects.length > 0}
-          onSelect={(id) => openTask(id)}
-          onMove={(id, status) =>
-            api(`/api/tasks/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status }),
-            })
-              .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-              .catch(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
-          }
-        />
       ) : (
         <Card withBorder padding={0} radius="md">
-          <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Title</Table.Th>
-                {activeProject ? null : <Table.Th>Project</Table.Th>}
-                <Table.Th>Kind</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Priority</Table.Th>
-                <Table.Th>Assignee</Table.Th>
-                <Table.Th>Due</Table.Th>
-                <Table.Th>Hours</Table.Th>
-                <Table.Th>Progress</Table.Th>
-                <Table.Th>Updated</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {pagedTasks.map((t) => {
-                const variance =
-                  t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
-                const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
-                return (
-                  <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
-                    <Table.Td>
-                      <Stack gap={2}>
-                        <Group gap={6} wrap="nowrap">
-                          <Text size="sm" fw={500} lineClamp={1}>
-                            {t.title}
-                          </Text>
-                          {blocked ? (
-                            <Tooltip label={`Blocked by ${t._count.blockedBy} task(s)`}>
-                              <Badge size="xs" color="gray" variant="filled">
-                                blocked
-                              </Badge>
-                            </Tooltip>
-                          ) : null}
-                        </Group>
-                        {t.tags.length > 0 && (
-                          <Group gap={4} wrap="wrap">
-                            {t.tags.slice(0, 4).map((tt) => (
-                              <Badge key={tt.tagId} size="xs" color={tt.tag.color} variant="light">
-                                {tt.tag.name}
-                              </Badge>
-                            ))}
-                            {t.tags.length > 4 && (
-                              <Text size="xs" c="dimmed">
-                                +{t.tags.length - 4}
-                              </Text>
-                            )}
+          {deletableSelected.length > 0 && (
+            <Group
+              justify="space-between"
+              px="md"
+              py="xs"
+              style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+            >
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">
+                  {deletableSelected.length} terpilih
+                  {allDeletableSelected && deletableTasks.length > 1 ? ' (semua)' : ''}
+                </Text>
+                <Button size="compact-xs" variant="subtle" onClick={clearSelection}>
+                  Bersihkan
+                </Button>
+              </Group>
+              <Button
+                size="compact-xs"
+                color="red"
+                variant="filled"
+                leftSection={<TbTrash size={12} />}
+                disabled={deleteBulk.isPending}
+                loading={deleteBulk.isPending}
+                onClick={confirmDeleteSelected}
+              >
+                Hapus terpilih
+              </Button>
+            </Group>
+          )}
+          <Table.ScrollContainer minWidth={activeProject ? 1080 : 1220}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
+              <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                <Table.Tr>
+                  <Table.Th style={{ width: 36 }}>
+                    <Tooltip
+                      label={allDeletableSelected ? 'Bersihkan pilihan' : `Pilih semua ${deletableTasks.length} task`}
+                    >
+                      <Checkbox
+                        size="xs"
+                        aria-label="Pilih semua task"
+                        checked={allDeletableSelected}
+                        indeterminate={someDeletableSelected}
+                        onChange={toggleAllSelection}
+                        disabled={deletableTasks.length === 0}
+                      />
+                    </Tooltip>
+                  </Table.Th>
+                  <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
+                  {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}
+                  <Table.Th style={{ width: 90 }}>Kind</Table.Th>
+                  <Table.Th style={{ width: 130 }}>Status</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Priority</Table.Th>
+                  <Table.Th style={{ width: 150 }}>Assignee</Table.Th>
+                  {activeProject ? <Table.Th style={{ width: 110 }}>Fase</Table.Th> : null}
+                  <Table.Th style={{ width: 110 }}>Due</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Hours</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Progress</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Updated</Table.Th>
+                  <Table.Th style={{ width: 40 }} />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {pagedTasks.map((t) => {
+                  const variance =
+                    t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
+                  const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
+                  const deletable = canDeleteTask(t)
+                  const checked = selectedIds.has(t.id)
+                  return (
+                    <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
+                      <Table.Td onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          size="xs"
+                          aria-label={`Select task ${t.title}`}
+                          checked={checked}
+                          onChange={() => toggleSelection(t.id)}
+                          disabled={!deletable}
+                        />
+                      </Table.Td>
+                      <Table.Td style={STICKY_COL_CELL}>
+                        <Stack gap={2}>
+                          <Group gap={6} wrap="nowrap">
+                            <Text size="sm" fw={500} lineClamp={1}>
+                              {t.title}
+                            </Text>
+                            {blocked ? (
+                              <Tooltip label={`Blocked by ${t._count.blockedBy} task(s)`}>
+                                <Badge size="xs" color="gray" variant="filled">
+                                  blocked
+                                </Badge>
+                              </Tooltip>
+                            ) : null}
                           </Group>
+                          {t.tags.length > 0 && (
+                            <Group gap={4} wrap="wrap">
+                              {t.tags.slice(0, 4).map((tt) => (
+                                <Badge key={tt.tagId} size="xs" color={tt.tag.color} variant="light">
+                                  {tt.tag.name}
+                                </Badge>
+                              ))}
+                              {t.tags.length > 4 && (
+                                <Text size="xs" c="dimmed">
+                                  +{t.tags.length - 4}
+                                </Text>
+                              )}
+                            </Group>
+                          )}
+                        </Stack>
+                      </Table.Td>
+                      {activeProject ? null : (
+                        <Table.Td>
+                          <Text size="xs" c="dimmed">
+                            {t.project.name}
+                          </Text>
+                        </Table.Td>
+                      )}
+                      <Table.Td>
+                        <Badge color={KIND_COLOR[t.kind]} variant="light" size="sm">
+                          {t.kind}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={STATUS_COLOR[t.status]} variant="light" size="sm">
+                          {t.status.replace('_', ' ')}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={PRIORITY_COLOR[t.priority]} variant="dot" size="sm">
+                          {t.priority}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {t.assignee ? (
+                          <Tooltip label={t.assignee.name} withArrow>
+                            <Group gap={6} wrap="nowrap">
+                              <UserAvatar name={t.assignee.name} image={t.assignee.image} size={20} color="blue" />
+                              <Text size="xs" truncate style={{ maxWidth: 90 }}>
+                                {t.assignee.name.split(' ')[0]}
+                              </Text>
+                            </Group>
+                          </Tooltip>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
                         )}
-                      </Stack>
-                    </Table.Td>
-                    {activeProject ? null : (
+                      </Table.Td>
+                      {activeProject ? (
+                        <Table.Td>
+                          {t.phase ? (
+                            <Badge size="xs" variant="light" color="indigo">
+                              {t.phase.title}
+                            </Badge>
+                          ) : (
+                            <Text size="xs" c="dimmed">—</Text>
+                          )}
+                        </Table.Td>
+                      ) : null}
+                      <Table.Td>
+                        {t.dueAt ? (
+                          (() => {
+                            const dueMs = new Date(t.dueAt).getTime()
+                            const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
+                            return (
+                              <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
+                                {new Date(t.dueAt).toLocaleDateString('id-ID')}
+                              </Text>
+                            )
+                          })()
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Tooltip
+                          label={
+                            t.estimateHours != null || t.actualHours != null
+                              ? `estimate: ${t.estimateHours ?? '—'}h · actual: ${t.actualHours ?? '—'}h${variance != null ? ` · ${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : ''}`
+                              : 'No hours logged'
+                          }
+                        >
+                          <Group gap={4} wrap="nowrap">
+                            <TbClock size={12} />
+                            <Text size="xs" c={variance != null && variance > 0 ? 'red' : 'dimmed'}>
+                              {t.actualHours != null
+                                ? `${t.actualHours}h`
+                                : t.estimateHours != null
+                                  ? `~${t.estimateHours}h`
+                                  : '—'}
+                            </Text>
+                          </Group>
+                        </Tooltip>
+                      </Table.Td>
+                      <Table.Td style={{ minWidth: 90 }}>
+                        {t.progressPercent != null ? (
+                          <Stack gap={2}>
+                            <Text size="xs" c="dimmed">
+                              {t.progressPercent}%
+                            </Text>
+                            <Progress
+                              value={t.progressPercent}
+                              size="xs"
+                              color={t.status === 'CLOSED' ? 'green' : 'blue'}
+                            />
+                          </Stack>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
+                      </Table.Td>
                       <Table.Td>
                         <Text size="xs" c="dimmed">
-                          {t.project.name}
+                          {new Date(t.updatedAt).toLocaleDateString()}
                         </Text>
                       </Table.Td>
-                    )}
-                    <Table.Td>
-                      <Badge color={KIND_COLOR[t.kind]} variant="light" size="sm">
-                        {t.kind}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={STATUS_COLOR[t.status]} variant="light" size="sm">
-                        {t.status.replace('_', ' ')}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={PRIORITY_COLOR[t.priority]} variant="dot" size="sm">
-                        {t.priority}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs">{t.assignee?.name ?? '—'}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      {t.dueAt ? (
-                        (() => {
-                          const dueMs = new Date(t.dueAt).getTime()
-                          const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
-                          return (
-                            <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
-                              {new Date(t.dueAt).toLocaleDateString()}
-                            </Text>
-                          )
-                        })()
-                      ) : (
-                        <Text size="xs" c="dimmed">
-                          —
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Tooltip
-                        label={
-                          t.estimateHours != null || t.actualHours != null
-                            ? `estimate: ${t.estimateHours ?? '—'}h · actual: ${t.actualHours ?? '—'}h${variance != null ? ` · ${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : ''}`
-                            : 'No hours logged'
-                        }
-                      >
-                        <Group gap={4} wrap="nowrap">
-                          <TbClock size={12} />
-                          <Text size="xs" c={variance != null && variance > 0 ? 'red' : 'dimmed'}>
-                            {t.actualHours != null
-                              ? `${t.actualHours}h`
-                              : t.estimateHours != null
-                                ? `~${t.estimateHours}h`
-                                : '—'}
-                          </Text>
-                        </Group>
-                      </Tooltip>
-                    </Table.Td>
-                    <Table.Td style={{ minWidth: 90 }}>
-                      {t.progressPercent != null ? (
-                        <Stack gap={2}>
-                          <Text size="xs" c="dimmed">
-                            {t.progressPercent}%
-                          </Text>
-                          <Progress
-                            value={t.progressPercent}
-                            size="xs"
-                            color={t.status === 'CLOSED' ? 'green' : 'blue'}
-                          />
-                        </Stack>
-                      ) : (
-                        <Text size="xs" c="dimmed">
-                          —
-                        </Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed">
-                        {new Date(t.updatedAt).toLocaleDateString()}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                )
-              })}
-            </Table.Tbody>
-          </Table>
-          {tasks.length > PAGE_SIZE && (
+                      <Table.Td onClick={(e) => e.stopPropagation()}>
+                        {deletable ? (
+                          <Tooltip label="Hapus task">
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="red"
+                              onClick={() => confirmDeleteOne(t)}
+                              loading={deleteOne.isPending && deleteOne.variables?.id === t.id}
+                            >
+                              <TbTrash size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        ) : null}
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+          {total > PAGE_SIZE && (
             <Group justify="space-between" p="md">
               <Text size="xs" c="dimmed">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, tasks.length)} dari {tasks.length}
+                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, total)} dari {total}
               </Text>
               <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
             </Group>
@@ -659,703 +1385,29 @@ export function TasksPanel({
         projects={writableProjects}
         defaultProjectId={activeProjectId ?? writableProjects[0]?.id ?? null}
         onSubmit={(body) => create.mutate(body)}
-        loading={create.isPending}
-        error={create.error?.message}
+        onBulkSubmit={(body) => bulkCreate.mutate(body)}
+        loading={create.isPending || bulkCreate.isPending}
+        error={create.error?.message ?? bulkCreate.error?.message}
         tagsByProject={tagsQ.data?.tags ?? []}
       />
-    </Stack>
-  )
-}
 
-const STATUS_HEX: Record<TaskStatus, string> = {
-  OPEN: '#228be6',
-  IN_PROGRESS: '#7950f2',
-  READY_FOR_QC: '#f59f00',
-  REOPENED: '#fd7e14',
-  CLOSED: '#40c057',
-}
-
-function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
-  const { throughput, donut, assignees, stats } = useMemo(() => {
-    const days = 14
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const buckets: { date: string; created: number; closed: number }[] = []
-    const keyToIdx = new Map<string, number>()
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
-      keyToIdx.set(key, buckets.length)
-      buckets.push({ date: key, created: 0, closed: 0 })
-    }
-    const byStatus = new Map<TaskStatus, number>()
-    const byAssignee = new Map<string, { name: string; count: number }>()
-
-    for (const t of tasks) {
-      byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1)
-      const ck = t.createdAt.slice(0, 10)
-      const ci = keyToIdx.get(ck)
-      if (ci !== undefined) buckets[ci].created += 1
-      if (t.closedAt) {
-        const xk = t.closedAt.slice(0, 10)
-        const xi = keyToIdx.get(xk)
-        if (xi !== undefined) buckets[xi].closed += 1
-      }
-      if (t.status !== 'CLOSED' && t.assignee) {
-        const existing = byAssignee.get(t.assignee.id)
-        if (existing) existing.count += 1
-        else byAssignee.set(t.assignee.id, { name: t.assignee.name, count: 1 })
-      }
-    }
-
-    const throughputOpt: EChartsOption = {
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['Created', 'Closed'], top: 0, right: 8 },
-      grid: { left: 36, right: 16, top: 36, bottom: 28 },
-      xAxis: { type: 'category', data: buckets.map((b) => b.date.slice(5)), boundaryGap: false },
-      yAxis: { type: 'value', minInterval: 1 },
-      series: [
-        {
-          name: 'Created',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 6,
-          areaStyle: { opacity: 0.15 },
-          itemStyle: { color: '#228be6' },
-          data: buckets.map((b) => b.created),
-        },
-        {
-          name: 'Closed',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 6,
-          areaStyle: { opacity: 0.15 },
-          itemStyle: { color: '#40c057' },
-          data: buckets.map((b) => b.closed),
-        },
-      ],
-    }
-
-    const donutOpt: EChartsOption = {
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: { bottom: 0, left: 'center', itemGap: 8 },
-      series: [
-        {
-          type: 'pie',
-          radius: ['55%', '78%'],
-          center: ['50%', '42%'],
-          avoidLabelOverlap: true,
-          label: { show: false },
-          labelLine: { show: false },
-          data: (Array.from(byStatus.entries()) as [TaskStatus, number][]).map(([s, v]) => ({
-            name: s.replace('_', ' '),
-            value: v,
-            itemStyle: { color: STATUS_HEX[s] },
-          })),
-        },
-      ],
-    }
-
-    const topAssignees = Array.from(byAssignee.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8)
-      .reverse()
-
-    const assigneesOpt: EChartsOption = {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 90, right: 16, top: 12, bottom: 24 },
-      xAxis: { type: 'value', minInterval: 1 },
-      yAxis: { type: 'category', data: topAssignees.map((a) => a.name) },
-      series: [
-        {
-          type: 'bar',
-          data: topAssignees.map((a) => a.count),
-          itemStyle: { color: '#7950f2', borderRadius: [0, 4, 4, 0] },
-          barMaxWidth: 18,
-          label: { show: true, position: 'right', fontSize: 11 },
-        },
-      ],
-    }
-
-    const openCount = tasks.filter((t) => t.status !== 'CLOSED').length
-    const closedCount = tasks.length - openCount
-    const overdueCount = tasks.filter(
-      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < today.getTime(),
-    ).length
-
-    return {
-      throughput: throughputOpt,
-      donut: donutOpt,
-      assignees: assigneesOpt,
-      stats: { total: tasks.length, open: openCount, closed: closedCount, overdue: overdueCount },
-    }
-  }, [tasks])
-
-  return (
-    <Stack gap="sm">
-      <SimpleGrid cols={{ base: 2, md: 4 }} spacing="sm">
-        <Card withBorder padding="sm" radius="md">
-          <Text size="xs" c="dimmed">
-            Total
-          </Text>
-          <Text fw={700} size="xl">
-            {stats.total}
-          </Text>
-        </Card>
-        <Card withBorder padding="sm" radius="md">
-          <Text size="xs" c="dimmed">
-            Open
-          </Text>
-          <Text fw={700} size="xl" c="blue">
-            {stats.open}
-          </Text>
-        </Card>
-        <Card withBorder padding="sm" radius="md">
-          <Text size="xs" c="dimmed">
-            Closed
-          </Text>
-          <Text fw={700} size="xl" c="green">
-            {stats.closed}
-          </Text>
-        </Card>
-        <Card withBorder padding="sm" radius="md">
-          <Text size="xs" c="dimmed">
-            Overdue
-          </Text>
-          <Text fw={700} size="xl" c={stats.overdue > 0 ? 'red' : undefined}>
-            {stats.overdue}
-          </Text>
-        </Card>
-      </SimpleGrid>
-      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
-        <Card withBorder padding="sm" radius="md">
-          <Text size="sm" fw={500} mb={4}>
-            Throughput (last 14 days)
-          </Text>
-          <EChart option={throughput} height={200} />
-        </Card>
-        <Card withBorder padding="sm" radius="md">
-          <Text size="sm" fw={500} mb={4}>
-            Status breakdown
-          </Text>
-          <EChart option={donut} height={200} />
-        </Card>
-        <Card withBorder padding="sm" radius="md">
-          <Text size="sm" fw={500} mb={4}>
-            Top assignees (open)
-          </Text>
-          <EChart option={assignees} height={200} />
-        </Card>
-      </SimpleGrid>
-    </Stack>
-  )
-}
-
-function CreateTaskModal({
-  opened,
-  onClose,
-  projects,
-  defaultProjectId,
-  onSubmit,
-  loading,
-  error,
-  tagsByProject,
-}: {
-  opened: boolean
-  onClose: () => void
-  projects: ProjectOption[]
-  defaultProjectId: string | null
-  onSubmit: (body: {
-    projectId: string
-    title: string
-    description: string
-    kind: TaskKind
-    priority: TaskPriority
-    startsAt: string | null
-    dueAt: string | null
-    estimateHours: number | null
-    tagIds: string[]
-  }) => void
-  loading: boolean
-  error?: string
-  tagsByProject: TagListItem[]
-}) {
-  const [projectId, setProjectId] = useState<string | null>(defaultProjectId)
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [kind, setKind] = useState<TaskKind>('TASK')
-  const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
-  const [startsAt, setStartsAt] = useState<Date | null>(null)
-  const [dueAt, setDueAt] = useState<Date | null>(null)
-  const [estimateHours, setEstimateHours] = useState<number | string>('')
-  const [tagIds, setTagIds] = useState<string[]>([])
-
-  const invalidRange = startsAt && dueAt && dueAt < startsAt
-  const availableTags = tagsByProject.filter((t) => t.projectId === projectId)
-
-  return (
-    <Modal
-      opened={opened}
-      onClose={() => {
-        setTitle('')
-        setDescription('')
-        setStartsAt(null)
-        setDueAt(null)
-        setEstimateHours('')
-        setTagIds([])
-        onClose()
-      }}
-      title="Create Task"
-      size="md"
-    >
-      <Stack gap="sm">
-        <Select
-          label="Project"
-          data={projects.map((p) => ({ value: p.id, label: p.name }))}
-          value={projectId}
-          onChange={setProjectId}
-          required
-        />
-        <TextInput
-          label="Title"
-          placeholder="What needs to get done?"
-          value={title}
-          onChange={(e) => setTitle(e.currentTarget.value)}
-          required
-        />
-        <Textarea
-          label="Description"
-          placeholder="Context, acceptance criteria, etc."
-          value={description}
-          onChange={(e) => setDescription(e.currentTarget.value)}
-          autosize
-          minRows={3}
-          maxRows={8}
-          required
-        />
-        <Group grow>
-          <Select
-            label="Kind"
-            data={['TASK', 'BUG', 'QC']}
-            value={kind}
-            onChange={(v) => setKind((v as TaskKind) || 'TASK')}
-          />
-          <Select
-            label="Priority"
-            data={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
-            value={priority}
-            onChange={(v) => setPriority((v as TaskPriority) || 'MEDIUM')}
-          />
-        </Group>
-        <Group grow>
-          <DateInput
-            label="Start date"
-            placeholder="Optional"
-            value={startsAt}
-            onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
-            clearable
-          />
-          <DateInput
-            label="Due date"
-            placeholder="Optional"
-            value={dueAt}
-            onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
-            clearable
-            error={invalidRange ? 'Due must be after start' : undefined}
-          />
-          <NumberInput
-            label="Estimate (hours)"
-            placeholder="e.g. 2.5"
-            value={estimateHours}
-            onChange={setEstimateHours}
-            min={0}
-            step={0.5}
-            decimalScale={2}
-            leftSection={<TbClock size={14} />}
-          />
-        </Group>
-        {availableTags.length > 0 && (
-          <MultiSelect
-            label="Tags"
-            placeholder="Pick tags"
-            data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
-            value={tagIds}
-            onChange={setTagIds}
-            leftSection={<TbTag size={14} />}
-            searchable
-            clearable
-          />
-        )}
-        {error ? (
-          <Text size="sm" c="red">
-            {error}
-          </Text>
-        ) : null}
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() =>
-              projectId &&
-              onSubmit({
-                projectId,
-                title: title.trim(),
-                description: description.trim(),
-                kind,
-                priority,
-                startsAt: startsAt ? startsAt.toISOString() : null,
-                dueAt: dueAt ? dueAt.toISOString() : null,
-                estimateHours: typeof estimateHours === 'number' ? estimateHours : null,
-                tagIds,
-              })
-            }
-            disabled={!projectId || !title.trim() || !description.trim() || Boolean(invalidRange) || loading}
-            loading={loading}
-          >
-            Create
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  )
-}
-
-const GANTT_STATUS_HEX: Record<TaskStatus, string> = {
-  OPEN: '#868e96',
-  IN_PROGRESS: '#7950f2',
-  READY_FOR_QC: '#f59f00',
-  REOPENED: '#fd7e14',
-  CLOSED: '#40c057',
-}
-
-const KANBAN_COLUMNS: Array<{ status: TaskStatus; label: string }> = [
-  { status: 'OPEN', label: 'Open' },
-  { status: 'IN_PROGRESS', label: 'In Progress' },
-  { status: 'READY_FOR_QC', label: 'Ready for QC' },
-  { status: 'REOPENED', label: 'Reopened' },
-  { status: 'CLOSED', label: 'Closed' },
-]
-
-function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[] {
-  if (kind === 'TASK') {
-    const m: Record<TaskStatus, TaskStatus[]> = {
-      OPEN: ['IN_PROGRESS', 'CLOSED'],
-      IN_PROGRESS: ['OPEN', 'CLOSED'],
-      CLOSED: ['REOPENED'],
-      REOPENED: ['IN_PROGRESS', 'CLOSED'],
-      READY_FOR_QC: ['CLOSED', 'REOPENED'],
-    }
-    return m[current] ?? []
-  }
-  const m: Record<TaskStatus, TaskStatus[]> = {
-    OPEN: ['IN_PROGRESS', 'CLOSED'],
-    IN_PROGRESS: ['READY_FOR_QC', 'CLOSED'],
-    READY_FOR_QC: ['CLOSED', 'REOPENED'],
-    REOPENED: ['IN_PROGRESS', 'CLOSED'],
-    CLOSED: ['REOPENED'],
-  }
-  return m[current] ?? []
-}
-
-function TasksKanbanView({
-  tasks,
-  canWrite,
-  onSelect,
-  onMove,
-}: {
-  tasks: TaskListItem[]
-  canWrite: boolean
-  onSelect: (id: string) => void
-  onMove: (id: string, status: TaskStatus) => void
-}) {
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [overStatus, setOverStatus] = useState<TaskStatus | null>(null)
-  const draggingTask = draggingId ? tasks.find((t) => t.id === draggingId) : null
-  const allowedForDrag = draggingTask ? kanbanAllowed(draggingTask.status, draggingTask.kind) : []
-
-  const byStatus = useMemo(() => {
-    const map: Record<TaskStatus, TaskListItem[]> = {
-      OPEN: [],
-      IN_PROGRESS: [],
-      READY_FOR_QC: [],
-      REOPENED: [],
-      CLOSED: [],
-    }
-    for (const t of tasks) map[t.status].push(t)
-    return map
-  }, [tasks])
-
-  const handleDrop = (status: TaskStatus) => {
-    if (!draggingTask) return
-    setOverStatus(null)
-    setDraggingId(null)
-    if (draggingTask.status === status) return
-    if (!allowedForDrag.includes(status)) return
-    onMove(draggingTask.id, status)
-  }
-
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${KANBAN_COLUMNS.length}, minmax(240px, 1fr))`,
-        gap: 12,
-        overflowX: 'auto',
-      }}
-    >
-      {KANBAN_COLUMNS.map((col) => {
-        const items = byStatus[col.status]
-        const canDrop = !!draggingTask && draggingTask.status !== col.status && allowedForDrag.includes(col.status)
-        const isOver = overStatus === col.status
-        return (
-          <Card
-            key={col.status}
-            withBorder
-            padding="xs"
-            radius="md"
-            style={{
-              background: isOver && canDrop ? 'var(--mantine-color-blue-light)' : undefined,
-              borderColor: isOver && canDrop ? 'var(--mantine-color-blue-filled)' : undefined,
-              borderStyle: draggingTask && !canDrop && draggingTask.status !== col.status ? 'dashed' : undefined,
-              opacity: draggingTask && !canDrop && draggingTask.status !== col.status ? 0.55 : 1,
-              minHeight: 240,
-            }}
-            onDragOver={(e) => {
-              if (!canDrop) return
-              e.preventDefault()
-              if (overStatus !== col.status) setOverStatus(col.status)
-            }}
-            onDragLeave={() => {
-              if (overStatus === col.status) setOverStatus(null)
-            }}
-            onDrop={(e) => {
-              e.preventDefault()
-              handleDrop(col.status)
-            }}
-          >
-            <Group justify="space-between" mb={6}>
-              <Group gap={6}>
-                <Badge size="sm" color={STATUS_COLOR[col.status]} variant="light">
-                  {col.label}
-                </Badge>
-                <Text size="xs" c="dimmed">
-                  {items.length}
-                </Text>
-              </Group>
-            </Group>
-            <Stack gap={6}>
-              {items.length === 0 ? (
-                <Text size="xs" c="dimmed" ta="center" py="md">
-                  {draggingTask && canDrop ? 'Drop here' : 'No tasks'}
-                </Text>
-              ) : (
-                items.map((t) => (
-                  <Card
-                    key={t.id}
-                    withBorder
-                    padding="xs"
-                    radius="sm"
-                    draggable={canWrite}
-                    onDragStart={() => setDraggingId(t.id)}
-                    onDragEnd={() => {
-                      setDraggingId(null)
-                      setOverStatus(null)
-                    }}
-                    onClick={() => onSelect(t.id)}
-                    style={{
-                      cursor: canWrite ? 'grab' : 'pointer',
-                      opacity: draggingId === t.id ? 0.5 : 1,
-                    }}
-                  >
-                    <Stack gap={4}>
-                      <Group gap={4} wrap="wrap">
-                        <Badge size="xs" color={KIND_COLOR[t.kind]} variant="light">
-                          {t.kind}
-                        </Badge>
-                        <Badge size="xs" color={PRIORITY_COLOR[t.priority]} variant="dot">
-                          {t.priority}
-                        </Badge>
-                      </Group>
-                      <Text size="sm" fw={500} lineClamp={2}>
-                        {t.title}
-                      </Text>
-                      {t.tags.length > 0 && (
-                        <Group gap={4} wrap="wrap">
-                          {t.tags.slice(0, 3).map((tg) => (
-                            <Badge key={tg.tagId} size="xs" variant="light" color={tg.tag.color}>
-                              {tg.tag.name}
-                            </Badge>
-                          ))}
-                        </Group>
-                      )}
-                      {t.progressPercent != null && t.progressPercent > 0 && (
-                        <div
-                          style={{
-                            height: 4,
-                            background: 'var(--mantine-color-gray-2)',
-                            borderRadius: 2,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${t.progressPercent}%`,
-                              height: '100%',
-                              background:
-                                t.status === 'CLOSED' ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-blue-6)',
-                            }}
-                          />
-                        </div>
-                      )}
-                      <Group justify="space-between" wrap="nowrap">
-                        <Text size="xs" c="dimmed" truncate>
-                          {t.assignee ? t.assignee.name : 'Unassigned'}
-                        </Text>
-                        {t.dueAt && (
-                          <Text
-                            size="xs"
-                            c={new Date(t.dueAt) < new Date() && t.status !== 'CLOSED' ? 'red' : 'dimmed'}
-                          >
-                            {new Date(t.dueAt).toLocaleDateString()}
-                          </Text>
-                        )}
-                      </Group>
-                    </Stack>
-                  </Card>
-                ))
-              )}
-            </Stack>
-          </Card>
-        )
-      })}
-    </div>
-  )
-}
-
-function TasksGanttView({ tasks, onSelect }: { tasks: TaskListItem[]; onSelect: (id: string) => void }) {
-  const withDates = useMemo(() => tasks.filter((t) => (t.startsAt || t.createdAt) && t.dueAt), [tasks])
-
-  const option = useMemo<EChartsOption>(() => {
-    const now = Date.now()
-    const categories = withDates.map((t) => t.title)
-    const data = withDates.map((t, idx) => {
-      const start = new Date(t.startsAt ?? t.createdAt).getTime()
-      const end = new Date(t.dueAt as string).getTime()
-      const overdue = end < now && t.status !== 'CLOSED'
-      const color = overdue ? '#fa5252' : GANTT_STATUS_HEX[t.status]
-      return {
-        name: t.title,
-        value: [idx, start, end],
-        taskId: t.id,
-        status: t.status,
-        assignee: t.assignee?.name ?? 'Unassigned',
-        progressPercent: t.progressPercent,
-        overdue,
-        itemStyle: { color },
-      }
-    })
-
-    type BarData = (typeof data)[number]
-
-    return {
-      grid: { left: 200, right: 24, top: 12, bottom: 48, containLabel: false },
-      xAxis: { type: 'time', position: 'bottom', splitLine: { show: true } },
-      yAxis: {
-        type: 'category',
-        data: categories,
-        inverse: true,
-        axisLabel: { width: 180, overflow: 'truncate', fontSize: 11 },
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: unknown) => {
-          const p = params as { data: BarData }
-          const d = p.data
-          const start = new Date(d.value[1]).toLocaleDateString()
-          const end = new Date(d.value[2]).toLocaleDateString()
-          const parts = [
-            `<b>${d.name}</b>`,
-            `${start} → ${end}`,
-            `Status: ${d.status.replace('_', ' ')} · Assignee: ${d.assignee}`,
-          ]
-          if (d.progressPercent != null) parts.push(`Progress: ${d.progressPercent}%`)
-          if (d.overdue) parts.push('<span style="color:#fa5252">Overdue</span>')
-          return parts.join('<br/>')
-        },
-      },
-      series: [
-        {
-          type: 'custom',
-          encode: { x: [1, 2], y: 0 },
-          data,
-          renderItem: (_params: unknown, apiRef: unknown) => {
-            const api = apiRef as {
-              value: (i: number) => number
-              coord: (pt: [number, number]) => [number, number]
-              size: (v: [number, number]) => [number, number]
-              visual: (key: string) => string
-            }
-            const yIdx = api.value(0)
-            const start = api.coord([api.value(1), yIdx])
-            const end = api.coord([api.value(2), yIdx])
-            const height = api.size([0, 1])[1] * 0.5
-            const width = Math.max(2, end[0] - start[0])
-            const color = api.visual('color') || '#228be6'
-            return {
-              type: 'rect',
-              shape: { x: start[0], y: start[1] - height / 2, width, height },
-              style: { fill: color, opacity: 0.9 },
-            }
-          },
-          markLine: {
-            symbol: 'none',
-            silent: true,
-            label: { formatter: 'Today', position: 'insideEndTop', color: '#fa5252' },
-            lineStyle: { color: '#fa5252', type: 'dashed', width: 1 },
-            data: [{ xAxis: now }],
-          },
-        },
-      ],
-      dataZoom: [
-        { type: 'slider', xAxisIndex: 0, height: 18, bottom: 8, filterMode: 'weakFilter' },
-        { type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' },
-      ],
-    } as unknown as EChartsOption
-  }, [withDates])
-
-  if (withDates.length === 0) {
-    return (
-      <Card withBorder p="xl" radius="md">
-        <Stack align="center" gap="xs">
-          <TbListCheck size={32} />
-          <Text fw={500}>No tasks with due date</Text>
-          <Text size="sm" c="dimmed">
-            Set a due date (and optionally a start date) on a task to see it here.
-          </Text>
-        </Stack>
-      </Card>
-    )
-  }
-
-  const height = Math.max(240, withDates.length * 32 + 80)
-
-  return (
-    <Card withBorder padding="sm" radius="md">
-      <EChart
-        option={option}
-        height={height}
-        onEvents={{
-          click: (params: unknown) => {
-            const p = params as { data?: { taskId?: string } }
-            const id = p?.data?.taskId
-            if (id) onSelect(id)
-          },
+      <Modal
+        opened={!!drawerTaskId}
+        onClose={closeTask}
+        centered
+        size="min(90vw, 1100px)"
+        withCloseButton={false}
+        scrollAreaComponent={ScrollArea.Autosize}
+        overlayProps={{ blur: 4, backgroundOpacity: 0.45 }}
+        transitionProps={{ transition: 'fade-up', duration: 220 }}
+        radius="lg"
+        styles={{
+          content: { maxHeight: '90vh' },
+          body: { padding: 'var(--mantine-spacing-lg)' },
         }}
-      />
-    </Card>
+      >
+        {drawerTaskId && <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />}
+      </Modal>
+    </Stack>
   )
 }

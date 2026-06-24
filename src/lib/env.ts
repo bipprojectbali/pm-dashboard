@@ -16,16 +16,14 @@ export const env = {
   REDIS_URL: required('REDIS_URL'),
   GOOGLE_CLIENT_ID: required('GOOGLE_CLIENT_ID'),
   GOOGLE_CLIENT_SECRET: required('GOOGLE_CLIENT_SECRET'),
+  BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET'),
+  BETTER_AUTH_URL: optional('BETTER_AUTH_URL', 'http://localhost:3000'),
   SUPER_ADMIN_EMAILS: optional('SUPER_ADMIN_EMAIL', '')
     .split(',')
     .map((e) => e.trim())
     .filter(Boolean),
   AUDIT_LOG_RETENTION_DAYS: parseInt(optional('AUDIT_LOG_RETENTION_DAYS', '90'), 10),
   MCP_SECRET: optional('MCP_SECRET', ''),
-  MCP_SECRET_ADMIN: optional('MCP_SECRET_ADMIN', ''),
-  PMW_WEBHOOK_TOKEN: optional('PMW_WEBHOOK_TOKEN', ''),
-  PMW_EVENT_BATCH_MAX: parseInt(optional('PMW_EVENT_BATCH_MAX', '500'), 10),
-  WEBHOOK_LOG_RETENTION_DAYS: parseInt(optional('WEBHOOK_LOG_RETENTION_DAYS', '7'), 10),
   GITHUB_WEBHOOK_SECRET: optional('GITHUB_WEBHOOK_SECRET', ''),
   UPLOADS_DIR: optional('UPLOADS_DIR', './uploads'),
   UPLOAD_MAX_BYTES: parseInt(optional('UPLOAD_MAX_BYTES', String(10 * 1024 * 1024)), 10),

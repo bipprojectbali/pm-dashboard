@@ -20,17 +20,19 @@ import {
   TbClipboardList,
   TbClockHour3,
   TbHeartbeat,
+  TbHistory,
   TbLayoutDashboard,
   TbListCheck,
+  TbMessageCircle,
   TbPlugConnected,
   TbReportAnalytics,
   TbShieldLock,
   TbTarget,
   TbUsers,
 } from 'react-icons/tb'
+import { AdminChatPanel } from '@/frontend/components/AdminChatPanel'
 import { AnalyticsPanel } from '@/frontend/components/admin/AnalyticsPanel'
 import { AuditLogsPanel } from '@/frontend/components/admin/AuditLogsPanel'
-import { EffortPanel } from '@/frontend/components/admin/EffortPanel'
 import { OverviewPanel } from '@/frontend/components/admin/OverviewPanel'
 import { ProjectsOverviewPanel } from '@/frontend/components/admin/ProjectsOverviewPanel'
 import { SessionsPanel } from '@/frontend/components/admin/SessionsPanel'
@@ -38,10 +40,12 @@ import { SystemHealthPanel } from '@/frontend/components/admin/SystemHealthPanel
 import { TaskTriagePanel } from '@/frontend/components/admin/TaskTriagePanel'
 import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
+import { ReportHistoryPanel } from '@/frontend/components/ReportHistoryPanel'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
+import { useIsExtensionEnabled } from '@/frontend/hooks/useExtensions'
 import { useNavBadges } from '@/frontend/hooks/useNavBadges'
 
 const validTabs = [
@@ -50,10 +54,11 @@ const validTabs = [
   'audit-logs',
   'projects',
   'tasks',
-  'effort',
   'analytics',
   'sessions',
   'health',
+  'report-history',
+  'chat',
 ] as const
 type TabKey = (typeof validTabs)[number]
 
@@ -84,8 +89,9 @@ type NavItem = {
   label: string
   icon: typeof TbLayoutDashboard
   key: TabKey
-  badgeKey?: 'pastDueProjects' | 'overdueTasks' | 'offlineAgents' | 'missingEnv'
+  badgeKey?: 'pastDueProjects' | 'overdueTasks' | 'missingEnv'
   badgeColor?: string
+  badgeLabel?: string
 }
 
 type NavGroup = { label: string; items: NavItem[] }
@@ -95,9 +101,8 @@ const navGroups: NavGroup[] = [
     label: 'Pantau',
     items: [
       { label: 'Ringkasan', icon: TbLayoutDashboard, key: 'overview' },
-      { label: 'Proyek', icon: TbTarget, key: 'projects', badgeKey: 'pastDueProjects', badgeColor: 'red' },
-      { label: 'Triase Task', icon: TbListCheck, key: 'tasks', badgeKey: 'overdueTasks', badgeColor: 'orange' },
-      { label: 'Effort', icon: TbClockHour3, key: 'effort' },
+      { label: 'Proyek', icon: TbTarget, key: 'projects', badgeKey: 'pastDueProjects', badgeColor: 'red', badgeLabel: 'proyek past-due' },
+      { label: 'Triase Task', icon: TbListCheck, key: 'tasks', badgeKey: 'overdueTasks', badgeColor: 'orange', badgeLabel: 'task overdue' },
       { label: 'Analitik', icon: TbReportAnalytics, key: 'analytics' },
     ],
   },
@@ -111,7 +116,14 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Sistem',
-    items: [{ label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red' }],
+    items: [
+      { label: 'Kesehatan Sistem', icon: TbHeartbeat, key: 'health', badgeKey: 'missingEnv', badgeColor: 'red', badgeLabel: 'env var hilang' },
+      { label: 'Riwayat Laporan', icon: TbHistory, key: 'report-history' },
+    ],
+  },
+  {
+    label: 'AI',
+    items: [{ label: 'Chat AI', icon: TbMessageCircle, key: 'chat' }],
   },
 ]
 
@@ -136,10 +148,6 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
     label: 'Triase Task',
     description: 'Task overdue, tanpa assignee, terblokir, atau stale.',
   },
-  effort: {
-    label: 'Effort',
-    description: 'Estimasi vs aktual, ghost task, dan phantom work per user.',
-  },
   analytics: {
     label: 'Analitik',
     description: 'Throughput, cycle time, WIP, dan timeline proyek.',
@@ -152,6 +160,14 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
     label: 'Kesehatan Sistem',
     description: 'Env vars, agents, webhook, dan retensi log.',
   },
+  'report-history': {
+    label: 'Riwayat Laporan',
+    description: '20 pengiriman laporan terakhir — klik baris untuk preview konten laporan.',
+  },
+  chat: {
+    label: 'Chat AI',
+    description: 'Tanya langsung ke AI tentang kondisi proyek, task, tim, dan risiko.',
+  },
 }
 
 function AdminPage() {
@@ -162,6 +178,12 @@ function AdminPage() {
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
+  const chatEnabled = useIsExtensionEnabled('chat')
+  const filteredNavGroups = chatEnabled
+    ? navGroups
+    : navGroups
+        .map((g) => ({ ...g, items: g.items.filter((it) => it.key !== 'chat') }))
+        .filter((g) => g.items.length > 0)
   const scrollPositions = useRef<Partial<Record<TabKey, number>>>({})
   const previousTab = useRef<TabKey>(active)
   const setActive = (key: TabKey) => {
@@ -205,7 +227,7 @@ function AdminPage() {
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
-      <AppShell.Header>
+      <AppShell.Header style={{ backgroundImage: 'linear-gradient(rgba(148,103,220,0.07), rgba(148,103,220,0.07))' }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
             <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="sm" />
@@ -226,9 +248,9 @@ function AdminPage() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'}>
-        <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto' }}>
-          {navGroups.map((group) => (
+      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ background: 'light-dark(rgba(148,103,220,0.05), rgba(148,103,220,0.08))' }}>
+        <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
+          {filteredNavGroups.map((group) => (
             <Stack key={group.label} gap={4}>
               {!(collapsed && !isMobile) && (
                 <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.6 }} px="xs" pt={4}>
@@ -276,9 +298,15 @@ function AdminPage() {
                     leftSection={<Icon size={18} />}
                     rightSection={
                       badgeCount > 0 ? (
-                        <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
-                          {badgeCount > 99 ? '99+' : badgeCount}
-                        </Badge>
+                        <Tooltip
+                          label={`${badgeCount} ${item.badgeLabel ?? 'item perlu perhatian'}`}
+                          withArrow
+                          position="right"
+                        >
+                          <Badge size="xs" color={item.badgeColor ?? 'red'} variant="filled">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </Badge>
+                        </Tooltip>
                       ) : null
                     }
                     color="violet"
@@ -299,12 +327,11 @@ function AdminPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="violet"
         />
       </AppShell.Navbar>
 
-      <AppShell.Main>
-        <Container fluid px={0}>
+      <AppShell.Main style={{ borderTop: '3px solid var(--mantine-color-violet-5)' }}>
+        <Container size={'xl'} px={0}>
           <Stack gap="md">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: 0.6 }}>
@@ -320,10 +347,16 @@ function AdminPage() {
               {active === 'audit-logs' && <AuditLogsPanel />}
               {active === 'projects' && <ProjectsOverviewPanel />}
               {active === 'tasks' && <TaskTriagePanel />}
-              {active === 'effort' && <EffortPanel />}
               {active === 'analytics' && <AnalyticsPanel />}
               {active === 'sessions' && <SessionsPanel />}
               {active === 'health' && <SystemHealthPanel />}
+              {active === 'report-history' && <ReportHistoryPanel />}
+              {active === 'chat' && chatEnabled && <AdminChatPanel />}
+              {active === 'chat' && !chatEnabled && (
+                <Text size="sm" c="dimmed">
+                  Chat AI extension nonaktif. Aktifkan di /dev → Extensions → Chat AI.
+                </Text>
+              )}
             </SectionErrorBoundary>
           </Stack>
         </Container>

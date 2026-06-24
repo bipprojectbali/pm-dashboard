@@ -31,6 +31,7 @@ import {
   TbBell,
   TbBug,
   TbCalendarDue,
+  TbCalendarEvent,
   TbCircleCheck,
   TbClockHour4,
   TbGhost2,
@@ -43,8 +44,10 @@ import {
   TbUserPlus,
   TbUsers,
 } from 'react-icons/tb'
-import { ActivityPanel } from '@/frontend/components/ActivityPanel'
 import { EChart } from '@/frontend/components/charts/EChart'
+import { EventDetailView } from '@/frontend/components/EventDetailView'
+import { EventFormView } from '@/frontend/components/EventFormView'
+import { EventsPanel } from '@/frontend/components/EventsPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { PROJECT_DETAIL_TABS, type ProjectDetailTab, ProjectDetailView } from '@/frontend/components/ProjectDetailView'
 import { ProjectsPanel } from '@/frontend/components/ProjectsPanel'
@@ -55,11 +58,19 @@ import { TaskDetailView } from '@/frontend/components/TaskDetailView'
 import { TasksPanel } from '@/frontend/components/TasksPanel'
 import { TeamPanel } from '@/frontend/components/TeamPanel'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
+import { toLocalDateStr } from '@/frontend/lib/dates'
 
-const validTabs = ['overview', 'projects', 'tasks', 'activity', 'team'] as const
+const validTabs = ['overview', 'projects', 'tasks', 'team', 'events'] as const
 type TabKey = (typeof validTabs)[number]
 
-type PmSearch = { tab: TabKey; projectId?: string; detailTab?: ProjectDetailTab; taskId?: string }
+type PmSearch = {
+  tab: TabKey
+  projectId?: string
+  detailTab?: ProjectDetailTab
+  taskId?: string
+  eventId?: string
+  eventMode?: 'create' | 'edit'
+}
 
 export const Route = createFileRoute('/pm')({
   validateSearch: (search: Record<string, unknown>): PmSearch => {
@@ -69,10 +80,14 @@ export const Route = createFileRoute('/pm')({
       ? (search.detailTab as ProjectDetailTab)
       : undefined
     const taskId = typeof search.taskId === 'string' ? search.taskId : undefined
+    const eventId = typeof search.eventId === 'string' ? search.eventId : undefined
+    const eventMode = search.eventMode === 'create' || search.eventMode === 'edit' ? search.eventMode : undefined
     const out: PmSearch = { tab }
     if (projectId) out.projectId = projectId
     if (detailTab) out.detailTab = detailTab
     if (taskId) out.taskId = taskId
+    if (eventId) out.eventId = eventId
+    if (eventMode) out.eventMode = eventMode
     return out
   },
   beforeLoad: async ({ context }) => {
@@ -91,15 +106,52 @@ export const Route = createFileRoute('/pm')({
   component: PmPage,
 })
 
-type NavItem = { label: string; description: string; icon: typeof TbLayoutDashboard; key: TabKey; badge?: string }
+type NavItem = {
+  label: string
+  description: string
+  icon: typeof TbLayoutDashboard
+  key: TabKey
+  badge?: string
+  badgeColor?: string
+}
 
-const navItems: NavItem[] = [
-  { label: 'Ringkasan', description: 'KPI, overdue, prioritas', icon: TbLayoutDashboard, key: 'overview' },
-  { label: 'Proyek', description: 'Kelola semua proyek', icon: TbTarget, key: 'projects' },
-  { label: 'Task', description: 'Tugas kamu & tim', icon: TbListCheck, key: 'tasks' },
-  { label: 'Aktivitas', description: 'Event ActivityWatch', icon: TbActivity, key: 'activity', badge: 'AW' },
-  { label: 'Tim', description: 'Anggota & beban kerja', icon: TbUsers, key: 'team' },
-]
+function buildNavItems(counts: { events: number; tasks: number; projects: number; overdue: number }): NavItem[] {
+  return [
+    {
+      label: 'Ringkasan',
+      description: 'KPI, overdue, prioritas',
+      icon: TbLayoutDashboard,
+      key: 'overview',
+      badge: counts.overdue > 0 ? String(counts.overdue) : undefined,
+      badgeColor: counts.overdue > 0 ? 'red' : undefined,
+    },
+    {
+      label: 'Proyek',
+      description: 'Kelola semua proyek',
+      icon: TbTarget,
+      key: 'projects',
+      badge: counts.projects > 0 ? String(counts.projects) : undefined,
+      badgeColor: 'blue',
+    },
+    {
+      label: 'Task',
+      description: 'Tugas kamu & tim',
+      icon: TbListCheck,
+      key: 'tasks',
+      badge: counts.tasks > 0 ? String(counts.tasks) : undefined,
+      badgeColor: counts.overdue > 0 ? 'orange' : 'blue',
+    },
+    { label: 'Tim', description: 'Anggota & beban kerja', icon: TbUsers, key: 'team' },
+    {
+      label: 'Events',
+      description: 'Jadwal & pengingat tim',
+      icon: TbCalendarEvent,
+      key: 'events' as TabKey,
+      badge: counts.events > 0 ? String(counts.events) : undefined,
+      badgeColor: 'orange',
+    },
+  ]
+}
 
 const TAB_META: Record<TabKey, { label: string; description: string }> = {
   overview: {
@@ -114,18 +166,18 @@ const TAB_META: Record<TabKey, { label: string; description: string }> = {
     label: 'Task',
     description: 'Semua task di proyek kamu. Filter by assignee, status, tag, atau prioritas.',
   },
-  activity: {
-    label: 'Aktivitas',
-    description: 'Event ActivityWatch dari pm-watch agent — pantau fokus kerja tim.',
-  },
   team: {
     label: 'Tim',
     description: 'Anggota proyek dan beban kerja per user.',
   },
+  events: {
+    label: 'Events',
+    description: 'Jadwal dan pengingat tim bersama — meeting, review, atau event penting lainnya.',
+  },
 }
 
 function PmPageHeader({ tabKey }: { tabKey: TabKey }) {
-  const item = navItems.find((n) => n.key === tabKey)
+  const item = buildNavItems({ events: 0, tasks: 0, projects: 0, overdue: 0 }).find((n) => n.key === tabKey)
   const meta = TAB_META[tabKey]
   const Icon = item?.icon ?? TbLayoutDashboard
   return (
@@ -162,7 +214,14 @@ function PmPage() {
   const { data } = useSession()
   const logout = useLogout()
   const user = data?.user
-  const { tab: active, projectId: activeProjectId, detailTab, taskId: activeTaskId } = Route.useSearch()
+  const {
+    tab: active,
+    projectId: activeProjectId,
+    detailTab,
+    taskId: activeTaskId,
+    eventId: activeEventId,
+    eventMode,
+  } = Route.useSearch()
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
@@ -184,6 +243,7 @@ function PmPage() {
   }
   const setProjectDetailTab = (next: ProjectDetailTab) => {
     if (!activeProjectId) return
+    localStorage.setItem('pm:project:last-tab', next)
     navigate({ to: '/pm', search: { tab: 'projects', projectId: activeProjectId, detailTab: next } })
   }
   const closeProjectDetail = () => {
@@ -195,6 +255,11 @@ function PmPage() {
       search: activeProjectId ? { tab: 'tasks', projectId: activeProjectId } : { tab: 'tasks' },
     })
   }
+  const openEvent = (id: string) => navigate({ to: '/pm', search: { tab: 'events', eventId: id } })
+  const closeEventDetail = () => navigate({ to: '/pm', search: { tab: 'events' } })
+  const openEventCreate = () => navigate({ to: '/pm', search: { tab: 'events', eventMode: 'create' } })
+  const openEventEdit = (id: string) =>
+    navigate({ to: '/pm', search: { tab: 'events', eventId: id, eventMode: 'edit' } })
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('pm:sidebar') === 'collapsed')
   const toggleSidebar = () => {
     setCollapsed((prev) => {
@@ -212,6 +277,34 @@ function PmPage() {
       onConfirm: () => logout.mutate(),
     })
 
+  const eventsQ = useQuery<{ count: number; events: Array<{ startsAt: string }> }>({
+    queryKey: ['events', 'badge'],
+    queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
+  })
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const tomorrowStr = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+  const eventBadgeCount = (eventsQ.data?.events ?? []).filter((e) => {
+    const d = e.startsAt.slice(0, 10)
+    return d === todayStr || d === tomorrowStr
+  }).length
+
+  // Query keys sama dengan OverviewPanel → gratis dari cache saat overview sudah dibuka
+  const projectsBadgeQ = useQuery<{ projects: Array<{ archivedAt: string | null }> }>({
+    queryKey: ['projects'],
+    queryFn: () => fetch('/api/projects', { credentials: 'include' }).then((r) => r.json()),
+    staleTime: 5 * 60_000,
+  })
+  const tasksBadgeQ = useQuery<{ tasks: Array<{ status: string; dueAt: string | null }> }>({
+    queryKey: ['tasks', 'mine=1', 'overview'],
+    queryFn: () => fetch('/api/tasks?mine=1&limit=300', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 60_000,
+  })
+  const activeProjectsBadge = (projectsBadgeQ.data?.projects ?? []).filter((p) => !p.archivedAt).length
+  const myActiveTasks = (tasksBadgeQ.data?.tasks ?? []).filter((t) => t.status !== 'CLOSED')
+  const tasksBadge = myActiveTasks.length
+  const overdueBadge = myActiveTasks.filter((t) => t.dueAt && new Date(t.dueAt).getTime() <= Date.now()).length
+
   const desktopWidth = collapsed ? 60 : 260
 
   return (
@@ -228,7 +321,7 @@ function PmPage() {
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
-      <AppShell.Header>
+      <AppShell.Header style={{ backgroundImage: 'linear-gradient(rgba(34,139,230,0.07), rgba(34,139,230,0.07))' }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
             <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="sm" />
@@ -249,7 +342,7 @@ function PmPage() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'}>
+      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ background: 'light-dark(rgba(34,139,230,0.05), rgba(34,139,230,0.08))' }}>
         <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
           <Stack gap={4}>
             {!(collapsed && !isMobile) && (
@@ -257,7 +350,12 @@ function PmPage() {
                 Manajer Proyek
               </Text>
             )}
-            {navItems.map((item) => {
+            {buildNavItems({
+              events: eventBadgeCount,
+              tasks: tasksBadge,
+              projects: activeProjectsBadge,
+              overdue: overdueBadge,
+            }).map((item) => {
               const Icon = item.icon
               if (collapsed && !isMobile) {
                 return (
@@ -296,7 +394,7 @@ function PmPage() {
                   leftSection={<Icon size={18} />}
                   rightSection={
                     item.badge ? (
-                      <Badge size="xs" variant="light">
+                      <Badge size="xs" variant="light" color={item.badgeColor ?? 'blue'}>
                         {item.badge}
                       </Badge>
                     ) : null
@@ -318,14 +416,13 @@ function PmPage() {
           onToggleCollapse={toggleSidebar}
           onLogout={confirmLogout}
           isLoggingOut={logout.isPending}
-          accentColor="blue"
         />
       </AppShell.Navbar>
 
-      <AppShell.Main>
-        <Container fluid px={0}>
+      <AppShell.Main style={{ borderTop: '3px solid var(--mantine-color-blue-5)' }}>
+        <Container size={'xl'} px={0}>
           <Stack gap="md">
-            {!activeProjectId && !activeTaskId && <PmPageHeader tabKey={active} />}
+            {!activeProjectId && !activeTaskId && !activeEventId && !eventMode && <PmPageHeader tabKey={active} />}
             <Box key={active}>
               {active === 'overview' && (
                 <OverviewPanel
@@ -338,7 +435,11 @@ function PmPage() {
                 (activeProjectId ? (
                   <ProjectDetailView
                     projectId={activeProjectId}
-                    tab={detailTab ?? 'overview'}
+                    tab={
+                      detailTab ??
+                      (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ??
+                      'overview'
+                    }
                     onTabChange={setProjectDetailTab}
                     onBack={closeProjectDetail}
                     onDeleted={closeProjectDetail}
@@ -356,8 +457,25 @@ function PmPage() {
                     onBackToProjects={() => setActive('projects')}
                   />
                 ))}
-              {active === 'activity' && <ActivityPanel />}
               {active === 'team' && <TeamPanel />}
+              {active === 'events' &&
+                (eventMode === 'create' ? (
+                  <EventFormView onBack={closeEventDetail} onSaved={(id) => openEvent(id)} />
+                ) : eventMode === 'edit' && activeEventId ? (
+                  <EventFormView
+                    editId={activeEventId}
+                    onBack={() => openEvent(activeEventId)}
+                    onSaved={(id) => openEvent(id)}
+                  />
+                ) : activeEventId ? (
+                  <EventDetailView
+                    eventId={activeEventId}
+                    onBack={closeEventDetail}
+                    onEdit={() => openEventEdit(activeEventId)}
+                  />
+                ) : (
+                  <EventsPanel onOpen={openEvent} onEdit={openEventEdit} onCreate={openEventCreate} />
+                ))}
             </Box>
           </Stack>
         </Container>
@@ -473,12 +591,27 @@ function OverviewPanel({
   const myTasksQ = useQuery<{ tasks: OverviewTask[] }>({
     queryKey: ['tasks', 'mine=1', 'overview'],
     queryFn: () => fetch('/api/tasks?mine=1&limit=300', { credentials: 'include' }).then((r) => r.json()),
-    refetchInterval: 60_000,
   })
   const notifsQ = useQuery<{ notifications: OverviewNotification[] }>({
     queryKey: ['me', 'notifications', 'overview'],
     queryFn: () => fetch('/api/me/notifications?limit=10', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 60_000,
+  })
+  // Reuse key ['events','badge'] — shared cache dengan badge query di PmPage, gratis tanpa request baru
+  const upcomingEventsQ = useQuery<{
+    events: Array<{
+      id: string
+      title: string
+      startsAt: string
+      endsAt: string | null
+      location: string | null
+      tags: Array<{ tagId: string; tag: { name: string; color: string } }>
+      project: { id: string; name: string } | null
+    }>
+  }>({
+    queryKey: ['events', 'badge'],
+    queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
   })
 
   const projects = projectsQ.data?.projects ?? []
@@ -513,6 +646,14 @@ function OverviewPanel({
   const bugsAssignedThisWeek = myTasks.filter((t) => t.kind === 'BUG' && new Date(t.createdAt).getTime() > weekAgo)
   const inProgressCount = activeMine.filter((t) => t.status === 'IN_PROGRESS').length
   const notifs = notifsQ.data?.notifications ?? []
+  const upcomingEvents = upcomingEventsQ.data?.events ?? []
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const weekKey = new Date(Date.now() + 7 * dayMs).toISOString().slice(0, 10)
+  const eventsToday = upcomingEvents.filter((e) => e.startsAt.slice(0, 10) === todayKey)
+  const eventsThisWeek = upcomingEvents.filter((e) => {
+    const k = e.startsAt.slice(0, 10)
+    return k > todayKey && k <= weekKey
+  })
 
   const statusDonutOption = useMemo(() => {
     const buckets: Record<OverviewTask['status'], number> = {
@@ -559,7 +700,7 @@ function OverviewPanel({
       const d = new Date()
       d.setHours(0, 0, 0, 0)
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
+      const key = toLocalDateStr(d)
       days.push({ key, label: key.slice(5), count: 0 })
     }
     const index = new Map(days.map((d, i) => [d.key, i]))
@@ -567,7 +708,7 @@ function OverviewPanel({
       if (!t.closedAt) continue
       const d = new Date(t.closedAt)
       d.setHours(0, 0, 0, 0)
-      const i = index.get(d.toISOString().slice(0, 10))
+      const i = index.get(toLocalDateStr(d))
       if (i !== undefined) days[i].count++
     }
     return {
@@ -814,6 +955,70 @@ function OverviewPanel({
               </>
             )}
           </Paper>
+
+          <SectionCard
+            title="Events Mendatang"
+            subtitle="Jadwal tim hari ini dan 7 hari ke depan."
+            icon={TbCalendarEvent}
+            color="orange"
+            count={eventsToday.length + eventsThisWeek.length}
+            loading={upcomingEventsQ.isLoading}
+            emptyMessage="Tidak ada event mendatang. Kosong!"
+            tip="Event tim yang akan datang dalam 7 hari ke depan. Merah = hari ini. Klik untuk buka detail event."
+            action={
+              eventsToday.length + eventsThisWeek.length > 0 ? (
+                <Button variant="subtle" size="xs" onClick={() => navigate({ to: '/pm', search: { tab: 'events' } })}>
+                  Semua events
+                </Button>
+              ) : null
+            }
+          >
+            {eventsToday.length > 0 && (
+              <>
+                <Text size="xs" fw={600} c="red" tt="uppercase" mb={4}>
+                  Hari ini
+                </Text>
+                {eventsToday.slice(0, 3).map((e) => (
+                  <UnstyledButton
+                    key={e.id}
+                    onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
+                    style={{ borderRadius: 6, padding: '4px 8px', width: '100%' }}
+                  >
+                    <Group gap="xs" wrap="nowrap">
+                      <TbCalendarEvent size={13} color="var(--mantine-color-red-6)" style={{ flexShrink: 0 }} />
+                      <Text size="sm" truncate style={{ flex: 1 }}>
+                        {e.title}
+                      </Text>
+                      <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                        {new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </Group>
+                  </UnstyledButton>
+                ))}
+              </>
+            )}
+            {eventsThisWeek.slice(0, 5 - Math.min(eventsToday.length, 3)).map((e) => (
+              <UnstyledButton
+                key={e.id}
+                onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
+                style={{ borderRadius: 6, padding: '4px 8px', width: '100%' }}
+              >
+                <Group gap="xs" wrap="nowrap">
+                  <TbCalendarEvent size={13} color="var(--mantine-color-blue-5)" style={{ flexShrink: 0 }} />
+                  <Text size="sm" truncate style={{ flex: 1 }}>
+                    {e.title}
+                  </Text>
+                  <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                    {new Date(e.startsAt).toLocaleDateString('id-ID', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </Text>
+                </Group>
+              </UnstyledButton>
+            ))}
+          </SectionCard>
 
           <SectionCard
             title="Aktivitas Terbaru"

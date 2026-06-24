@@ -251,9 +251,8 @@ Local MCP server exposes the app to Claude Code for remote automation. Configure
 | `code`, `project`, `dev` | Codebase introspection + editor integration |
 | `redis`, `presence`, `health` | Infra checks |
 
-- `MCP_SECRET` — grants readonly tools
-- `MCP_SECRET_ADMIN` — grants write + dev automation tools
-- Both empty = HTTP endpoint disabled
+- `MCP_SECRET` — shared bearer token. Scope is decided by `NODE_ENV`: `production` → readonly, anything else → admin (write + dev tools).
+- Empty = HTTP endpoint disabled (503).
 
 ## WebSocket
 
@@ -346,7 +345,6 @@ All views use React Flow with auto-save positions and viewport per view.
 | `PMW_EVENT_BATCH_MAX`      | No       | Max events per webhook batch (default: 500)    |
 | `PORT`                     | No       | Server port (default: 3000)                    |
 | `REACT_EDITOR`             | No       | Editor for click-to-source (default: code)     |
-| `MCP_SECRET`               | No       | Grants readonly MCP tools (HTTP `POST /mcp`)   |
-| `MCP_SECRET_ADMIN`         | No       | Grants write + dev automation MCP tools        |
+| `MCP_SECRET`               | No       | MCP bearer for `POST /mcp`. Scope from `NODE_ENV`: prod=readonly, else=admin. |
 | `TELEGRAM_NOTIFY_TOKEN`    | No       | Bot token for task-done notifications          |
 | `TELEGRAM_NOTIFY_CHAT_ID`  | No       | Chat ID for Telegram notifications             |

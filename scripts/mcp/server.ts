@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { adminTools } from './tools/admin'
-import { agentsTools, agentsReadonly } from './tools/agents'
+import { chatAdmin, chatReadonly } from './tools/chat'
 import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
 import { devTools } from './tools/dev'
@@ -9,14 +9,20 @@ import { githubReadonly } from './tools/github'
 import { healthTools } from './tools/health'
 import { logsAdmin, logsReadonly } from './tools/logs'
 import { milestonesReadonly, milestonesTools } from './tools/milestones'
+import { phasesReadonly, phasesTools } from './tools/phases'
 import { overviewReadonly } from './tools/overview'
 import { presenceTools } from './tools/presence'
 import { projectTools } from './tools/project'
 import { projectsReadonly, projectsTools } from './tools/projects'
+import { qcReadonly, qcTools } from './tools/qc'
 import { redisTools } from './tools/redis'
+import { reportAdmin, reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
+import { eventsReadonly, eventsTools } from './tools/events'
+import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
+import { permissionsAdmin, permissionsReadonly } from './tools/permissions'
 import { tasksReadonly, tasksTools } from './tools/tasks'
-import { webhooksTools, webhooksReadonly } from './tools/webhooks'
+import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import type { McpScope, ToolModule } from './tools/shared'
 
 export type { McpScope }
@@ -28,14 +34,20 @@ const READONLY_MODULES: ToolModule[] = [
   healthTools,
   projectTools,
   codeTools,
-  agentsReadonly,
-  webhooksReadonly,
   githubReadonly,
   projectsReadonly,
   tasksReadonly,
+  ticketsReadonly,
   tagsReadonly,
   milestonesReadonly,
+  phasesReadonly,
   overviewReadonly,
+  qcReadonly,
+  reportReadonly,
+  eventsReadonly,
+  chatReadonly,
+  extensionsReadonly,
+  permissionsReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [
@@ -44,21 +56,32 @@ const ADMIN_MODULES: ToolModule[] = [
   adminTools,
   devTools,
   redisTools,
-  agentsTools,
-  webhooksTools,
   projectsTools,
   tasksTools,
+  ticketsTools,
   tagsTools,
   milestonesTools,
+  phasesTools,
+  qcTools,
+  reportAdmin,
+  eventsTools,
+  chatAdmin,
+  extensionsAdmin,
+  permissionsAdmin,
 ]
 
 export function createMcpServer(scope: McpScope = 'admin'): McpServer {
+  // Hard cap: production is readonly, full stop. No config knob, no exception.
+  // Scope is decided solely by NODE_ENV so write tools can never be exposed
+  // against prod data regardless of how MCP_SECRET is configured.
+  const effectiveScope: McpScope = process.env.NODE_ENV === 'production' ? 'readonly' : scope
+
   const server = new McpServer({
     name: 'pm-dashboard',
     version: '0.3.0',
   })
 
-  const modules = scope === 'admin' ? ADMIN_MODULES : READONLY_MODULES
+  const modules = effectiveScope === 'admin' ? ADMIN_MODULES : READONLY_MODULES
   for (const mod of modules) {
     mod.register(server)
   }

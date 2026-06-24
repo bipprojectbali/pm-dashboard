@@ -15,14 +15,18 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
+import { useLocalStorage } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import {
   TbAlertTriangle,
+  TbCalendarEvent,
   TbCheck,
   TbClock,
   TbExternalLink,
+  TbLayoutBoard,
+  TbLayoutList,
   TbRefresh,
   TbSearch,
   TbTarget,
@@ -31,8 +35,30 @@ import {
 import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import type { ProjectListItem, ProjectPriority, ProjectStatus } from '../ProjectsPanel'
+import { ProjectsGanttView } from '../ProjectsPanel'
+import { QcSelfProjectCard } from './QcSelfProjectCard'
 
 const PAGE_SIZE = 25
+
+const STICKY_PROJECT_HEADER: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 3,
+  background: 'var(--mantine-color-body)',
+  minWidth: 220,
+  width: 220,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
+
+const STICKY_PROJECT_CELL: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  background: 'var(--mantine-color-body)',
+  minWidth: 220,
+  width: 220,
+  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
+}
 
 const STATUS_COLOR: Record<ProjectStatus, string> = {
   DRAFT: 'gray',
@@ -60,6 +86,8 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+type ViewMode = 'table' | 'board' | 'gantt'
+
 export function ProjectsOverviewPanel() {
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
@@ -68,6 +96,7 @@ export function ProjectsOverviewPanel() {
   const [healthFilter, setHealthFilter] = useState<'all' | 'overdue' | 'extended'>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [view, setView] = useLocalStorage<ViewMode>({ key: 'admin:projects:view', defaultValue: 'table' })
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['admin', 'projects-overview'],
@@ -146,6 +175,8 @@ export function ProjectsOverviewPanel() {
           </ActionIcon>
         </Tooltip>
       </Group>
+
+      <QcSelfProjectCard />
 
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
         <StatCard
@@ -238,160 +269,290 @@ export function ProjectsOverviewPanel() {
           <Badge variant="light" size="sm" ml="auto">
             {filtered.length} of {projects.length}
           </Badge>
+          <Group gap={2}>
+            <Tooltip label="Table" withArrow>
+              <ActionIcon
+                size="sm"
+                variant={view === 'table' ? 'filled' : 'subtle'}
+                color={view === 'table' ? 'blue' : 'gray'}
+                onClick={() => setView('table')}
+              >
+                <TbLayoutList size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Board" withArrow>
+              <ActionIcon
+                size="sm"
+                variant={view === 'board' ? 'filled' : 'subtle'}
+                color={view === 'board' ? 'blue' : 'gray'}
+                onClick={() => setView('board')}
+              >
+                <TbLayoutBoard size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Gantt" withArrow>
+              <ActionIcon
+                size="sm"
+                variant={view === 'gantt' ? 'filled' : 'subtle'}
+                color={view === 'gantt' ? 'blue' : 'gray'}
+                onClick={() => setView('gantt')}
+              >
+                <TbCalendarEvent size={14} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
       </Card>
 
-      <Card withBorder padding={0} radius="md">
-        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Project</Table.Th>
-              <Table.Th>Owner</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Priority</Table.Th>
-              <Table.Th>
-                <Tooltip label="Jumlah task CLOSED / total task + bar progress. 100% bar berubah hijau.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Tasks</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th>
-                <Tooltip label="Milestone = sub-deadline dalam project. Format done / total. '—' = project belum punya milestone.">
-                  <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Milestones</span>
-                </Tooltip>
-              </Table.Th>
-              <Table.Th>Members</Table.Th>
-              <Table.Th>Deadline</Table.Th>
-              <Table.Th style={{ width: 40 }} />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={9}>
-                  <EmptyRow icon={TbTarget} title="Memuat project…" />
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {!isLoading && filtered.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={9}>
-                  <EmptyRow
-                    icon={TbSearch}
-                    title="Tidak ada project yang cocok"
-                    message="Coba ubah filter status/prioritas atau reset pencarian."
-                  />
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {pagedFiltered.map((p) => {
-              const overdue = isOverdue(p)
-              const taskTotal = p.taskStats?.total ?? 0
-              const taskDone = p.taskStats?.closed ?? 0
-              const taskPct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0
-              const msDone = p.milestoneStats?.done ?? 0
-              const msTotal = p.milestoneStats?.total ?? 0
-              const extended =
-                p.originalEndAt && p.endsAt && new Date(p.endsAt).getTime() !== new Date(p.originalEndAt).getTime()
-              return (
-                <Table.Tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openProject(p.id)}>
-                  <Table.Td>
-                    <Stack gap={2}>
-                      <Text size="sm" fw={500} lineClamp={1}>
-                        {p.name}
-                      </Text>
-                      {p.description && (
-                        <Text size="xs" c="dimmed" lineClamp={1}>
-                          {p.description}
-                        </Text>
-                      )}
-                    </Stack>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs">{p.owner.name}</Text>
-                    <Text size="xs" c="dimmed">
-                      {p.owner.email}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={STATUS_COLOR[p.status]} variant="light" size="sm">
-                      {p.status.replace('_', ' ')}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="sm">
-                      {p.priority}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td style={{ minWidth: 120 }}>
-                    {taskTotal > 0 ? (
-                      <Stack gap={2}>
-                        <Text size="xs" c="dimmed">
-                          {taskDone} / {taskTotal} · {taskPct}%
-                        </Text>
-                        <Progress value={taskPct} size="xs" color={taskPct === 100 ? 'green' : 'blue'} />
-                      </Stack>
-                    ) : (
-                      <Text size="xs" c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {msTotal > 0 ? `${msDone} / ${msTotal}` : '—'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {p._count.members}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={4} wrap="nowrap">
-                      <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
-                        {formatDate(p.endsAt)}
-                      </Text>
-                      {extended && (
-                        <Tooltip
-                          multiline
-                          w={260}
-                          label={`Deadline diperpanjang dari rencana awal. Original: ${formatDate(p.originalEndAt)}. Indikator schedule slip atau scope creep.`}
-                        >
-                          <Badge color="grape" variant="light" size="xs">
-                            ext
-                          </Badge>
-                        </Tooltip>
-                      )}
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <ActionIcon
-                      variant="subtle"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openProject(p.id)
-                      }}
-                      aria-label="Open project"
-                    >
-                      <TbExternalLink size={14} />
-                    </ActionIcon>
-                  </Table.Td>
+      {view === 'gantt' && <ProjectsGanttView projects={filtered} onSelect={(p) => openProject(p.id)} />}
+
+      {view === 'board' && <ProjectsBoardView projects={filtered} onSelect={(p) => openProject(p.id)} />}
+
+      {view === 'table' && (
+        <Card withBorder padding={0} radius="md">
+          <Table.ScrollContainer minWidth={1100}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={STICKY_PROJECT_HEADER}>Project</Table.Th>
+                  <Table.Th style={{ width: 180 }}>Owner</Table.Th>
+                  <Table.Th style={{ width: 120 }}>Status</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Priority</Table.Th>
+                  <Table.Th style={{ width: 150 }}>
+                    <Tooltip label="Jumlah task CLOSED / total task + bar progress. 100% bar berubah hijau.">
+                      <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Tasks</span>
+                    </Tooltip>
+                  </Table.Th>
+                  <Table.Th style={{ width: 110 }}>
+                    <Tooltip label="Milestone = sub-deadline dalam project. Format done / total. '—' = project belum punya milestone.">
+                      <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Milestones</span>
+                    </Tooltip>
+                  </Table.Th>
+                  <Table.Th style={{ width: 90 }}>Members</Table.Th>
+                  <Table.Th style={{ width: 160 }}>Deadline</Table.Th>
+                  <Table.Th style={{ width: 60 }} />
                 </Table.Tr>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
-        {filtered.length > PAGE_SIZE && (
-          <Group justify="space-between" p="md">
-            <Text size="xs" c="dimmed">
-              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} dari {filtered.length}
-            </Text>
-            <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
-          </Group>
-        )}
-      </Card>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={9}>
+                      <EmptyRow icon={TbTarget} title="Memuat project…" />
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {!isLoading && filtered.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={9}>
+                      <EmptyRow
+                        icon={TbSearch}
+                        title="Tidak ada project yang cocok"
+                        message="Coba ubah filter status/prioritas atau reset pencarian."
+                      />
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {pagedFiltered.map((p) => {
+                  const overdue = isOverdue(p)
+                  const taskTotal = p.taskStats?.total ?? 0
+                  const taskDone = p.taskStats?.closed ?? 0
+                  const taskPct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0
+                  const msDone = p.milestoneStats?.done ?? 0
+                  const msTotal = p.milestoneStats?.total ?? 0
+                  const extended =
+                    p.originalEndAt && p.endsAt && new Date(p.endsAt).getTime() !== new Date(p.originalEndAt).getTime()
+                  return (
+                    <Table.Tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openProject(p.id)}>
+                      <Table.Td style={STICKY_PROJECT_CELL}>
+                        <Stack gap={2}>
+                          <Text size="sm" fw={500} lineClamp={1}>
+                            {p.name}
+                          </Text>
+                          {p.description && (
+                            <Text size="xs" c="dimmed" lineClamp={1}>
+                              {p.description}
+                            </Text>
+                          )}
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs">{p.owner.name}</Text>
+                        <Text size="xs" c="dimmed">
+                          {p.owner.email}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={STATUS_COLOR[p.status]} variant="light" size="sm">
+                          {p.status.replace('_', ' ')}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="sm">
+                          {p.priority}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td style={{ minWidth: 120 }}>
+                        {taskTotal > 0 ? (
+                          <Stack gap={2}>
+                            <Text size="xs" c="dimmed">
+                              {taskDone} / {taskTotal} · {taskPct}%
+                            </Text>
+                            <Progress value={taskPct} size="xs" color={taskPct === 100 ? 'green' : 'blue'} />
+                          </Stack>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" c="dimmed">
+                          {msTotal > 0 ? `${msDone} / ${msTotal}` : '—'}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" c="dimmed">
+                          {p._count.members}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap">
+                          <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
+                            {formatDate(p.endsAt)}
+                          </Text>
+                          {extended && (
+                            <Tooltip
+                              multiline
+                              w={260}
+                              label={`Deadline diperpanjang dari rencana awal. Original: ${formatDate(p.originalEndAt)}. Indikator schedule slip atau scope creep.`}
+                            >
+                              <Badge color="grape" variant="light" size="xs">
+                                ext
+                              </Badge>
+                            </Tooltip>
+                          )}
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openProject(p.id)
+                          }}
+                          aria-label="Open project"
+                        >
+                          <TbExternalLink size={14} />
+                        </ActionIcon>
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+          {filtered.length > PAGE_SIZE && (
+            <Group justify="space-between" p="md">
+              <Text size="xs" c="dimmed">
+                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} dari{' '}
+                {filtered.length}
+              </Text>
+              <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
+            </Group>
+          )}
+        </Card>
+      )}
     </Stack>
+  )
+}
+
+const BOARD_STATUS_ORDER: ProjectStatus[] = ['ACTIVE', 'ON_HOLD', 'DRAFT', 'COMPLETED', 'CANCELLED']
+const BOARD_STATUS_LABEL: Record<ProjectStatus, string> = {
+  ACTIVE: 'Active',
+  ON_HOLD: 'On Hold',
+  DRAFT: 'Draft',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+}
+
+function ProjectsBoardView({
+  projects,
+  onSelect,
+}: {
+  projects: ProjectListItem[]
+  onSelect: (p: ProjectListItem) => void
+}) {
+  const columns = BOARD_STATUS_ORDER.map((status) => ({
+    status,
+    items: projects.filter((p) => p.status === status),
+  })).filter((c) => c.items.length > 0)
+
+  if (columns.length === 0) {
+    return (
+      <Card withBorder p="xl" radius="md">
+        <Stack align="center" gap="xs">
+          <TbLayoutBoard size={32} />
+          <Text fw={500}>Tidak ada project yang cocok</Text>
+        </Stack>
+      </Card>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 12, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 8 }}>
+      {columns.map(({ status, items }) => (
+        <Stack key={status} gap="xs" style={{ minWidth: 240, width: 240, flexShrink: 0 }}>
+          <Group gap="xs">
+            <Badge color={STATUS_COLOR[status]} variant="light" size="sm">
+              {BOARD_STATUS_LABEL[status]}
+            </Badge>
+            <Text size="xs" c="dimmed">
+              {items.length}
+            </Text>
+          </Group>
+          {items.map((p) => {
+            const overdue = isOverdue(p)
+            const taskTotal = p.taskStats?.total ?? 0
+            const taskDone = p.taskStats?.closed ?? 0
+            const taskPct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0
+            return (
+              <Card
+                key={p.id}
+                withBorder
+                padding="sm"
+                radius="md"
+                style={{ cursor: 'pointer', borderLeft: `3px solid var(--mantine-color-${STATUS_COLOR[status]}-5)` }}
+                onClick={() => onSelect(p)}
+              >
+                <Stack gap={4}>
+                  <Text size="xs" fw={600} lineClamp={2}>
+                    {p.name}
+                  </Text>
+                  <Text size="xs" c="dimmed" lineClamp={1}>
+                    {p.owner.name}
+                  </Text>
+                  {taskTotal > 0 && (
+                    <Stack gap={2}>
+                      <Text size="10px" c="dimmed">
+                        {taskDone}/{taskTotal} tasks
+                      </Text>
+                      <Progress value={taskPct} size="xs" color={taskPct === 100 ? 'green' : 'blue'} />
+                    </Stack>
+                  )}
+                  {p.endsAt && (
+                    <Text size="10px" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
+                      {overdue ? '⚠ ' : ''}
+                      {formatDate(p.endsAt)}
+                    </Text>
+                  )}
+                </Stack>
+              </Card>
+            )
+          })}
+        </Stack>
+      ))}
+    </div>
   )
 }
 

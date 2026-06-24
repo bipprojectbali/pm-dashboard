@@ -52,6 +52,19 @@ export function broadcastToUser(userId: string, message: object) {
   }
 }
 
+export function broadcastAll(message: object) {
+  const msg = JSON.stringify(message)
+  for (const set of connections.values()) {
+    for (const ws of set) ws.send(msg)
+  }
+}
+
+export type InvalidateScope = { projectId?: string; userId?: string }
+
+export function emitInvalidate(topic: string, scope?: InvalidateScope) {
+  broadcastAll({ type: 'invalidate', topic, scope: scope ?? null })
+}
+
 export function removeConnection(ws: ServerWebSocket<{ userId: string }>) {
   const userId = ws.data.userId
   const set = connections.get(userId)

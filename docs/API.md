@@ -1,0 +1,95 @@
+# HTTP API
+
+Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific APIs split out:
+- Overview / Effort / Retro → `@docs/FEATURES.md`
+- pm-watch + GitHub webhooks → `@docs/INTEGRATIONS.md`
+- QC tickets → `@docs/QC-TICKETS.md`
+
+## Admin API (SUPER_ADMIN only)
+
+- `GET /api/admin/users` — list all users with role, blocked status, createdAt
+- `PUT /api/admin/users/:id/role` — change role to USER or ADMIN (cannot change self or to SUPER_ADMIN)
+- `PUT /api/admin/users/:id/block` — block/unblock user (deletes all sessions on block)
+- `GET /api/admin/presence` — list online user IDs
+- `GET /api/admin/logs/app` — app logs from Redis (filter: level, limit, afterId)
+- `GET /api/admin/logs/audit` — audit logs from DB (filter: userId, action, limit)
+- `DELETE /api/admin/logs/app` — clear all app logs from Redis
+- `DELETE /api/admin/logs/audit` — clear all audit logs from DB
+- `GET /api/admin/routes` — all routes metadata (method, path, auth level, category, description) with summary stats
+- `GET /api/admin/project-structure` — scans `src/`, `prisma/`, `tests/` — returns files with line counts, exports, imports, categories + directory tree
+- `GET /api/admin/env-map` — environment variables with set/unset status, required/optional, default values, consuming files
+- `GET /api/admin/test-coverage` — source files + test files mapping, coverage status (covered/partial/uncovered)
+- `GET /api/admin/dependencies` — NPM packages from package.json with version, type (runtime/dev), category, importing files
+- `GET /api/admin/migrations` — Prisma migration timeline with parsed SQL changes and date info
+- `GET /api/admin/sessions` — all active sessions with user info, online status, expiry, role breakdown
+- `GET /api/admin/agents` — list pm-watch agents with claimedBy user + event counts
+- `POST /api/admin/agents/:id/approve` — approve PENDING agent and assign to a user
+- `POST /api/admin/agents/:id/revoke` — revoke APPROVED agent (events preserved, reversible)
+- `GET /api/admin/webhook-tokens` — list webhook tokens (hashes never returned)
+- `POST /api/admin/webhook-tokens` — create token (plaintext returned **once** only)
+- `PATCH /api/admin/webhook-tokens/:id` — toggle ACTIVE/DISABLED or rename
+- `POST /api/admin/webhook-tokens/:id/revoke` — permanently revoke token
+- `GET /api/admin/webhooks/stats` — aggregate stats (24h + 7d windows): total/success/fail/auth-fail/events, perToken, perAgent
+- `GET /api/admin/webhooks/logs?status=all|ok|fail|auth&limit=N` — recent webhook request logs with token/agent relations
+
+## Extensions
+
+Toggle untuk fitur opt-in (GitHub Integration, Chat AI). Default semuanya aktif. Lihat `@docs/FEATURES.md` § Extensions.
+
+- `GET /api/admin/extensions` (ADMIN + SUPER_ADMIN) — list extension + status. Response: `{ extensions: [{ key, label, description, enabled }] }`.
+- `PUT /api/admin/extensions/:name` (ADMIN + SUPER_ADMIN) — body `{ enabled: boolean }`. Tulis `AuditLog` action `EXTENSION_TOGGLED` detail `{ name, enabled, source: 'api' }`. 400 untuk nama tak dikenal atau body non-boolean.
+- `GET /api/extensions/status` (semua user authed) — `{ enabled: { github: boolean, chat: boolean } }`. Dipakai FE untuk gating UI.
+
+Saat extension OFF:
+- `/api/admin/chat/stream` & `/api/admin/chat/sync` → 503 `{ error: 'Extension disabled', extension: 'chat' }`.
+- `/webhooks/github` → 200 `{ ok: true, skipped: true, reason: 'extension_disabled' }` (200 sengaja agar GitHub tidak auto-disable webhook).
+
+## Chat AI
+
+Admin Chat AI dengan live-context + RAG knowledge base. Lihat `@docs/CHAT-AI.md` untuk arsitektur, doc types, dan sync schedule.
+
+- `POST /api/admin/chat/stream` — SSE stream. Body: `{ messages: ChatMessage[], systemContext?: string|null }`. Events: `phase` (`{ phase, iter }`), `system` (kalau cachedContext null), `docs` (count relevan), `sources` (`[{ ref, type, entityId, title }]`), `tool_use` (`{ id, name, input }`), `tool_result` (`{ id, name, ok, result }`), `token`, `done` (full text + sources + toolCalls trace), `error`. AI dapat memanggil 5 tool read-only via Anthropic tool_use loop (max 5 iterasi); lihat `@docs/CHAT-AI.md` § Tool-calling layer.
+- `GET /api/admin/chat/sync/status` — `{ totalDocuments, lastSync, breakdown }`.
+- `POST /api/admin/chat/sync` — trigger full sync + orphan prune. Return `{ ok, synced, pruned, failedEmbeddings, duration }`.
+
+## Report History
+
+Riwayat pengiriman laporan harian disimpan di PostgreSQL (bukan Redis). Accessible oleh ADMIN + SUPER_ADMIN; delete hanya SUPER_ADMIN.
+
+- `GET /api/admin/report/send-history?page=1&limit=20&range=1m|3m|all` — paginated history. `range` default `1m`. Response: `{ history, entries, total, page, limit, range }`. Setiap entry: `{ id, sentAt, ok, message, trigger, markdown?, createdAt }`.
+- `DELETE /api/admin/report/history/:id` — hapus satu entri (SUPER_ADMIN only).
+
+## Events (Team Reminders)
+
+Team-wide events/reminders. All authenticated users can read and create. Only creator or admin can edit/delete.
+
+- `GET /api/events` — list events ordered by startsAt asc. Filters: `upcoming=true` (only future events), `limit` (default 50, max 200), `offset`. Returns `{ count, events }` with `createdBy` and `project` joined.
+- `POST /api/events` — create event. Body: `title` (required), `startsAt` (required ISO 8601), `endsAt?`, `description?`, `location?`, `projectId?` (optional link to a project).
+- `PATCH /api/events/:id` — partial update (creator or ADMIN/SUPER_ADMIN). Accepts same fields as POST. `endsAt: null` to clear.
+- `DELETE /api/events/:id` — permanent delete (creator or ADMIN/SUPER_ADMIN).
+
+## Projects + Tasks
+
+Projects and tasks are project-scoped; all write endpoints gate on `requireProjectMember`. Role hierarchy (inside a project): `OWNER > PM > MEMBER > VIEWER`. `SUPER_ADMIN` bypasses membership checks.
+
+- `GET /api/projects` — list projects visible to current user (owned or member of); counts and task stats
+- `POST /api/projects` — create (auto-adds creator as `OWNER`)
+- `GET /api/projects/:id` — full detail (members, milestones, extensions, recent tasks) + `myRole`
+- `PATCH /api/projects/:id` — update fields (OWNER/PM). Accepts `githubRepo` (normalized server-side, `null` to unlink; 409 on duplicate link)
+- `DELETE /api/projects/:id` — permanent delete with cascade (OWNER or SUPER_ADMIN). Audited.
+- Project members, milestones, extensions — usual CRUD under `/api/projects/:id/*`
+- `GET/POST /api/projects/:id/tags` — list/create per-project tags; unique by (projectId, name)
+- `PATCH/DELETE /api/tags/:id` — rename/recolor or delete (cascades to TaskTag)
+- `GET /api/tasks` — list with filters (`projectId`, `status`, `kind`, `assigneeId`, `tagId`). Response enriches each task with `actualHours`, `progressPercent`, `tags`, counts for blockedBy/blocks/checklist.
+- `POST /api/tasks` — create, accepts `startsAt`, `dueAt`, `estimateHours`, `tagIds[]`
+- `GET /api/tasks/:id` — full detail incl. tags, blockedBy, blocks, checklist, statusChanges, comments, evidence + computed `actualHours`/`progressPercent`
+- `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`). Accepts `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
+- `DELETE /api/tasks/:id` — OWNER/PM/SUPER_ADMIN
+- `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` — add-only
+- `POST /api/tasks/:id/dependencies` (body: `blockedById`) / `DELETE /api/tasks/:id/dependencies/:blockedById`
+- `POST /api/tasks/:id/checklist`, `PATCH/DELETE /api/checklist/:id`
+
+### Computed task fields (not stored)
+
+- `actualHours` = `closedAt − (startsAt ?? createdAt)` in hours, rounded to 2dp. `null` until closed.
+- `progressPercent`: 100 if `CLOSED`; else ratio of checklist.done / checklist.length if checklist non-empty; else manual `progressPercent` column value.

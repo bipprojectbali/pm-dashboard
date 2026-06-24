@@ -9,15 +9,26 @@ export interface User {
   email: string
   role: Role
   blocked: boolean
+  image?: string | null
 }
 
 export function getDefaultRoute(role: Role): string {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') return '/admin'
+  if (role === 'QC') return '/qc'
   return '/pm'
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+// Sentinel error type agar global handler bisa membedakan 401 dari error lain
+export class UnauthorizedError extends Error {
+  status = 401
+  constructor() {
+    super('Session expired')
+  }
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
+  if (res.status === 401) throw new UnauthorizedError()
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }))
     throw new Error(err.error || `HTTP ${res.status}`)
@@ -25,12 +36,17 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+// Poll session setiap 5 menit — cukup untuk deteksi expire tanpa membebani server.
+// Jika dapat 401 (session expired/deleted), query masuk error state dan
+// global handler di App.tsx akan redirect ke /login.
 export function useSession() {
   return useQuery({
     queryKey: ['auth', 'session'],
     queryFn: () => apiFetch<{ user: User | null }>('/api/auth/session'),
     retry: false,
     staleTime: 30_000,
+    refetchInterval: 10 * 60 * 1000, // poll tiap 10 menit
+    refetchIntervalInBackground: false, // jangan poll kalau tab tidak aktif
   })
 }
 
@@ -59,7 +75,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => apiFetch<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
     onSuccess: () => {
-      queryClient.setQueryData(['auth', 'session'], { user: null })
+      queryClient.removeQueries({ queryKey: ['auth', 'session'] })
       navigate({ to: '/login' })
     },
   })

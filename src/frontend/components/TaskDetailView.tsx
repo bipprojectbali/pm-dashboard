@@ -21,17 +21,16 @@ import {
   Textarea,
   TextInput,
   ThemeIcon,
-  Title,
   Tooltip,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useHotkeys } from '@mantine/hooks'
+import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import {
   TbActivity,
   TbAlertTriangle,
-  TbApps,
   TbArrowLeft,
   TbBug,
   TbCalendarEvent,
@@ -40,7 +39,7 @@ import {
   TbClock,
   TbCloudUpload,
   TbCopy,
-  TbDeviceDesktop,
+  TbEdit,
   TbLink,
   TbListCheck,
   TbLock,
@@ -50,13 +49,14 @@ import {
   TbRefresh,
   TbShieldCheck,
   TbTag,
-  TbTarget,
   TbTrash,
   TbUpload,
   TbX,
 } from 'react-icons/tb'
+import { useSession } from '@/frontend/hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { Breadcrumbs } from './shared/Breadcrumbs'
+import { UserAvatar } from './shared/UserAvatar'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -68,6 +68,7 @@ interface TaskUser {
   name: string
   email: string
   role: string
+  image?: string | null
 }
 
 interface TaskComment {
@@ -120,17 +121,6 @@ interface TagListItem {
   color: string
 }
 
-interface AwFocus {
-  focusHours: number
-  eventCount: number
-  windowStart: string
-  windowEnd: string
-  topApps: Array<{ app: string; seconds: number }>
-  topTitles: Array<{ app: string; title: string; seconds: number }>
-  matchKeywords: string[]
-  matchedHours: number | null
-}
-
 interface TaskDetail {
   id: string
   projectId: string
@@ -142,6 +132,8 @@ interface TaskDetail {
   route: string | null
   reporter: TaskUser
   assignee: TaskUser | null
+  phaseId: string | null
+  phase: { id: string; title: string } | null
   startsAt: string | null
   dueAt: string | null
   estimateHours: number | null
@@ -158,7 +150,6 @@ interface TaskDetail {
   blocks: Array<{ id: string; taskId: string; task: DependencyTask }>
   checklist: ChecklistItem[]
   statusChanges: StatusChange[]
-  awFocus: AwFocus | null
 }
 
 interface ProjectDetail {
@@ -240,10 +231,35 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   const myRole = projectQ.data?.myRole ?? null
   const canWrite = myRole !== null && myRole !== 'VIEWER'
 
+  const phasesQ = useQuery({
+    queryKey: ['phases', task?.projectId],
+    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${task?.projectId}/phases`),
+    enabled: !!task?.projectId,
+  })
+  const session = useSession()
+  const sessionRole = session.data?.user?.role
+  const canDelete = sessionRole === 'SUPER_ADMIN' || myRole === 'OWNER' || myRole === 'PM'
+
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [draftDescription, setDraftDescription] = useState('')
+
+  useEffect(() => {
+    if (!editingTitle && task) setDraftTitle(task.title)
+  }, [editingTitle, task])
+  useEffect(() => {
+    if (!editingDescription && task) setDraftDescription(task.description ?? '')
+  }, [editingDescription, task])
+
   const update = useMutation({
     mutationFn: (
       body: Partial<Pick<TaskDetail, 'status' | 'priority'>> & {
+        title?: string
+        description?: string
+        route?: string | null
         assigneeId?: string | null
+        phaseId?: string | null
         startsAt?: string | null
         dueAt?: string | null
         estimateHours?: number | null
@@ -256,13 +272,74 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['task', taskId] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
       notifySuccess({ message: 'Task diperbarui.' })
+      if ('title' in variables) setEditingTitle(false)
+      if ('description' in variables) setEditingDescription(false)
     },
     onError: (err) => notifyError(err),
   })
+
+  const deleteM = useMutation({
+    mutationFn: (reason: string) =>
+      api<{ ok: true }>(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      notifySuccess({ message: 'Task dipindahkan ke Trash.' })
+      onBack()
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const confirmDelete = () => {
+    modals.open({
+      title: 'Hapus task?',
+      children: (
+        <DeleteReasonModal
+          taskTitle={task?.title ?? ''}
+          onConfirm={(reason) => {
+            deleteM.mutate(reason)
+            modals.closeAll()
+          }}
+          onCancel={() => modals.closeAll()}
+        />
+      ),
+    })
+  }
+
+  const saveTitle = () => {
+    if (!task) return
+    const title = draftTitle.trim()
+    if (!title) {
+      notifyError({ message: 'Title wajib diisi.' })
+      return
+    }
+    if (title.length > 500) {
+      notifyError({ message: 'Title maksimum 500 karakter.' })
+      return
+    }
+    if (title === task.title) {
+      setEditingTitle(false)
+      return
+    }
+    update.mutate({ title })
+  }
+
+  const saveDescription = () => {
+    if (!task) return
+    const description = draftDescription
+    if (description === (task.description ?? '')) {
+      setEditingDescription(false)
+      return
+    }
+    update.mutate({ description })
+  }
 
   const tagsQ = useQuery({
     queryKey: ['tags', task?.projectId],
@@ -383,13 +460,21 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
 
   useHotkeys([['Escape', onBack]])
 
+  const isOverdue = task?.dueAt && task.status !== 'CLOSED' && new Date(task.dueAt) < new Date()
+
   return (
-    <Stack gap="md">
-      <Group justify="space-between" wrap="wrap" gap="sm">
+    <Stack gap={0}>
+      {/* ── Top bar ── */}
+      <Group
+        justify="space-between"
+        px="md"
+        py="sm"
+        style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+      >
         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Tooltip label="Kembali ke daftar task (Esc)">
-            <ActionIcon variant="subtle" size="lg" onClick={onBack} aria-label="Back">
-              <TbArrowLeft size={18} />
+          <Tooltip label="Kembali (Esc)">
+            <ActionIcon variant="subtle" size="md" onClick={onBack}>
+              <TbArrowLeft size={16} />
             </ActionIcon>
           </Tooltip>
           <Breadcrumbs
@@ -402,71 +487,67 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
           {task && (
             <CopyButton value={task.id} timeout={1500}>
               {({ copied, copy }) => (
-                <Tooltip label={copied ? 'ID disalin' : 'Salin task ID'}>
-                  <ActionIcon variant="subtle" size="sm" onClick={copy} color={copied ? 'teal' : 'gray'}>
-                    {copied ? <TbChecks size={14} /> : <TbCopy size={14} />}
+                <Tooltip label={copied ? 'Disalin!' : 'Salin ID'}>
+                  <ActionIcon variant="subtle" size="sm" color={copied ? 'teal' : 'gray'} onClick={copy}>
+                    {copied ? <TbChecks size={13} /> : <TbCopy size={13} />}
                   </ActionIcon>
                 </Tooltip>
               )}
             </CopyButton>
           )}
         </Group>
-        <Group gap="xs">
+        <Group gap={6}>
           {taskQ.isFetching && !taskQ.isLoading && (
-            <Badge variant="dot" color="blue" size="sm">
-              Sinkronisasi…
+            <Badge variant="dot" color="blue" size="xs">
+              Sync…
             </Badge>
           )}
-          <Tooltip label="Refresh data">
-            <ActionIcon variant="light" size="lg" onClick={() => taskQ.refetch()} loading={taskQ.isFetching}>
-              <TbRefresh size={16} />
+          <Tooltip label="Refresh">
+            <ActionIcon variant="subtle" size="md" onClick={() => taskQ.refetch()} loading={taskQ.isFetching}>
+              <TbRefresh size={15} />
             </ActionIcon>
           </Tooltip>
+          {task && canDelete && (
+            <Tooltip label="Hapus task">
+              <ActionIcon variant="subtle" color="red" size="md" onClick={confirmDelete} loading={deleteM.isPending}>
+                <TbTrash size={15} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 
+      {/* ── States ── */}
       {taskQ.isLoading ? (
-        <Stack gap="md">
-          <Card withBorder padding="md" radius="md">
-            <Group gap="sm" align="flex-start">
-              <Skeleton height={48} width={48} radius="md" />
-              <Stack gap={6} style={{ flex: 1 }}>
-                <Skeleton height={24} width="50%" />
-                <Skeleton height={14} width="70%" />
-                <Group gap={6}>
-                  <Skeleton height={18} width={50} radius="xl" />
-                  <Skeleton height={18} width={70} radius="xl" />
-                  <Skeleton height={18} width={60} radius="xl" />
-                </Group>
-              </Stack>
-            </Group>
-          </Card>
-          <Card withBorder padding="md" radius="md">
-            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
-              <Skeleton height={44} />
-              <Skeleton height={44} />
-              <Skeleton height={44} />
-              <Skeleton height={44} />
-            </SimpleGrid>
-          </Card>
-          <Card withBorder padding="md" radius="md">
-            <Stack gap="sm">
-              <Skeleton height={14} width="20%" />
-              <Skeleton height={80} />
+        <Stack gap="md" p="md">
+          <Group gap="sm" align="flex-start">
+            <Skeleton height={44} width={44} radius="md" />
+            <Stack gap={6} style={{ flex: 1 }}>
+              <Skeleton height={22} width="55%" />
+              <Skeleton height={13} width="40%" />
+              <Group gap={6}>
+                <Skeleton height={18} width={52} radius="xl" />
+                <Skeleton height={18} width={68} radius="xl" />
+              </Group>
             </Stack>
-          </Card>
+          </Group>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+            {(['sk-a', 'sk-b', 'sk-c', 'sk-d'] as const).map((id, i) => (
+              <Skeleton key={id} height={[80, 80, 120, 120][i]} radius="md" />
+            ))}
+          </SimpleGrid>
         </Stack>
       ) : taskQ.error ? (
-        <Alert color="red" icon={<TbAlertTriangle size={18} />} title="Gagal memuat task" radius="md">
-          <Stack gap="sm">
+        <Alert color="red" icon={<TbAlertTriangle size={16} />} title="Gagal memuat" m="md" radius="md">
+          <Stack gap="xs">
             <Text size="sm">{(taskQ.error as Error).message}</Text>
-            <Group>
+            <Group gap="xs">
               <Button
                 size="xs"
                 variant="light"
                 color="red"
+                leftSection={<TbRefresh size={13} />}
                 onClick={() => taskQ.refetch()}
-                leftSection={<TbRefresh size={14} />}
               >
                 Coba lagi
               </Button>
@@ -477,142 +558,296 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
           </Stack>
         </Alert>
       ) : !task ? (
-        <Alert color="yellow" icon={<TbAlertTriangle size={18} />} radius="md">
+        <Alert color="yellow" icon={<TbAlertTriangle size={16} />} m="md" radius="md">
           Task tidak ditemukan atau kamu tidak punya akses.
         </Alert>
       ) : (
-        <Stack gap="md">
-          <Card withBorder padding="md" radius="md">
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing={0} style={{ minHeight: 0 }}>
+          {/* ── Left: main content ── */}
+          <Stack gap="md" p="md" style={{ borderRight: '1px solid var(--mantine-color-default-border)', minWidth: 0 }}>
+            {/* Title + kind icon */}
             <Group gap="sm" align="flex-start" wrap="nowrap">
-              <ThemeIcon variant="light" color={KIND_COLOR[task.kind]} size="xl" radius="md">
+              <ThemeIcon
+                variant="light"
+                color={KIND_COLOR[task.kind]}
+                size={40}
+                radius="md"
+                style={{ flexShrink: 0, marginTop: 2 }}
+              >
                 {task.kind === 'BUG' ? (
-                  <TbBug size={22} />
+                  <TbBug size={20} />
                 ) : task.kind === 'QC' ? (
-                  <TbShieldCheck size={22} />
+                  <TbShieldCheck size={20} />
                 ) : (
-                  <TbListCheck size={22} />
+                  <TbListCheck size={20} />
                 )}
               </ThemeIcon>
               <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-                <Title order={2} style={{ lineHeight: 1.2 }}>
-                  {task.title}
-                </Title>
-                <Text size="xs" c="dimmed">
-                  #{task.id.slice(0, 8)} · {task.project.name} · dilaporkan oleh {task.reporter.name} ·{' '}
-                  {new Date(task.createdAt).toLocaleString()}
-                </Text>
-                <Group gap={6} wrap="wrap" mt={2}>
-                  <Badge color={KIND_COLOR[task.kind]} variant="light" size="sm">
+                {editingTitle ? (
+                  <Group gap="xs" wrap="nowrap" align="flex-start">
+                    <TextInput
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.currentTarget.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveTitle()
+                        } else if (e.key === 'Escape') setEditingTitle(false)
+                      }}
+                      size="sm"
+                      maxLength={500}
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                    <ActionIcon variant="light" color="blue" size="sm" onClick={saveTitle} loading={update.isPending}>
+                      <TbCheck size={14} />
+                    </ActionIcon>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => setEditingTitle(false)}
+                      disabled={update.isPending}
+                    >
+                      <TbX size={14} />
+                    </ActionIcon>
+                  </Group>
+                ) : (
+                  <Group gap={6} wrap="nowrap" align="flex-start">
+                    <Text fw={700} size="lg" style={{ lineHeight: 1.3, flex: 1, wordBreak: 'break-word' }}>
+                      {task.title}
+                    </Text>
+                    {canWrite && (
+                      <Tooltip label="Edit judul">
+                        <ActionIcon
+                          variant="subtle"
+                          size="xs"
+                          color="gray"
+                          onClick={() => setEditingTitle(true)}
+                          style={{ marginTop: 3, flexShrink: 0 }}
+                        >
+                          <TbEdit size={12} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
+                )}
+                <Group gap={4} wrap="wrap">
+                  <Badge color={KIND_COLOR[task.kind]} variant="light" size="xs">
                     {task.kind}
                   </Badge>
-                  <Badge color={STATUS_COLOR[task.status]} variant="light" size="sm">
-                    {task.status.replace('_', ' ')}
+                  <Badge color={STATUS_COLOR[task.status]} variant="filled" size="xs">
+                    {task.status.replace(/_/g, ' ')}
                   </Badge>
-                  <Badge color={PRIORITY_COLOR[task.priority]} variant="dot" size="sm">
+                  <Badge
+                    color={PRIORITY_COLOR[task.priority]}
+                    variant="light"
+                    size="xs"
+                    leftSection={
+                      <div
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: `var(--mantine-color-${PRIORITY_COLOR[task.priority]}-6)`,
+                        }}
+                      />
+                    }
+                  >
                     {task.priority}
                   </Badge>
-                  {task.assignee && (
-                    <Badge color="blue" variant="outline" size="sm">
-                      @ {task.assignee.name}
+                  {isOverdue && (
+                    <Badge color="red" variant="filled" size="xs" leftSection={<TbAlertTriangle size={9} />}>
+                      Overdue
+                    </Badge>
+                  )}
+                  {task.blockedBy.length > 0 && task.status !== 'CLOSED' && (
+                    <Badge color="orange" variant="light" size="xs" leftSection={<TbLock size={9} />}>
+                      Blocked
                     </Badge>
                   )}
                   {task.route && (
-                    <Badge color="gray" variant="outline" size="sm" leftSection={<TbLink size={10} />}>
+                    <Badge color="gray" variant="light" size="xs" leftSection={<TbLink size={9} />}>
                       {task.route}
                     </Badge>
                   )}
                   {task.tags.map((t) => (
-                    <Badge
-                      key={t.tagId}
-                      color={t.tag.color}
-                      variant="light"
-                      size="sm"
-                      leftSection={<TbTag size={10} />}
-                    >
+                    <Badge key={t.tagId} color={t.tag.color} variant="dot" size="xs">
                       {t.tag.name}
                     </Badge>
                   ))}
-                  {task.blockedBy.length > 0 && task.status !== 'CLOSED' && (
-                    <Tooltip label={`Blocked by ${task.blockedBy.length} task(s)`}>
-                      <Badge color="gray" variant="filled" size="sm" leftSection={<TbLock size={10} />}>
-                        blocked
-                      </Badge>
-                    </Tooltip>
-                  )}
                 </Group>
+                <Text size="xs" c="dimmed">
+                  #{task.id.slice(0, 8)} · {task.project.name} · {task.reporter.name} ·{' '}
+                  {new Date(task.createdAt).toLocaleDateString('id-ID')}
+                </Text>
               </Stack>
             </Group>
-          </Card>
 
-          <HoursProgressCard task={task} />
+            <Divider />
 
-          {task.awFocus && <AwFocusCard focus={task.awFocus} task={task} />}
-
-          {canWrite && (
-            <Card withBorder padding="md" radius="md">
-              <Stack gap="sm">
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-                  Planning
+            {/* Description */}
+            <Stack gap={6}>
+              <Group justify="space-between">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Deskripsi
                 </Text>
-                <Group grow align="flex-end">
-                  <DateInput
-                    label="Start date"
-                    placeholder="Optional"
-                    size="sm"
-                    clearable
-                    leftSection={<TbCalendarEvent size={14} />}
-                    value={task.startsAt ? new Date(task.startsAt) : null}
-                    onChange={(v) =>
-                      update.mutate({
-                        startsAt: v ? new Date(v as unknown as string).toISOString() : null,
-                      })
-                    }
+                {canWrite && !editingDescription && (
+                  <ActionIcon variant="subtle" size="xs" color="gray" onClick={() => setEditingDescription(true)}>
+                    <TbEdit size={12} />
+                  </ActionIcon>
+                )}
+              </Group>
+              {editingDescription ? (
+                <Stack gap="xs">
+                  <Textarea
+                    value={draftDescription}
+                    onChange={(e) => setDraftDescription(e.currentTarget.value)}
+                    autosize
+                    minRows={3}
+                    placeholder="Deskripsi, steps to reproduce, expected vs actual…"
+                    autoFocus
                   />
-                  <DateInput
-                    label="Due date"
-                    placeholder="Optional"
-                    size="sm"
-                    clearable
-                    leftSection={<TbCalendarEvent size={14} />}
-                    value={task.dueAt ? new Date(task.dueAt) : null}
-                    onChange={(v) =>
-                      update.mutate({
-                        dueAt: v ? new Date(v as unknown as string).toISOString() : null,
-                      })
-                    }
-                  />
-                  <EstimateField value={task.estimateHours} onCommit={(v) => update.mutate({ estimateHours: v })} />
-                </Group>
-                <TagsPicker
-                  projectId={task.projectId}
-                  currentTagIds={task.tags.map((t) => t.tagId)}
-                  availableTags={tagsQ.data?.tags ?? []}
-                  onChange={(tagIds) => update.mutate({ tagIds })}
-                  onCreate={(name) => createTag.mutate(name)}
-                  creating={createTag.isPending}
-                />
-              </Stack>
-            </Card>
-          )}
-
-          <Card withBorder padding="md" radius="md">
-            <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={6}>
-              Description
-            </Text>
-            <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {task.description || (
-                <Text span c="dimmed" fs="italic">
-                  No description
+                  <Group justify="flex-end" gap="xs">
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      leftSection={<TbX size={12} />}
+                      onClick={() => setEditingDescription(false)}
+                      disabled={update.isPending}
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      size="xs"
+                      leftSection={<TbCheck size={12} />}
+                      onClick={saveDescription}
+                      loading={update.isPending}
+                    >
+                      Simpan
+                    </Button>
+                  </Group>
+                </Stack>
+              ) : (
+                <Text
+                  size="sm"
+                  c={task.description ? undefined : 'dimmed'}
+                  fs={task.description ? undefined : 'italic'}
+                  style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+                >
+                  {task.description || 'Belum ada deskripsi'}
                 </Text>
               )}
-            </Text>
-          </Card>
+            </Stack>
 
-          {canWrite && (
-            <Card withBorder padding="md" radius="md">
-              <Stack gap="sm">
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-                  Actions
+            {/* Tabs */}
+            <Card withBorder radius="md" padding={0} style={{ overflow: 'hidden' }}>
+              <Tabs
+                defaultValue="checklist"
+                keepMounted={false}
+                styles={{
+                  list: { paddingInline: 8, paddingTop: 4, background: 'var(--mantine-color-default-hover)' },
+                  tab: { fontWeight: 500, fontSize: 'var(--mantine-font-size-xs)' },
+                }}
+              >
+                <Tabs.List>
+                  <Tabs.Tab
+                    value="checklist"
+                    leftSection={<TbListCheck size={13} />}
+                    rightSection={
+                      task.checklist.length ? (
+                        <TabCount
+                          value={`${task.checklist.filter((c) => c.done).length}/${task.checklist.length}`}
+                          color={task.checklist.every((c) => c.done) && task.checklist.length > 0 ? 'green' : 'gray'}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    Checklist
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="comments"
+                    leftSection={<TbMessage size={13} />}
+                    rightSection={task.comments.length ? <TabCount value={task.comments.length} /> : undefined}
+                  >
+                    Komentar
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="evidence"
+                    leftSection={<TbPaperclip size={13} />}
+                    rightSection={task.evidence.length ? <TabCount value={task.evidence.length} /> : undefined}
+                  >
+                    Evidence
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="dependencies"
+                    leftSection={<TbLock size={13} />}
+                    rightSection={
+                      task.blockedBy.length + task.blocks.length > 0 ? (
+                        <TabCount
+                          value={`${task.blockedBy.length}/${task.blocks.length}`}
+                          color={task.blockedBy.length > 0 ? 'orange' : 'gray'}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    Deps
+                  </Tabs.Tab>
+                  <Tabs.Tab value="activity" leftSection={<TbActivity size={13} />}>
+                    Aktivitas
+                  </Tabs.Tab>
+                </Tabs.List>
+                <Tabs.Panel value="checklist" p="sm">
+                  <ChecklistSection
+                    items={task.checklist}
+                    canWrite={canWrite}
+                    onToggle={(id, done) => updateChecklist.mutate({ id, body: { done } })}
+                    onAdd={(title) => addChecklist.mutate(title)}
+                    onRemove={(id) => removeChecklist.mutate(id)}
+                    adding={addChecklist.isPending}
+                  />
+                </Tabs.Panel>
+                <Tabs.Panel value="comments" p="sm">
+                  <CommentsSection
+                    comments={task.comments}
+                    canWrite={canWrite}
+                    onSubmit={(body) => addComment.mutate(body)}
+                    loading={addComment.isPending}
+                    error={addComment.error ? (addComment.error as Error).message : undefined}
+                  />
+                </Tabs.Panel>
+                <Tabs.Panel value="evidence" p="sm">
+                  <EvidenceSection
+                    taskId={task.id}
+                    items={task.evidence}
+                    canWrite={canWrite}
+                    onSubmit={(body) => addEvidence.mutate(body)}
+                    loading={addEvidence.isPending}
+                    error={addEvidence.error ? (addEvidence.error as Error).message : undefined}
+                  />
+                </Tabs.Panel>
+                <Tabs.Panel value="dependencies" p="sm">
+                  <DependenciesSection
+                    task={task}
+                    projectTasks={projectTasksQ.data?.tasks ?? []}
+                    canWrite={canWrite}
+                    onAdd={(blockedById) => addDependency.mutate(blockedById)}
+                    onRemove={(blockedById) => removeDependency.mutate(blockedById)}
+                  />
+                </Tabs.Panel>
+                <Tabs.Panel value="activity" p="sm">
+                  <ActivityTimelineSection task={task} />
+                </Tabs.Panel>
+              </Tabs>
+            </Card>
+          </Stack>
+
+          {/* ── Right: sidebar ── */}
+          <Stack gap="md" p="md" style={{ minWidth: 0 }}>
+            {/* Status transitions */}
+            {canWrite && allowedTransitions(task.status, task.kind).length > 0 && (
+              <Stack gap={6}>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Ubah Status
                 </Text>
                 <Group gap="xs" wrap="wrap">
                   {allowedTransitions(task.status, task.kind).map((s) => (
@@ -623,160 +858,229 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
                       color={STATUS_COLOR[s]}
                       onClick={() => update.mutate({ status: s })}
                       loading={update.isPending}
+                      leftSection={
+                        <div
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: `var(--mantine-color-${STATUS_COLOR[s]}-6)`,
+                          }}
+                        />
+                      }
                     >
-                      → {s.replace('_', ' ')}
+                      {s.replace(/_/g, ' ')}
                     </Button>
                   ))}
-                  {allowedTransitions(task.status, task.kind).length === 0 ? (
-                    <Text size="xs" c="dimmed">
-                      No status transitions available
-                    </Text>
-                  ) : null}
                 </Group>
-                <Group grow>
-                  <Select
-                    label="Priority"
-                    size="sm"
-                    data={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
-                    value={task.priority}
-                    onChange={(v) => v && update.mutate({ priority: v as TaskPriority })}
-                  />
-                  <Select
-                    label="Assignee"
-                    size="sm"
-                    placeholder="Unassigned"
-                    clearable
-                    data={
-                      projectQ.data?.project.members.map((m) => ({
-                        value: m.user.id,
-                        label: `${m.user.name} (${m.role})`,
-                      })) ?? []
-                    }
-                    value={task.assignee?.id ?? null}
-                    onChange={(v) => update.mutate({ assigneeId: v })}
-                  />
-                </Group>
-                {update.error ? (
+                {update.error && (
                   <Text size="xs" c="red">
                     {(update.error as Error).message}
                   </Text>
-                ) : null}
+                )}
               </Stack>
-            </Card>
-          )}
+            )}
 
-          <Card withBorder radius="md" padding={0} style={{ overflow: 'hidden' }}>
-            <Tabs
-              defaultValue="checklist"
-              keepMounted={false}
-              styles={{
-                list: {
-                  paddingInline: 'var(--mantine-spacing-sm)',
-                  paddingTop: 6,
-                  background: 'var(--mantine-color-default-hover)',
-                },
-                tab: {
-                  fontWeight: 500,
-                },
-              }}
-            >
-              <Tabs.List>
-                <Tabs.Tab
-                  value="checklist"
-                  leftSection={<TbListCheck size={14} />}
-                  rightSection={
-                    task.checklist.length ? (
-                      <TabCount
-                        value={`${task.checklist.filter((c) => c.done).length}/${task.checklist.length}`}
-                        color={task.checklist.every((c) => c.done) && task.checklist.length > 0 ? 'green' : 'gray'}
-                      />
+            {/* Assignee + Priority */}
+            {canWrite && (
+              <Stack gap="sm">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Pengaturan
+                </Text>
+                <Select
+                  label="Prioritas"
+                  size="xs"
+                  data={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
+                  value={task.priority}
+                  onChange={(v) => v && update.mutate({ priority: v as TaskPriority })}
+                />
+                <Select
+                  label="Assignee"
+                  size="xs"
+                  placeholder="Tidak ada"
+                  clearable
+                  data={
+                    projectQ.data?.project.members.map((m) => ({
+                      value: m.user.id,
+                      label: `${m.user.name} · ${m.role}`,
+                    })) ?? []
+                  }
+                  value={task.assignee?.id ?? null}
+                  onChange={(v) => update.mutate({ assigneeId: v })}
+                  leftSection={
+                    task.assignee ? (
+                      <UserAvatar name={task.assignee.name} image={task.assignee.image} size={16} color="blue" />
                     ) : undefined
                   }
-                >
-                  Checklist
-                </Tabs.Tab>
-                <Tabs.Tab
-                  value="dependencies"
-                  leftSection={<TbLock size={14} />}
-                  rightSection={
-                    task.blockedBy.length + task.blocks.length > 0 ? (
-                      <TabCount
-                        value={`${task.blockedBy.length}/${task.blocks.length}`}
-                        color={task.blockedBy.length > 0 ? 'orange' : 'gray'}
-                      />
-                    ) : undefined
-                  }
-                >
-                  Dependencies
-                </Tabs.Tab>
-                <Tabs.Tab
-                  value="comments"
-                  leftSection={<TbMessage size={14} />}
-                  rightSection={task.comments.length ? <TabCount value={task.comments.length} /> : undefined}
-                >
-                  Comments
-                </Tabs.Tab>
-                <Tabs.Tab
-                  value="evidence"
-                  leftSection={<TbPaperclip size={14} />}
-                  rightSection={task.evidence.length ? <TabCount value={task.evidence.length} /> : undefined}
-                >
-                  Evidence
-                </Tabs.Tab>
-                <Tabs.Tab value="activity" leftSection={<TbActivity size={14} />}>
-                  Activity
-                </Tabs.Tab>
-              </Tabs.List>
-
-              <Tabs.Panel value="checklist" p="md">
-                <ChecklistSection
-                  items={task.checklist}
-                  canWrite={canWrite}
-                  onToggle={(id, done) => updateChecklist.mutate({ id, body: { done } })}
-                  onAdd={(title) => addChecklist.mutate(title)}
-                  onRemove={(id) => removeChecklist.mutate(id)}
-                  adding={addChecklist.isPending}
                 />
-              </Tabs.Panel>
+                {(phasesQ.data?.phases.length ?? 0) > 0 && (
+                  <Select
+                    label="Fase"
+                    size="xs"
+                    placeholder="Tanpa fase"
+                    clearable
+                    data={(phasesQ.data?.phases ?? []).map((p) => ({ value: p.id, label: p.title }))}
+                    value={task.phaseId ?? null}
+                    onChange={(v) => update.mutate({ phaseId: v })}
+                  />
+                )}
+              </Stack>
+            )}
 
-              <Tabs.Panel value="dependencies" p="md">
-                <DependenciesSection
-                  task={task}
-                  projectTasks={projectTasksQ.data?.tasks ?? []}
-                  canWrite={canWrite}
-                  onAdd={(blockedById) => addDependency.mutate(blockedById)}
-                  onRemove={(blockedById) => removeDependency.mutate(blockedById)}
+            {/* Reporter + Assignee display */}
+            <Stack gap={6}>
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                People
+              </Text>
+              <Group gap="xs" wrap="nowrap">
+                <UserAvatar name={task.reporter.name} image={task.reporter.image} size={26} color="gray" />
+                <Stack gap={0}>
+                  <Text size="xs" fw={500}>
+                    {task.reporter.name}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Reporter
+                  </Text>
+                </Stack>
+              </Group>
+              {task.assignee && (
+                <Group gap="xs" wrap="nowrap">
+                  <UserAvatar name={task.assignee.name} image={task.assignee.image} size={26} color="blue" />
+                  <Stack gap={0}>
+                    <Text size="xs" fw={500}>
+                      {task.assignee.name}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Assignee
+                    </Text>
+                  </Stack>
+                </Group>
+              )}
+            </Stack>
+
+            <Divider />
+
+            {/* Dates + Estimate */}
+            <Stack gap="sm">
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                Planning
+              </Text>
+              {canWrite ? (
+                <Stack gap="xs">
+                  <DateInput
+                    highlightToday
+                    label="Mulai"
+                    placeholder="Opsional"
+                    size="xs"
+                    clearable
+                    leftSection={<TbCalendarEvent size={13} />}
+                    value={task.startsAt ? new Date(task.startsAt) : null}
+                    onChange={(v) =>
+                      update.mutate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })
+                    }
+                  />
+                  <DateInput
+                    highlightToday
+                    label="Tenggat"
+                    placeholder="Opsional"
+                    size="xs"
+                    clearable
+                    leftSection={<TbCalendarEvent size={13} />}
+                    value={task.dueAt ? new Date(task.dueAt) : null}
+                    onChange={(v) =>
+                      update.mutate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })
+                    }
+                  />
+                  <EstimateField value={task.estimateHours} onCommit={(v) => update.mutate({ estimateHours: v })} />
+                </Stack>
+              ) : (
+                <Stack gap={4}>
+                  {task.startsAt && (
+                    <Group gap={6}>
+                      <TbCalendarEvent size={13} />
+                      <Text size="xs">{new Date(task.startsAt).toLocaleDateString('id-ID')}</Text>
+                      <Text size="xs" c="dimmed">
+                        mulai
+                      </Text>
+                    </Group>
+                  )}
+                  {task.dueAt && (
+                    <Group gap={6}>
+                      <TbCalendarEvent size={13} />
+                      <Text size="xs" c={isOverdue ? 'red' : undefined}>
+                        {new Date(task.dueAt).toLocaleDateString('id-ID')}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        tenggat
+                      </Text>
+                    </Group>
+                  )}
+                  {!task.startsAt && !task.dueAt && (
+                    <Text size="xs" c="dimmed" fs="italic">
+                      Belum ada jadwal
+                    </Text>
+                  )}
+                </Stack>
+              )}
+            </Stack>
+
+            {/* Tags */}
+            {canWrite && (
+              <Stack gap={6}>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                  Tags
+                </Text>
+                <TagsPicker
+                  projectId={task.projectId}
+                  currentTagIds={task.tags.map((t) => t.tagId)}
+                  availableTags={tagsQ.data?.tags ?? []}
+                  onChange={(tagIds) => update.mutate({ tagIds })}
+                  onCreate={(name) => createTag.mutate(name)}
+                  creating={createTag.isPending}
                 />
-              </Tabs.Panel>
+              </Stack>
+            )}
 
-              <Tabs.Panel value="comments" p="md">
-                <CommentsSection
-                  comments={task.comments}
-                  canWrite={canWrite}
-                  onSubmit={(body) => addComment.mutate(body)}
-                  loading={addComment.isPending}
-                  error={addComment.error ? (addComment.error as Error).message : undefined}
-                />
-              </Tabs.Panel>
+            <Divider />
 
-              <Tabs.Panel value="evidence" p="md">
-                <EvidenceSection
-                  taskId={task.id}
-                  items={task.evidence}
-                  canWrite={canWrite}
-                  onSubmit={(body) => addEvidence.mutate(body)}
-                  loading={addEvidence.isPending}
-                  error={addEvidence.error ? (addEvidence.error as Error).message : undefined}
-                />
-              </Tabs.Panel>
+            {/* Hours + Progress */}
+            <HoursProgressCard task={task} />
 
-              <Tabs.Panel value="activity" p="md">
-                <ActivityTimelineSection task={task} />
-              </Tabs.Panel>
-            </Tabs>
-          </Card>
-        </Stack>
+          </Stack>
+        </SimpleGrid>
       )}
+    </Stack>
+  )
+}
+
+function DeleteReasonModal({
+  taskTitle,
+  onConfirm,
+  onCancel,
+}: {
+  taskTitle: string
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  return (
+    <Stack gap="sm">
+      <Text size="sm">"{taskTitle}" akan dipindahkan ke Trash. Bisa di-restore dalam 30 hari.</Text>
+      <TextInput
+        placeholder="Tulis alasan penghapusan..."
+        value={reason}
+        onChange={(e) => setReason(e.currentTarget.value)}
+        data-autofocus
+        autoFocus
+      />
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" color="gray" size="xs" onClick={onCancel}>
+          Batal
+        </Button>
+        <Button color="red" size="xs" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>
+          Hapus
+        </Button>
+      </Group>
     </Stack>
   )
 }
@@ -817,14 +1121,17 @@ function CommentsSection({
       ) : (
         comments.map((c) => (
           <Card key={c.id} withBorder padding="sm" radius="sm">
-            <Group justify="space-between" mb={4}>
-              <Text size="xs" fw={600}>
-                {c.author.name}{' '}
+            <Group justify="space-between" mb={4} wrap="nowrap">
+              <Group gap="xs" wrap="nowrap">
+                <UserAvatar name={c.author.name} image={c.author.image} size={22} color="blue" />
+                <Text size="xs" fw={600}>
+                  {c.author.name}
+                </Text>
                 <Badge size="xs" variant="light">
                   {c.authorTag}
                 </Badge>
-              </Text>
-              <Text size="xs" c="dimmed">
+              </Group>
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                 {new Date(c.createdAt).toLocaleString()}
               </Text>
             </Group>
@@ -1150,146 +1457,6 @@ function formatHoursMinutes(hours: number): string {
   const h = Math.floor(hours)
   const m = Math.round((hours - h) * 60)
   return m === 0 ? `${h}h` : `${h}h ${m}m`
-}
-
-function AwFocusCard({ focus, task }: { focus: AwFocus; task: TaskDetail }) {
-  const matchRatio =
-    focus.matchedHours != null && focus.focusHours > 0
-      ? Math.min(100, Math.round((focus.matchedHours / focus.focusHours) * 100))
-      : null
-  const windowLabel = `${new Date(focus.windowStart).toLocaleDateString()} → ${
-    task.closedAt ? new Date(focus.windowEnd).toLocaleDateString() : 'now'
-  }`
-
-  return (
-    <Card withBorder padding="sm" radius="md">
-      <Stack gap="xs">
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="xs">
-            <TbDeviceDesktop size={14} />
-            <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-              ActivityWatch focus
-            </Text>
-          </Group>
-          <Tooltip
-            label={`From ${new Date(focus.windowStart).toLocaleString()} to ${new Date(focus.windowEnd).toLocaleString()}`}
-          >
-            <Text size="xs" c="dimmed">
-              {windowLabel}
-            </Text>
-          </Tooltip>
-        </Group>
-
-        {focus.eventCount === 0 ? (
-          <Text size="xs" c="dimmed">
-            No tracked activity in this window yet.
-          </Text>
-        ) : (
-          <>
-            <Group gap="xl" wrap="wrap">
-              <div>
-                <Text size="xs" c="dimmed">
-                  Focus time
-                </Text>
-                <Text fw={600}>{formatHoursMinutes(focus.focusHours)}</Text>
-              </div>
-              {focus.matchedHours != null && (
-                <div>
-                  <Text size="xs" c="dimmed">
-                    <TbTarget size={10} style={{ marginRight: 4 }} />
-                    On-task (keyword match)
-                  </Text>
-                  <Text fw={600} c={matchRatio != null && matchRatio >= 30 ? 'green' : undefined}>
-                    {formatHoursMinutes(focus.matchedHours)}
-                    {matchRatio != null ? ` · ${matchRatio}%` : ''}
-                  </Text>
-                </div>
-              )}
-              <div>
-                <Text size="xs" c="dimmed">
-                  Events
-                </Text>
-                <Text fw={600}>{focus.eventCount.toLocaleString()}</Text>
-              </div>
-              {task.estimateHours != null && focus.focusHours > 0 && (
-                <div>
-                  <Text size="xs" c="dimmed">
-                    vs estimate
-                  </Text>
-                  <Text fw={600} c={focus.focusHours > task.estimateHours ? 'red' : 'green'}>
-                    {focus.focusHours > task.estimateHours ? '+' : ''}
-                    {(focus.focusHours - task.estimateHours).toFixed(1)}h
-                  </Text>
-                </div>
-              )}
-            </Group>
-
-            {focus.matchKeywords.length > 0 && (
-              <Group gap={4} wrap="wrap">
-                <Text size="xs" c="dimmed">
-                  Matching:
-                </Text>
-                {focus.matchKeywords.slice(0, 8).map((k) => (
-                  <Badge key={k} size="xs" variant="dot" color="teal">
-                    {k}
-                  </Badge>
-                ))}
-              </Group>
-            )}
-
-            {focus.topApps.length > 0 && (
-              <div>
-                <Group gap="xs" mb={4}>
-                  <TbApps size={12} />
-                  <Text size="xs" c="dimmed" fw={500}>
-                    Top apps
-                  </Text>
-                </Group>
-                <Stack gap={2}>
-                  {focus.topApps.slice(0, 5).map((a) => {
-                    const pct = focus.focusHours > 0 ? Math.round((a.seconds / 3600 / focus.focusHours) * 100) : 0
-                    return (
-                      <Group key={a.app} gap="xs" wrap="nowrap" justify="space-between">
-                        <Text size="xs" truncate style={{ flex: 1, minWidth: 0 }}>
-                          {a.app}
-                        </Text>
-                        <Text size="xs" c="dimmed" style={{ minWidth: 90, textAlign: 'right' }}>
-                          {formatHoursMinutes(a.seconds / 3600)} · {pct}%
-                        </Text>
-                      </Group>
-                    )
-                  })}
-                </Stack>
-              </div>
-            )}
-
-            {focus.topTitles.length > 0 && (
-              <div>
-                <Text size="xs" c="dimmed" fw={500} mb={4}>
-                  Top window titles
-                </Text>
-                <Stack gap={2}>
-                  {focus.topTitles.slice(0, 5).map((t) => (
-                    <Group key={`${t.app}|${t.title}`} gap="xs" wrap="nowrap" justify="space-between">
-                      <Text size="xs" truncate style={{ flex: 1, minWidth: 0 }}>
-                        <Text span c="dimmed" size="xs">
-                          {t.app} ·{' '}
-                        </Text>
-                        {t.title}
-                      </Text>
-                      <Text size="xs" c="dimmed" style={{ minWidth: 60, textAlign: 'right' }}>
-                        {formatHoursMinutes(t.seconds / 3600)}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
-              </div>
-            )}
-          </>
-        )}
-      </Stack>
-    </Card>
-  )
 }
 
 function EstimateField({ value, onCommit }: { value: number | null; onCommit: (v: number | null) => void }) {

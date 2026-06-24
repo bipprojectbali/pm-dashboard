@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Button, Group, Select, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Button, Group, MultiSelect, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { TbPlus, TbTrash } from 'react-icons/tb'
@@ -19,6 +19,8 @@ const ROLE_COLOR: Record<MemberRole, string> = {
   MEMBER: 'blue',
   VIEWER: 'gray',
 }
+
+const SELECT_ALL_VALUE = '__select_all__'
 
 const MEMBER_ROLE_OPTIONS: Array<{ value: MemberRole; label: string }> = [
   { value: 'OWNER', label: 'Owner' },
@@ -48,8 +50,9 @@ export function MembersSection({
   ownerId: string
 }) {
   const qc = useQueryClient()
-  const [addUserId, setAddUserId] = useState<string | null>(null)
+  const [addUserIds, setAddUserIds] = useState<string[]>([])
   const [addRole, setAddRole] = useState<MemberRole>('MEMBER')
+  const [isAdding, setIsAdding] = useState(false)
 
   const detailQ = useQuery({
     queryKey: ['project', projectId],
@@ -60,22 +63,41 @@ export function MembersSection({
     queryFn: () => api<{ users: UserOption[] }>('/api/users'),
   })
 
-  const addMember = useMutation({
-    mutationFn: (body: { userId: string; role: MemberRole }) =>
-      api(`/api/projects/${projectId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
+  const handleAdd = async () => {
+    if (addUserIds.length === 0 || isAdding) return
+    setIsAdding(true)
+    try {
+      await Promise.all(
+        addUserIds.map((userId) =>
+          api(`/api/projects/${projectId}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, role: addRole }),
+          }),
+        ),
+      )
       qc.invalidateQueries({ queryKey: ['project', projectId] })
       qc.invalidateQueries({ queryKey: ['projects'] })
-      setAddUserId(null)
-      setAddRole('MEMBER')
-      notifySuccess({ message: 'Member ditambahkan.' })
-    },
-    onError: (err) => notifyError(err),
-  })
+      setAddUserIds([])
+      notifySuccess({
+        message: addUserIds.length === 1 ? 'Member ditambahkan.' : `${addUserIds.length} member ditambahkan.`,
+      })
+    } catch (err) {
+      notifyError(err instanceof Error ? err : new Error('Gagal menambahkan member'))
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  const handleMultiChange = (values: string[]) => {
+    if (values.includes(SELECT_ALL_VALUE)) {
+      const allIds = userOptions.map((u) => u.value)
+      // toggle: jika semua sudah terpilih → kosongkan; jika belum → pilih semua
+      setAddUserIds(addUserIds.length === allIds.length ? [] : allIds)
+    } else {
+      setAddUserIds(values)
+    }
+  }
 
   const changeRole = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: MemberRole }) =>
@@ -117,6 +139,10 @@ export function MembersSection({
     [usersQ.data, memberUserIds],
   )
   const roleOptions = canGrantOwner ? MEMBER_ROLE_OPTIONS : MEMBER_ROLE_OPTIONS.filter((r) => r.value !== 'OWNER')
+  const allSelected = userOptions.length > 0 && addUserIds.length === userOptions.length
+  const multiSelectData = userOptions.length > 0
+    ? [{ value: SELECT_ALL_VALUE, label: allSelected ? '✓ Batalkan Pilih Semua' : '✓ Pilih Semua' }, ...userOptions]
+    : []
 
   return (
     <Stack gap="xs">
@@ -187,15 +213,17 @@ export function MembersSection({
 
       {canManage && (
         <Group gap="xs" align="flex-end" wrap="nowrap">
-          <Select
+          <MultiSelect
             label="Add member"
-            placeholder={userOptions.length === 0 ? 'All users added' : 'Select user'}
-            data={userOptions}
-            value={addUserId}
-            onChange={setAddUserId}
+            placeholder={userOptions.length === 0 ? 'All users added' : 'Pilih user…'}
+            data={multiSelectData}
+            value={addUserIds}
+            onChange={handleMultiChange}
             searchable
-            disabled={userOptions.length === 0}
+            disabled={userOptions.length === 0 || isAdding}
             style={{ flex: 1 }}
+            maxDropdownHeight={260}
+            hidePickedOptions={false}
           />
           <Select
             label="Role"
@@ -205,22 +233,26 @@ export function MembersSection({
             w={110}
             allowDeselect={false}
           />
-          <Button
-            leftSection={<TbPlus size={14} />}
-            disabled={!addUserId || addMember.isPending}
-            loading={addMember.isPending}
-            onClick={() => addUserId && addMember.mutate({ userId: addUserId, role: addRole })}
+          <Tooltip
+            label={addUserIds.length > 1 ? `Tambah ${addUserIds.length} member` : 'Tambah member'}
+            withArrow
+            disabled={addUserIds.length === 0}
           >
-            Add
-          </Button>
+            <Button
+              leftSection={<TbPlus size={14} />}
+              disabled={addUserIds.length === 0 || isAdding}
+              loading={isAdding}
+              onClick={handleAdd}
+            >
+              Add{addUserIds.length > 1 ? ` (${addUserIds.length})` : ''}
+            </Button>
+          </Tooltip>
         </Group>
       )}
 
-      {(addMember.error || changeRole.error || removeMember.error) && (
+      {(changeRole.error || removeMember.error) && (
         <Text size="xs" c="red">
-          {(addMember.error as Error | null)?.message ??
-            (changeRole.error as Error | null)?.message ??
-            (removeMember.error as Error | null)?.message}
+          {(changeRole.error as Error | null)?.message ?? (removeMember.error as Error | null)?.message}
         </Text>
       )}
     </Stack>

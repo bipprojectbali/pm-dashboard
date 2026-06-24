@@ -7,6 +7,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-06-24
+
+### Diperbaiki
+- Navbar mobile tidak lagi transparan di Konsol Dev, Admin, dan Manajer Proyek — konten halaman di belakang menu tidak tembus saat drawer terbuka.
+
 ## [0.7.13] - 2026-06-24
 
 ### Diubah

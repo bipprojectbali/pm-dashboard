@@ -78,7 +78,7 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
         <Text size="xs" fw={600} c="dimmed">
           Deskripsi
         </Text>
-        <Text size="sm" c={phase.description ? undefined : 'dimmed'}>
+        <Text size="sm" c={phase.description ? undefined : 'dimmed'} style={{ whiteSpace: 'pre-wrap' }}>
           {phase.description || 'Tidak ada deskripsi.'}
         </Text>
       </div>
@@ -89,7 +89,7 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
             <Text size="xs" fw={600} mb={4} c="var(--mantine-color-green-light-color)">
               Kesimpulan
             </Text>
-            <Text size="sm" c={phase.summary ? undefined : 'dimmed'}>
+            <Text size="sm" c={phase.summary ? undefined : 'dimmed'} style={{ whiteSpace: 'pre-wrap' }}>
               {phase.summary || 'Tidak ada kesimpulan.'}
             </Text>
           </Card>
@@ -98,6 +98,44 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
       <Group justify="flex-end">
         <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
           Tutup
+        </Button>
+      </Group>
+    </Stack>
+  )
+}
+
+export function EditSummaryModal({
+  phase,
+  onConfirm,
+}: {
+  phase: ProjectPhase
+  onConfirm: (summary: string | null) => void
+}) {
+  const [summary, setSummary] = useState(phase.summary ?? '')
+  return (
+    <Stack gap="sm">
+      <Textarea
+        label="Kesimpulan"
+        placeholder="Apa yang dicapai, pelajaran yang dipetik…"
+        value={summary}
+        onChange={(e) => setSummary(e.currentTarget.value)}
+        autosize
+        minRows={4}
+        data-autofocus
+      />
+      <Group justify="flex-end" gap="xs">
+        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
+          Batal
+        </Button>
+        <Button
+          color="green"
+          size="xs"
+          onClick={() => {
+            onConfirm(summary.trim() || null)
+            modals.closeAll()
+          }}
+        >
+          Simpan
         </Button>
       </Group>
     </Stack>

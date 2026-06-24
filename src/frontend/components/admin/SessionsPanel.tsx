@@ -3,82 +3,22 @@ import {
   Badge,
   Card,
   Group,
-  Pagination,
   SegmentedControl,
   SimpleGrid,
   Stack,
-  Table,
   Text,
   TextInput,
-  ThemeIcon,
   Title,
   Tooltip,
 } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { TbActivity, TbClock, TbDevices, TbRefresh, TbSearch, type TbUsers, TbWifi } from 'react-icons/tb'
-import { EmptyRow } from '@/frontend/components/shared/EmptyState'
+import { TbActivity, TbClock, TbDevices, TbRefresh, TbSearch, TbWifi } from 'react-icons/tb'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
-import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
-
-const PAGE_SIZE = 25
-
-interface SessionRow {
-  id: string
-  userId: string
-  userName: string
-  userEmail: string
-  userRole: string
-  userBlocked: boolean
-  userImage?: string | null
-  isOnline: boolean
-  createdAt: string
-  expiresAt: string
-  isExpired: boolean
-}
-
-interface SessionsResponse {
-  sessions: SessionRow[]
-  summary: {
-    totalSessions: number
-    activeSessions: number
-    expiredSessions: number
-    onlineUsers: number
-    byRole: Record<string, number>
-  }
-}
-
-type StatusFilter = 'all' | 'active' | 'online' | 'expired'
-
-const ROLE_COLOR: Record<string, string> = {
-  USER: 'blue',
-  QC: 'teal',
-  ADMIN: 'violet',
-  SUPER_ADMIN: 'red',
-}
-
-function formatRelative(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now()
-  const abs = Math.abs(diff)
-  const mins = Math.floor(abs / 60_000)
-  const hours = Math.floor(mins / 60)
-  const days = Math.floor(hours / 24)
-  const suffix = diff < 0 ? 'ago' : 'from now'
-  if (days > 0) return `${days}d ${suffix}`
-  if (hours > 0) return `${hours}h ${suffix}`
-  if (mins > 0) return `${mins}m ${suffix}`
-  return `just now`
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { SessionStatCard } from './sessionspanel/SessionStatCard'
+import { SessionsTable } from './sessionspanel/SessionsTable'
+import { PAGE_SIZE, ROLE_COLOR } from './sessionspanel/types'
+import type { SessionsResponse, StatusFilter } from './sessionspanel/types'
 
 export function SessionsPanel() {
   const [search, setSearch] = useState('')
@@ -120,6 +60,7 @@ export function SessionsPanel() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pagedFiltered = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
     setPage(1)
@@ -148,28 +89,28 @@ export function SessionsPanel() {
       </Group>
 
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
-        <StatCard
+        <SessionStatCard
           label="Total Sessions"
           value={summary?.totalSessions ?? 0}
           icon={TbDevices}
           color="blue"
           tip="Jumlah seluruh row Session di DB (active + expired yang belum di-cleanup)."
         />
-        <StatCard
+        <SessionStatCard
           label="Active"
           value={summary?.activeSessions ?? 0}
           icon={TbActivity}
           color="teal"
           tip="Session dengan expiresAt > sekarang. User masih logged-in — bisa refresh page tanpa login ulang."
         />
-        <StatCard
+        <SessionStatCard
           label="Online Users"
           value={summary?.onlineUsers ?? 0}
           icon={TbWifi}
           color="green"
           tip="User unik yang sedang terhubung via WebSocket /ws/presence. Real-time indicator — lagi aktif buka app."
         />
-        <StatCard
+        <SessionStatCard
           label="Expired"
           value={summary?.expiredSessions ?? 0}
           icon={TbClock}
@@ -239,147 +180,15 @@ export function SessionsPanel() {
       </Card>
 
       <Card withBorder padding={0} radius="md">
-        <Table.ScrollContainer minWidth={850}>
-          <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={stickyFirstHeader(240)}>User</Table.Th>
-                <Table.Th style={{ width: 130 }}>Role</Table.Th>
-                <Table.Th style={{ width: 160 }}>Status</Table.Th>
-                <Table.Th style={{ width: 160 }}>Started</Table.Th>
-                <Table.Th style={{ width: 160 }}>Expires</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={5}>
-                    <EmptyRow icon={TbDevices} title="Memuat session…" />
-                  </Table.Td>
-                </Table.Tr>
-              )}
-              {!isLoading && filtered.length === 0 && (
-                <Table.Tr>
-                  <Table.Td colSpan={5}>
-                    <EmptyRow
-                      icon={TbSearch}
-                      title="Tidak ada session yang cocok"
-                      message="Coba ubah filter atau reset pencarian."
-                    />
-                  </Table.Td>
-                </Table.Tr>
-              )}
-              {pagedFiltered.map((s) => (
-                <Table.Tr key={s.id} opacity={s.isExpired ? 0.5 : 1}>
-                  <Table.Td style={stickyFirstCell(240)}>
-                    <Group gap="xs" wrap="nowrap">
-                      <UserAvatar
-                        name={s.userName}
-                        image={s.userImage}
-                        size={26}
-                        color="blue"
-                        style={{ flexShrink: 0 }}
-                      />
-                      <Stack gap={0} style={{ minWidth: 0 }}>
-                        <Text size="sm" fw={500} lineClamp={1}>
-                          {s.userName}
-                        </Text>
-                        <Text size="xs" c="dimmed" lineClamp={1}>
-                          {s.userEmail}
-                        </Text>
-                      </Stack>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={ROLE_COLOR[s.userRole] ?? 'gray'} variant="light" size="sm">
-                      {s.userRole}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      {s.userBlocked && (
-                        <Badge color="red" variant="filled" size="xs">
-                          Blocked
-                        </Badge>
-                      )}
-                      {s.isExpired ? (
-                        <Badge color="gray" variant="light" size="xs">
-                          Expired
-                        </Badge>
-                      ) : s.isOnline ? (
-                        <Badge color="green" variant="filled" size="xs">
-                          Online
-                        </Badge>
-                      ) : (
-                        <Badge color="blue" variant="light" size="xs">
-                          Active
-                        </Badge>
-                      )}
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Tooltip label={formatDateTime(s.createdAt)}>
-                      <Text size="xs" c="dimmed">
-                        {formatRelative(s.createdAt)}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
-                  <Table.Td>
-                    <Tooltip label={formatDateTime(s.expiresAt)}>
-                      <Text size="xs" c={s.isExpired ? 'red' : 'dimmed'}>
-                        {formatRelative(s.expiresAt)}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-        {filtered.length > PAGE_SIZE && (
-          <Group justify="space-between" p="md">
-            <Text size="xs" c="dimmed">
-              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} dari {filtered.length}
-            </Text>
-            <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
-          </Group>
-        )}
+        <SessionsTable
+          sessions={pagedFiltered}
+          isLoading={isLoading}
+          totalFiltered={filtered.length}
+          safePage={safePage}
+          totalPages={totalPages}
+          setPage={setPage}
+        />
       </Card>
     </Stack>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  tip,
-}: {
-  label: string
-  value: number
-  icon: typeof TbUsers
-  color: string
-  tip?: string
-}) {
-  return (
-    <Card withBorder padding="lg" radius="md">
-      <Group justify="space-between" align="flex-start">
-        <div style={{ flex: 1 }}>
-          <Group gap={4} wrap="nowrap">
-            <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-              {label}
-            </Text>
-            {tip && <InfoTip label={tip} size={12} />}
-          </Group>
-          <Text fw={700} size="xl">
-            {value}
-          </Text>
-        </div>
-        <ThemeIcon variant="light" color={color} size="lg" radius="md">
-          <Icon size={20} />
-        </ThemeIcon>
-      </Group>
-    </Card>
   )
 }

@@ -1,9 +1,8 @@
-import { Badge, Button, Card, Group, Stack, Stepper, Text, TextInput } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { Badge, Button, Card, Group, Stack, Stepper, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { TbPlus, TbStack2 } from 'react-icons/tb'
+import { TbStack2 } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import {
   CompletePhaseModal,
@@ -14,6 +13,7 @@ import {
   PhaseDetailModal,
   type ProjectPhase,
 } from './PhaseModals'
+import { PhaseAddForm } from './PhaseAddForm'
 
 const TEMPLATE_PHASES = [
   { title: 'Planning', description: 'Perencanaan scope, requirements, dan timeline' },
@@ -33,9 +33,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function PhasesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const qc = useQueryClient()
-  const [title, setTitle] = useState('')
-  const [newStartsAt, setNewStartsAt] = useState<Date | null>(null)
-  const [newEndsAt, setNewEndsAt] = useState<Date | null>(null)
+  const [isTemplating, setIsTemplating] = useState(false)
 
   const phasesQ = useQuery({
     queryKey: ['phases', projectId],
@@ -47,29 +45,6 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     qc.invalidateQueries({ queryKey: ['projects'] })
     qc.invalidateQueries({ queryKey: ['tasks'] })
   }
-
-  const create = useMutation({
-    mutationFn: (body: {
-      title: string
-      description?: string | null
-      status?: string
-      startsAt: string | null
-      endsAt: string | null
-    }) =>
-      api(`/api/projects/${projectId}/phases`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      invalidate()
-      setTitle('')
-      setNewStartsAt(null)
-      setNewEndsAt(null)
-      notifySuccess({ message: 'Fase dibuat.' })
-    },
-    onError: (err) => notifyError(err),
-  })
 
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
@@ -143,16 +118,24 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   }
 
   const handleTemplate = async () => {
-    for (const t of TEMPLATE_PHASES) {
-      await create.mutateAsync({
-        title: t.title,
-        description: t.description,
-        status: 'PLANNING',
-        startsAt: null,
-        endsAt: null,
-      })
+    setIsTemplating(true)
+    try {
+      for (const t of TEMPLATE_PHASES) {
+        const res = await fetch(`/api/projects/${projectId}/phases`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: t.title, description: t.description, status: 'PLANNING', startsAt: null, endsAt: null }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      }
+      invalidate()
+      notifySuccess({ message: 'Template fase dibuat.' })
+    } catch (err) {
+      notifyError(err instanceof Error ? err : new Error('Gagal membuat template'))
+    } finally {
+      setIsTemplating(false)
     }
-    invalidate()
   }
 
   return (
@@ -172,7 +155,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
               size="xs"
               leftSection={<TbStack2 size={14} />}
               onClick={handleTemplate}
-              loading={create.isPending}
+              loading={isTemplating}
             >
               Gunakan Template Standar
             </Button>
@@ -241,70 +224,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
         </Stepper>
       )}
 
-      {canManage && (
-        <Card withBorder padding="sm" radius="md">
-          <Stack gap="xs">
-            <Text size="xs" fw={600} c="dimmed">
-              Tambah Fase
-            </Text>
-            <TextInput
-              placeholder="Nama fase"
-              value={title}
-              onChange={(e) => setTitle(e.currentTarget.value)}
-              size="xs"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && title.trim()) {
-                  create.mutate({
-                    title: title.trim(),
-                    status: 'PLANNING',
-                    startsAt: newStartsAt ? newStartsAt.toISOString() : null,
-                    endsAt: newEndsAt ? newEndsAt.toISOString() : null,
-                  })
-                }
-              }}
-            />
-            <Group gap="xs" wrap="nowrap">
-              <DateInput
-                highlightToday
-                placeholder="Mulai (opsional)"
-                value={newStartsAt}
-                onChange={(v) => setNewStartsAt(v ? new Date(v as unknown as string) : null)}
-                clearable
-                size="xs"
-                w={170}
-              />
-              <Text size="xs" c="dimmed">
-                –
-              </Text>
-              <DateInput
-                highlightToday
-                placeholder="Selesai (opsional)"
-                value={newEndsAt}
-                onChange={(v) => setNewEndsAt(v ? new Date(v as unknown as string) : null)}
-                clearable
-                size="xs"
-                w={170}
-              />
-              <Button
-                leftSection={<TbPlus size={13} />}
-                size="xs"
-                disabled={!title.trim() || create.isPending}
-                loading={create.isPending}
-                onClick={() =>
-                  create.mutate({
-                    title: title.trim(),
-                    status: 'PLANNING',
-                    startsAt: newStartsAt ? newStartsAt.toISOString() : null,
-                    endsAt: newEndsAt ? newEndsAt.toISOString() : null,
-                  })
-                }
-              >
-                Tambah
-              </Button>
-            </Group>
-          </Stack>
-        </Card>
-      )}
+      {canManage && <PhaseAddForm projectId={projectId} onSuccess={invalidate} />}
     </Stack>
   )
 }

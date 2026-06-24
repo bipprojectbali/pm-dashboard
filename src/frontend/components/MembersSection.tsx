@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Button, Group, MultiSelect, Select, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Button, Checkbox, Group, MultiSelect, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { TbPlus, TbTrash } from 'react-icons/tb'
@@ -53,6 +53,8 @@ export function MembersSection({
   const [addUserIds, setAddUserIds] = useState<string[]>([])
   const [addRole, setAddRole] = useState<MemberRole>('MEMBER')
   const [isAdding, setIsAdding] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false)
 
   const detailQ = useQuery({
     queryKey: ['project', projectId],
@@ -92,10 +94,35 @@ export function MembersSection({
   const handleMultiChange = (values: string[]) => {
     if (values.includes(SELECT_ALL_VALUE)) {
       const allIds = userOptions.map((u) => u.value)
-      // toggle: jika semua sudah terpilih → kosongkan; jika belum → pilih semua
       setAddUserIds(addUserIds.length === allIds.length ? [] : allIds)
     } else {
       setAddUserIds(values)
+    }
+  }
+
+  const toggleSelect = (userId: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0 || isDeletingBulk) return
+    if (!confirm(`Hapus ${selectedIds.size} member dari proyek ini?`)) return
+    setIsDeletingBulk(true)
+    const ids = Array.from(selectedIds)
+    try {
+      await Promise.all(ids.map((userId) => api(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' })))
+      qc.invalidateQueries({ queryKey: ['project', projectId] })
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      setSelectedIds(new Set())
+      notifySuccess({ message: `${ids.length} member dihapus.` })
+    } catch (err) {
+      notifyError(err instanceof Error ? err : new Error('Gagal menghapus member'))
+    } finally {
+      setIsDeletingBulk(false)
     }
   }
 
@@ -116,7 +143,8 @@ export function MembersSection({
 
   const removeMember = useMutation({
     mutationFn: (userId: string) => api(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
-    onSuccess: () => {
+    onSuccess: (_d, userId) => {
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(userId); return n })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
       qc.invalidateQueries({ queryKey: ['projects'] })
       notifySuccess({ message: 'Member dikeluarkan.' })
@@ -139,6 +167,12 @@ export function MembersSection({
     [usersQ.data, memberUserIds],
   )
   const roleOptions = canGrantOwner ? MEMBER_ROLE_OPTIONS : MEMBER_ROLE_OPTIONS.filter((r) => r.value !== 'OWNER')
+  const deletableMembers = members.filter((m) => m.userId !== ownerId)
+  const allDeletableSelected = deletableMembers.length > 0 && deletableMembers.every((m) => selectedIds.has(m.userId))
+  const someSelected = selectedIds.size > 0 && !allDeletableSelected
+  const toggleSelectAll = () =>
+    setSelectedIds(allDeletableSelected ? new Set() : new Set(deletableMembers.map((m) => m.userId)))
+
   const allSelected = userOptions.length > 0 && addUserIds.length === userOptions.length
   const multiSelectData = userOptions.length > 0
     ? [{ value: SELECT_ALL_VALUE, label: allSelected ? '✓ Batalkan Pilih Semua' : '✓ Pilih Semua' }, ...userOptions]
@@ -152,62 +186,56 @@ export function MembersSection({
         </Text>
       ) : (
         <Stack gap={6}>
-          {members.map((m) => {
-            const isOwner = m.userId === ownerId
-            return (
-              <Group key={m.id} justify="space-between" wrap="nowrap">
-                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                  <UserAvatar
-                    name={m.user.name}
-                    image={m.user.image}
-                    size={28}
-                    color="blue"
-                    style={{ flexShrink: 0 }}
-                  />
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={500} truncate>
-                      {m.user.name}
-                    </Text>
-                    <Text size="xs" c="dimmed" truncate>
-                      {m.user.email}
-                    </Text>
-                  </Stack>
-                </Group>
-                <Group gap="xs" wrap="nowrap">
-                  {canManage && !isOwner ? (
-                    <Select
-                      size="xs"
-                      data={roleOptions}
-                      value={m.role}
-                      onChange={(v) => v && changeRole.mutate({ userId: m.userId, role: v as MemberRole })}
-                      w={110}
-                      allowDeselect={false}
-                    />
-                  ) : (
-                    <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">
-                      {m.role}
-                    </Badge>
-                  )}
-                  {canRemove && !isOwner && (
-                    <Tooltip label="Remove member">
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remove ${m.user.name} from this project?`)) {
-                            removeMember.mutate(m.userId)
-                          }
-                        }}
-                      >
-                        <TbTrash size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                </Group>
+          {members.filter((m) => m.userId === ownerId).map((m) => (
+            <Group key={m.id} justify="space-between" wrap="nowrap">
+              <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                <UserAvatar name={m.user.name} image={m.user.image} size={28} color="blue" style={{ flexShrink: 0 }} />
+                <Stack gap={0} style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={500} truncate>{m.user.name}</Text>
+                  <Text size="xs" c="dimmed" truncate>{m.user.email}</Text>
+                </Stack>
               </Group>
-            )
-          })}
+              <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">{m.role}</Badge>
+            </Group>
+          ))}
+          {canRemove && deletableMembers.length > 1 && (
+            <Group justify="space-between">
+              <Checkbox size="xs" label={`Pilih semua (${deletableMembers.length})`} checked={allDeletableSelected} indeterminate={someSelected} onChange={toggleSelectAll} />
+              {selectedIds.size > 0 && (
+                <Button size="xs" color="red" variant="light" leftSection={<TbTrash size={13} />} loading={isDeletingBulk} onClick={handleBulkDelete}>
+                  Hapus ({selectedIds.size})
+                </Button>
+              )}
+            </Group>
+          )}
+          {members.filter((m) => m.userId !== ownerId).map((m) => (
+            <Group key={m.id} justify="space-between" wrap="nowrap">
+              {canRemove && (
+                <Checkbox size="xs" checked={selectedIds.has(m.userId)} onChange={() => toggleSelect(m.userId)} />
+              )}
+              <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                <UserAvatar name={m.user.name} image={m.user.image} size={28} color="blue" style={{ flexShrink: 0 }} />
+                <Stack gap={0} style={{ minWidth: 0 }}>
+                  <Text size="sm" fw={500} truncate>{m.user.name}</Text>
+                  <Text size="xs" c="dimmed" truncate>{m.user.email}</Text>
+                </Stack>
+              </Group>
+              <Group gap="xs" wrap="nowrap">
+                {canManage ? (
+                  <Select size="xs" data={roleOptions} value={m.role} onChange={(v) => v && changeRole.mutate({ userId: m.userId, role: v as MemberRole })} w={110} allowDeselect={false} />
+                ) : (
+                  <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">{m.role}</Badge>
+                )}
+                {canRemove && (
+                  <Tooltip label="Remove member">
+                    <ActionIcon variant="subtle" color="red" size="sm" onClick={() => { if (confirm(`Remove ${m.user.name} from this project?`)) removeMember.mutate(m.userId) }}>
+                      <TbTrash size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </Group>
+            </Group>
+          ))}
         </Stack>
       )}
 

@@ -1,54 +1,12 @@
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  FileButton,
-  Group,
-  Modal,
-  MultiSelect,
-  NumberInput,
-  ScrollArea,
-  SegmentedControl,
-  Select,
-  Stack,
-  Table,
-  Text,
-  Textarea,
-  TextInput,
-} from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { Button, Group, Modal, SegmentedControl, Select, Stack, Text } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { TbAlertTriangle, TbClock, TbDownload, TbFileImport, TbTag, TbUpload } from 'react-icons/tb'
-import { downloadSampleCsv, parseTaskCsv, type RowError, TASK_CSV_HEADERS } from '../lib/csv'
+import { TbFileImport } from 'react-icons/tb'
+import { parseTaskCsv, type RowError } from '../lib/csv'
 import { notifyError } from '../lib/notify'
-
-type TaskKind = 'TASK' | 'BUG' | 'QC'
-type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-
-interface TagListItem {
-  id: string
-  projectId: string
-  name: string
-  color: string
-}
-
-interface ProjectOption {
-  id: string
-  name: string
-  myRole: 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER' | null
-  canWrite?: boolean
-}
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...init })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
-  return res.json()
-}
+import { BulkCsvForm } from './createtaskmodal/BulkCsvForm'
+import { SingleTaskForm } from './createtaskmodal/SingleTaskForm'
+import { api, type ProjectOption, type TagListItem, type TaskKind, type TaskPriority } from './createtaskmodal/types'
 
 export function CreateTaskModal({
   opened,
@@ -107,8 +65,8 @@ export function CreateTaskModal({
   const [estimateHours, setEstimateHours] = useState<number | string>('')
   const [tagIds, setTagIds] = useState<string[]>([])
   const [phaseId, setPhaseId] = useState<string | null>(null)
-
   const [csvText, setCsvText] = useState('')
+
   const phasesQ = useQuery({
     queryKey: ['phases', projectId, 'modal'],
     queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${projectId}/phases`),
@@ -119,6 +77,7 @@ export function CreateTaskModal({
     queryFn: () => api<{ tags: TagListItem[] }>(`/api/projects/${projectId}/tags`),
     enabled: !!projectId,
   })
+
   const parsed = useMemo(() => (csvText.trim() ? parseTaskCsv(csvText) : null), [csvText])
   const errorsByRow = useMemo(() => {
     const m = new Map<number, RowError[]>()
@@ -146,7 +105,7 @@ export function CreateTaskModal({
   const totalErrors =
     (parsed?.errors.length ?? 0) + Array.from(unknownTagsByRow.values()).reduce((a, b) => a + b.length, 0)
 
-  const invalidRange = startsAt && dueAt && dueAt < startsAt
+  const invalidRange = Boolean(startsAt && dueAt && dueAt < startsAt)
   const availableTags = tagsForProject
 
   const reset = () => {
@@ -166,8 +125,7 @@ export function CreateTaskModal({
       notifyError(new Error('Hanya file .csv yang didukung'))
       return
     }
-    const text = await file.text()
-    setCsvText(text)
+    setCsvText(await file.text())
   }
 
   const submitBulk = () => {
@@ -192,10 +150,7 @@ export function CreateTaskModal({
   return (
     <Modal
       opened={opened}
-      onClose={() => {
-        reset()
-        onClose()
-      }}
+      onClose={() => { reset(); onClose() }}
       title="Create Task"
       size={mode === 'bulk' ? 'xl' : 'md'}
     >
@@ -216,234 +171,34 @@ export function CreateTaskModal({
           required
         />
         {mode === 'single' ? (
-          <>
-            <TextInput
-              label="Title"
-              placeholder="What needs to get done?"
-              value={title}
-              onChange={(e) => setTitle(e.currentTarget.value)}
-              required
-            />
-            <Textarea
-              label="Description"
-              placeholder="Context, acceptance criteria, etc."
-              value={description}
-              onChange={(e) => setDescription(e.currentTarget.value)}
-              autosize
-              minRows={3}
-              maxRows={8}
-              required
-            />
-            <Group grow>
-              <Select
-                label="Kind"
-                data={['TASK', 'BUG', 'QC']}
-                value={kind}
-                onChange={(v) => setKind((v as TaskKind) || 'TASK')}
-              />
-              <Select
-                label="Priority"
-                data={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
-                value={priority}
-                onChange={(v) => setPriority((v as TaskPriority) || 'MEDIUM')}
-              />
-            </Group>
-            <Group grow>
-              <DateInput
-                highlightToday
-                label="Start date"
-                placeholder="Optional"
-                value={startsAt}
-                onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
-                clearable
-              />
-              <DateInput
-                highlightToday
-                label="Due date"
-                placeholder="Optional"
-                value={dueAt}
-                onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
-                clearable
-                error={invalidRange ? 'Due must be after start' : undefined}
-              />
-              <NumberInput
-                label="Estimate (hours)"
-                placeholder="e.g. 2.5"
-                value={estimateHours}
-                onChange={setEstimateHours}
-                min={0}
-                step={0.5}
-                decimalScale={2}
-                leftSection={<TbClock size={14} />}
-              />
-            </Group>
-            {availableTags.length > 0 && (
-              <MultiSelect
-                label="Tags"
-                placeholder="Pick tags"
-                data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
-                value={tagIds}
-                onChange={setTagIds}
-                leftSection={<TbTag size={14} />}
-                searchable
-                clearable
-              />
-            )}
-            {(phasesQ.data?.phases.length ?? 0) > 0 && (
-              <Select
-                label="Fase"
-                placeholder="Tanpa fase"
-                data={(phasesQ.data?.phases ?? []).map((p) => ({ value: p.id, label: p.title }))}
-                value={phaseId}
-                onChange={setPhaseId}
-                clearable
-              />
-            )}
-          </>
+          <SingleTaskForm
+            title={title} setTitle={setTitle}
+            description={description} setDescription={setDescription}
+            kind={kind} setKind={setKind}
+            priority={priority} setPriority={setPriority}
+            startsAt={startsAt} setStartsAt={setStartsAt}
+            dueAt={dueAt} setDueAt={setDueAt}
+            invalidRange={invalidRange}
+            estimateHours={estimateHours} setEstimateHours={setEstimateHours}
+            tagIds={tagIds} setTagIds={setTagIds}
+            phaseId={phaseId} setPhaseId={setPhaseId}
+            availableTags={availableTags}
+            phases={phasesQ.data?.phases ?? []}
+          />
         ) : (
-          <>
-            <Group gap="xs" wrap="wrap">
-              <FileButton onChange={handlePickFile} accept=".csv,text/csv">
-                {(props) => (
-                  <Button {...props} variant="light" leftSection={<TbUpload size={14} />}>
-                    Upload CSV
-                  </Button>
-                )}
-              </FileButton>
-              <Button variant="subtle" leftSection={<TbDownload size={14} />} onClick={() => downloadSampleCsv()}>
-                Download sample
-              </Button>
-              {csvText && (
-                <Button variant="subtle" color="gray" onClick={() => setCsvText('')}>
-                  Clear
-                </Button>
-              )}
-              <Text size="xs" c="dimmed" style={{ marginLeft: 'auto' }}>
-                Header wajib: <code>{TASK_CSV_HEADERS.join(',')}</code>
-              </Text>
-            </Group>
-            <Textarea
-              label="Atau paste CSV di sini"
-              placeholder={`title,description,kind,priority,startsAt,dueAt,estimateHours,assigneeEmail,tagNames\n"Login flow","Email + OAuth",TASK,HIGH,2026-04-25,2026-05-02,6.5,,frontend;auth`}
-              value={csvText}
-              onChange={(e) => setCsvText(e.currentTarget.value)}
-              autosize
-              minRows={4}
-              maxRows={10}
-              styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
-            />
-            {parsed && (
-              <>
-                {headerErrors.length > 0 && (
-                  <Alert color="red" icon={<TbAlertTriangle size={14} />} title="Header invalid">
-                    <Stack gap={2}>
-                      {headerErrors.map((e) => (
-                        <Text key={`${e.field}:${e.message}`} size="xs">
-                          {e.message}
-                        </Text>
-                      ))}
-                    </Stack>
-                  </Alert>
-                )}
-                {parsed.rows.length > 0 && (
-                  <Card withBorder padding="xs" radius="md">
-                    <Group justify="space-between" mb="xs">
-                      <Text size="sm" fw={500}>
-                        Preview · {parsed.rows.length} baris
-                      </Text>
-                      <Badge color={totalErrors > 0 ? 'red' : 'green'} variant="light">
-                        {totalErrors > 0 ? `${totalErrors} error` : 'siap import'}
-                      </Badge>
-                    </Group>
-                    <ScrollArea h={260}>
-                      <Table striped highlightOnHover withTableBorder withColumnBorders fz="xs">
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th>#</Table.Th>
-                            <Table.Th>Title</Table.Th>
-                            <Table.Th>Kind</Table.Th>
-                            <Table.Th>Priority</Table.Th>
-                            <Table.Th>Start</Table.Th>
-                            <Table.Th>Due</Table.Th>
-                            <Table.Th>Est (h)</Table.Th>
-                            <Table.Th>Assignee</Table.Th>
-                            <Table.Th>Tags</Table.Th>
-                            <Table.Th>Fase</Table.Th>
-                            <Table.Th>Errors</Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {parsed.rows.map((row, i) => {
-                            const errs = errorsByRow.get(i) ?? []
-                            const unknownTags = unknownTagsByRow.get(i) ?? []
-                            const hasError = errs.length > 0 || unknownTags.length > 0
-                            return (
-                              <Table.Tr
-                                // biome-ignore lint/suspicious/noArrayIndexKey: CSV preview rows have no stable ID; index pairs with errorsByRow Map keyed by index
-                                key={`row-${i}-${row.title}`}
-                                style={{
-                                  backgroundColor: hasError ? 'var(--mantine-color-red-light)' : undefined,
-                                }}
-                              >
-                                <Table.Td>{i + 1}</Table.Td>
-                                <Table.Td style={{ maxWidth: 220 }}>
-                                  <Text size="xs" lineClamp={2}>
-                                    {row.title || (
-                                      <Text component="span" c="red">
-                                        (missing)
-                                      </Text>
-                                    )}
-                                  </Text>
-                                </Table.Td>
-                                <Table.Td>{row.kind}</Table.Td>
-                                <Table.Td>{row.priority}</Table.Td>
-                                <Table.Td>{row.startsAt ? row.startsAt.slice(0, 10) : '—'}</Table.Td>
-                                <Table.Td>{row.dueAt ? row.dueAt.slice(0, 10) : '—'}</Table.Td>
-                                <Table.Td>{row.estimateHours ?? '—'}</Table.Td>
-                                <Table.Td>{row.assigneeEmail ?? '—'}</Table.Td>
-                                <Table.Td>{row.tagNames.join(', ') || '—'}</Table.Td>
-                                <Table.Td>{row.phaseTitle || '—'}</Table.Td>
-                                <Table.Td>
-                                  {hasError ? (
-                                    <Stack gap={2}>
-                                      {errs.map((e) => (
-                                        <Text key={`${e.field}:${e.message}`} size="xs" c="red">
-                                          {e.field}: {e.message}
-                                        </Text>
-                                      ))}
-                                      {unknownTags.length > 0 && (
-                                        <Text size="xs" c="red">
-                                          tag tidak ada di project: {unknownTags.join(', ')}
-                                        </Text>
-                                      )}
-                                    </Stack>
-                                  ) : (
-                                    <Text size="xs" c="green">
-                                      ok
-                                    </Text>
-                                  )}
-                                </Table.Td>
-                              </Table.Tr>
-                            )
-                          })}
-                        </Table.Tbody>
-                      </Table>
-                    </ScrollArea>
-                  </Card>
-                )}
-              </>
-            )}
-          </>
+          <BulkCsvForm
+            csvText={csvText} onCsvTextChange={setCsvText}
+            onPickFile={handlePickFile}
+            parsed={parsed}
+            errorsByRow={errorsByRow}
+            unknownTagsByRow={unknownTagsByRow}
+            headerErrors={headerErrors}
+            totalErrors={totalErrors}
+          />
         )}
-        {error ? (
-          <Text size="sm" c="red">
-            {error}
-          </Text>
-        ) : null}
+        {error && <Text size="sm" c="red">{error}</Text>}
         <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
+          <Button variant="subtle" onClick={onClose}>Cancel</Button>
           {mode === 'single' ? (
             <Button
               onClick={() =>
@@ -461,7 +216,7 @@ export function CreateTaskModal({
                   phaseId,
                 })
               }
-              disabled={!projectId || !title.trim() || !description.trim() || Boolean(invalidRange) || loading}
+              disabled={!projectId || !title.trim() || !description.trim() || invalidRange || loading}
               loading={loading}
             >
               Create

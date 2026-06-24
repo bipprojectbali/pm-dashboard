@@ -11,7 +11,6 @@ import {
   SimpleGrid,
   Stack,
   Text,
-  ThemeIcon,
   Title,
   Tooltip,
 } from '@mantine/core'
@@ -29,74 +28,9 @@ import {
   TbTrendingUp,
   TbUsers,
 } from 'react-icons/tb'
-import { toLocalDateStr } from '../lib/dates'
-
-interface RetroTaskRow {
-  id: string
-  title: string
-  status: string
-  priority: string
-  assigneeEmail: string | null
-  dueAt: string | null
-  closedAt: string | null
-  estimateHours: number | null
-}
-
-interface RetroExtension {
-  id: string
-  previousEndAt: string | null
-  newEndAt: string
-  reason: string | null
-  extendedBy: string | null
-  createdAt: string
-}
-
-interface RetroContributor {
-  userId: string | null
-  email: string | null
-  name: string | null
-  closed: number
-  commits: number
-  prsMerged: number
-}
-
-interface RetroResult {
-  project: { id: string; name: string; status: string; endsAt: string | null }
-  window: { since: string; until: string; days: number }
-  summary: {
-    closed: number
-    slipped: number
-    stillBlocked: number
-    extensions: number
-    newTasks: number
-    estimateHoursClosed: number
-  }
-  shipped: RetroTaskRow[]
-  slipped: RetroTaskRow[]
-  stillBlocked: RetroTaskRow[]
-  biggestMisses: (RetroTaskRow & { daysOverDue: number })[]
-  extensions: RetroExtension[]
-  github: {
-    commits: number
-    prsOpened: number
-    prsMerged: number
-    prsClosed: number
-    reviews: number
-  }
-  contributors: RetroContributor[]
-}
-
-const WINDOWS: { label: string; days: number }[] = [
-  { label: '7d', days: 7 },
-  { label: '14d', days: 14 },
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-]
-
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '—'
-  return toLocalDateStr(new Date(iso))
-}
+import { Section, SummaryCard, Stat, TaskLine } from './retrotab/RetroSubComponents'
+import { WINDOWS, fmtDate } from './retrotab/types'
+import type { RetroExtension, RetroResult } from './retrotab/types'
 
 export function RetroTab({ projectId }: { projectId: string }) {
   const [days, setDays] = useState(14)
@@ -270,7 +204,7 @@ export function RetroTab({ projectId }: { projectId: string }) {
 
       {data.extensions.length > 0 && (
         <Section title="Deadline pushes" color="yellow">
-          {data.extensions.map((e) => (
+          {data.extensions.map((e: RetroExtension) => (
             <Group key={e.id} gap="xs" wrap="nowrap">
               <Text size="sm" ff="monospace">
                 {fmtDate(e.previousEndAt)} → {fmtDate(e.newEndAt)}
@@ -300,16 +234,16 @@ export function RetroTab({ projectId }: { projectId: string }) {
                 <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
                   {c.name ?? c.email ?? '—'}
                 </Text>
-                <Badge size="xs" color="teal" variant="light">
+                <Badge size="xs" color="teal" variant="light" component="span">
                   {c.closed} closed
                 </Badge>
                 {c.commits > 0 && (
-                  <Badge size="xs" color="violet" variant="light">
+                  <Badge size="xs" color="violet" variant="light" component="span">
                     {c.commits} commits
                   </Badge>
                 )}
                 {c.prsMerged > 0 && (
-                  <Badge size="xs" color="blue" variant="light">
+                  <Badge size="xs" color="blue" variant="light" component="span">
                     {c.prsMerged} PRs
                   </Badge>
                 )}
@@ -319,82 +253,5 @@ export function RetroTab({ projectId }: { projectId: string }) {
         </Card>
       )}
     </Stack>
-  )
-}
-
-function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Group gap="xs" mb="sm">
-        <Badge color={color} variant="light" size="lg">
-          {title}
-        </Badge>
-      </Group>
-      <Stack gap={4}>{children}</Stack>
-    </Card>
-  )
-}
-
-function TaskLine({ task, suffix }: { task: RetroTaskRow; suffix?: string }) {
-  return (
-    <Group gap="xs" wrap="nowrap">
-      <Badge size="xs" variant="outline" color="gray">
-        {task.priority}
-      </Badge>
-      <Text size="sm" style={{ flex: 1 }} truncate>
-        {task.title}
-      </Text>
-      <Text size="xs" c="dimmed">
-        {task.assigneeEmail ?? 'unassigned'}
-      </Text>
-      {suffix && (
-        <Text size="xs" c="dimmed">
-          {suffix}
-        </Text>
-      )}
-    </Group>
-  )
-}
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: number
-  color: string
-}) {
-  return (
-    <Card withBorder padding="sm" radius="md">
-      <Group gap="xs" wrap="nowrap">
-        <ThemeIcon variant="light" color={color} size="md">
-          {icon}
-        </ThemeIcon>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
-            {label}
-          </Text>
-          <Text fw={700} size="lg">
-            {value}
-          </Text>
-        </div>
-      </Group>
-    </Card>
-  )
-}
-
-function Stat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-        {label}
-      </Text>
-      <Text fw={700} size="lg" c={color}>
-        {value}
-      </Text>
-    </div>
   )
 }

@@ -7,6 +7,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-06-24
+
+### Diubah
+- Refactor file-health: 9 file yang melebihi batas ukuran dipecah menjadi handler/helper/sub-component terpisah tanpa perubahan behavior (dev-graph, query, auth, trash, evidence routes; PhasesSection, ProjectCard, SnapshotHistoryPanel, SessionsPanel).
+
 ## [0.7.12] - 2026-06-17
 
 ### Diperbaiki

@@ -1,229 +1,15 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Group,
-  Modal,
-  Pagination,
-  Progress,
-  ScrollArea,
-  SegmentedControl,
-  Select,
-  Stack,
-  Switch,
-  Table,
-  Text,
-  TextInput,
-  Title,
-  Tooltip,
-} from '@mantine/core'
-import { modals } from '@mantine/modals'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  TbAlertTriangle,
-  TbArrowLeft,
-  TbCalendarOff,
-  TbChartBar,
-  TbChevronRight,
-  TbClock,
-  TbDownload,
-  TbFilter,
-  TbInfoCircle,
-  TbListCheck,
-  TbLock,
-  TbPlus,
-  TbRefresh,
-  TbSearch,
-  TbSortAscending,
-  TbSortDescending,
-  TbTag,
-  TbTrash,
-  TbUserQuestion,
-  TbX,
-} from 'react-icons/tb'
-
-// Modal kecil untuk input alasan hapus — dipakai oleh confirmDeleteOne & confirmDeleteSelected
-function DeleteReasonModal({ onConfirm, label }: { onConfirm: (reason: string) => void; label: string }) {
-  const [reason, setReason] = useState('')
-  return (
-    <Stack gap="sm">
-      <Text size="sm">{label}</Text>
-      <TextInput
-        placeholder="Tulis alasan penghapusan..."
-        value={reason}
-        onChange={(e) => setReason(e.currentTarget.value)}
-        autoFocus
-      />
-      <Group justify="flex-end" gap="xs">
-        <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
-          Batal
-        </Button>
-        <Button
-          color="red"
-          size="xs"
-          disabled={reason.trim().length < 3}
-          onClick={() => {
-            onConfirm(reason.trim())
-            modals.closeAll()
-          }}
-        >
-          Hapus
-        </Button>
-      </Group>
-    </Stack>
-  )
-}
-
-function PhasePill({
-  label,
-  count,
-  active,
-  color,
-  onClick,
-}: {
-  label: string
-  count?: number
-  active: boolean
-  color: string
-  onClick: () => void
-}) {
-  return (
-    <Badge
-      color={color}
-      variant={active ? 'filled' : 'light'}
-      size="sm"
-      style={{ cursor: 'pointer', userSelect: 'none', ...(active ? { color: 'white' } : {}) }}
-      onClick={onClick}
-    >
-      {label}
-      {count !== undefined ? ` · ${count}` : ''}
-    </Badge>
-  )
-}
-
-import { DatePickerInput } from '@mantine/dates'
-import { useLocalStorage } from '@mantine/hooks'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
-import { useSession } from '../hooks/useAuth'
-import { downloadTasksCsv, type ExportTaskRow } from '../lib/csv'
-import { notifyError, notifySuccess } from '../lib/notify'
+import { ActionIcon, Button, Group, Modal, ScrollArea, Stack, Text, Title, Tooltip } from '@mantine/core'
+import { TbArrowLeft, TbChartBar, TbChevronRight, TbListCheck, TbPlus, TbRefresh, TbTrash } from 'react-icons/tb'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDashboardOverlay } from './TaskDashboardOverlay'
 import { TaskDetailView } from './TaskDetailView'
 import { TasksGanttView } from './TasksGanttView'
 import { TasksKanbanView } from './TasksKanbanView'
 import { TasksTrashView } from './TasksTrashView'
-
-type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
-type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-type TaskKind = 'TASK' | 'BUG' | 'QC'
-
-interface TaskUser {
-  id: string
-  name: string
-  email: string
-  role: string
-  image?: string | null
-}
-
-interface TaskTag {
-  tagId: string
-  tag: { id: string; name: string; color: string; projectId: string }
-}
-
-interface TaskListItem {
-  id: string
-  projectId: string
-  kind: TaskKind
-  title: string
-  description: string
-  status: TaskStatus
-  priority: TaskPriority
-  route: string | null
-  reporter: TaskUser
-  assignee: TaskUser | null
-  startsAt: string | null
-  dueAt: string | null
-  estimateHours: number | null
-  actualHours: number | null
-  progressPercent: number | null
-  createdAt: string
-  updatedAt: string
-  closedAt: string | null
-  project: { id: string; name: string }
-  phase: { id: string; title: string } | null
-  tags: TaskTag[]
-  blockedBy: { blockedById: string }[]
-  _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
-}
-
-interface TagListItem {
-  id: string
-  projectId: string
-  name: string
-  color: string
-}
-
-interface ProjectOption {
-  id: string
-  name: string
-  myRole: 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER' | null
-  canWrite?: boolean
-}
-
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  OPEN: 'blue',
-  IN_PROGRESS: 'violet',
-  READY_FOR_QC: 'yellow',
-  REOPENED: 'orange',
-  CLOSED: 'green',
-}
-
-const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  LOW: 'gray',
-  MEDIUM: 'blue',
-  HIGH: 'orange',
-  CRITICAL: 'red',
-}
-
-const KIND_COLOR: Record<TaskKind, string> = {
-  TASK: 'blue',
-  BUG: 'red',
-  QC: 'teal',
-}
-
-const STICKY_COL_HEADER: CSSProperties = {
-  position: 'sticky',
-  left: 0,
-  zIndex: 3,
-  background: 'var(--mantine-color-body)',
-  minWidth: 280,
-  width: 280,
-  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
-}
-
-const STICKY_COL_CELL: CSSProperties = {
-  position: 'sticky',
-  left: 0,
-  zIndex: 1,
-  background: 'var(--mantine-color-body)',
-  minWidth: 280,
-  width: 280,
-  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.08)',
-}
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...init })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
-  return res.json()
-}
+import { TasksFilterBar } from './taskspanel/TasksFilterBar'
+import { TasksPhaseBar } from './taskspanel/TasksPhaseBar'
+import { TasksTableView } from './taskspanel/TasksTableView'
+import { PAGE_SIZE, useTasksPanelState } from './taskspanel/useTasksPanelState'
 
 export function TasksPanel({
   projectId,
@@ -236,480 +22,65 @@ export function TasksPanel({
   onBackToProjects?: () => void
   canWriteOverride?: boolean
 }) {
-  const qc = useQueryClient()
-
-  const session = useSession()
-  const systemRole = session.data?.user?.role ?? null
-  const isAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
-  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
-  const openTask = (id: string) => setDrawerTaskId(id)
-  const closeTask = () => {
-    setDrawerTaskId(null)
-    qc.invalidateQueries({ queryKey: ['tasks'] })
-  }
-  const [createOpen, setCreateOpen] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [kind, setKind] = useState<string | null>(null)
-  const [mine, setMine] = useState(false)
-  const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
-  const [tagFilter, setTagFilter] = useState<string | null>(null)
-  const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
-  const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
-  const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(
-    null,
-  )
-  const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
-  const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 25
-
-  const projectsQ = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<{ projects: ProjectOption[] }>('/api/projects'),
-  })
-
-  const activeProjectId = projectId ?? null
-
-  const changeProject = (id: string | null) => {
-    setTagFilter(null)
-    setPhaseFilter(null)
-    onProjectChange?.(id)
-  }
-
-  const tagsQ = useQuery({
-    queryKey: ['tags', activeProjectId],
-    queryFn: () => api<{ tags: TagListItem[] }>(`/api/projects/${activeProjectId}/tags`),
-    enabled: !!activeProjectId,
-  })
-
-  const phasesQ = useQuery({
-    queryKey: ['phases', activeProjectId],
-    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string; _count: { tasks: number } }> }>(`/api/projects/${activeProjectId}/phases`),
-    enabled: !!activeProjectId,
-  })
-
-  const params = new URLSearchParams()
-  if (activeProjectId) params.set('projectId', activeProjectId)
-  if (status) params.set('status', status)
-  if (kind) params.set('kind', kind)
-  if (mine) params.set('mine', '1')
-  if (tagFilter) params.set('tagId', tagFilter)
-  if (phaseFilter) params.set('phaseId', phaseFilter)
-  // Server-side pagination + filters (list/table view only; kanban has its own per-column queries)
-  if (view !== 'kanban') {
-    params.set('limit', String(PAGE_SIZE))
-    params.set('offset', String((page - 1) * PAGE_SIZE))
-    if (search.trim()) params.set('search', search.trim())
-    if (priorityFilter) params.set('priority', priorityFilter)
-    if (quickFilter === 'overdue') params.set('overdueOnly', '1')
-    else if (quickFilter === 'unassigned') params.set('unassigned', '1')
-    else if (quickFilter === 'nodue') params.set('noDue', '1')
-    else if (quickFilter === 'blocked') params.set('blocked', '1')
-  }
-  const query = params.toString()
-
-  const tasksQ = useQuery({
-    queryKey: ['tasks', query],
-    queryFn: () =>
-      api<{ tasks: TaskListItem[]; total: number; limit: number; offset: number }>(
-        `/api/tasks${query ? `?${query}` : ''}`,
-      ),
-    enabled: view !== 'kanban',
-  })
-
-  // Query khusus chart — hanya scope projectId, tanpa filter status/kind/mine/tag,
-  // limit 500 (max API). Chart harus mencerminkan data proyek, bukan hasil filter tabel.
-  const chartParams = new URLSearchParams()
-  if (activeProjectId) chartParams.set('projectId', activeProjectId)
-  chartParams.set('limit', '500')
-  const chartQuery = chartParams.toString()
-
-  const chartTasksQ = useQuery({
-    queryKey: ['tasks-chart', chartQuery],
-    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
-    staleTime: 60_000,
-  })
-
-  const create = useMutation({
-    mutationFn: (body: {
-      projectId: string
-      title: string
-      description: string
-      kind: TaskKind
-      priority: TaskPriority
-      startsAt: string | null
-      dueAt: string | null
-      estimateHours: number | null
-      tagIds: string[]
-      phaseId: string | null
-    }) =>
-      api<{ task: TaskListItem }>('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
-      setCreateOpen(false)
-      notifySuccess({ message: `Task "${res.task.title}" dibuat.` })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const bulkCreate = useMutation({
-    mutationFn: (body: {
-      projectId: string
-      tasks: Array<{
-        title: string
-        description: string
-        kind: string
-        priority: string
-        startsAt: string | null
-        dueAt: string | null
-        estimateHours: number | null
-        assigneeEmail: string | null
-        tagNames: string[]
-        phaseName: string | null
-      }>
-    }) =>
-      api<{ count: number; ids: string[] }>('/api/tasks/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
-      setCreateOpen(false)
-      notifySuccess({ message: `${res.count} task berhasil dibuat dari CSV.` })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const projects = projectsQ.data?.projects ?? []
-  const writableProjects = projects.filter((p) => {
-    if (projectId && p.id === projectId && canWriteOverride !== undefined) return canWriteOverride
-    if (isAdmin) return true
-    if (typeof p.canWrite === 'boolean') return p.canWrite
-    return p.myRole !== null && p.myRole !== 'VIEWER'
-  })
-  const currentUserId = session.data?.user?.id ?? null
-  const leadProjectIds = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of projects) if (p.myRole === 'OWNER' || p.myRole === 'PM') set.add(p.id)
-    return set
-  }, [projects])
-  const canDeleteTask = useCallback(
-    (t: TaskListItem) => {
-      if (isAdmin) return true
-      if (currentUserId && t.reporter.id === currentUserId) return true
-      return leadProjectIds.has(t.projectId)
-    },
-    [isAdmin, currentUserId, leadProjectIds],
-  )
-  const rawTasks = tasksQ.data?.tasks ?? []
-  const total = tasksQ.data?.total ?? 0
-  // Server-side handles: search, priority, overdue, unassigned, noDue, blocked.
-  // Client-side still handles: openOnly, dueDateRange, sortBy/sortDir (operates on current page only).
-  const tasks = useMemo(() => {
-    const PRIO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }
-
-    let filtered = rawTasks.filter((t) => {
-      if (quickFilter === 'openOnly') {
-        if (t.status === 'CLOSED') return false
-      }
-      const [dueFrom, dueTo] = dueDateRange
-      if (dueFrom || dueTo) {
-        if (!t.dueAt) return false
-        const due = new Date(t.dueAt).getTime()
-        if (dueFrom && due < new Date(dueFrom).getTime()) return false
-        if (dueTo) {
-          const endOfDay = new Date(dueTo)
-          endOfDay.setHours(23, 59, 59, 999)
-          if (due > endOfDay.getTime()) return false
-        }
-      }
-      return true
-    })
-
-    if (sortBy) {
-      filtered = [...filtered].sort((a, b) => {
-        let va: number | string = 0
-        let vb: number | string = 0
-        if (sortBy === 'priority') {
-          va = PRIO[a.priority]
-          vb = PRIO[b.priority]
-        } else if (sortBy === 'title') {
-          va = a.title.toLowerCase()
-          vb = b.title.toLowerCase()
-        } else if (sortBy === 'dueAt') {
-          va = a.dueAt ? new Date(a.dueAt).getTime() : Infinity
-          vb = b.dueAt ? new Date(b.dueAt).getTime() : Infinity
-        } else if (sortBy === 'createdAt') {
-          va = new Date(a.createdAt).getTime()
-          vb = new Date(b.createdAt).getTime()
-        } else if (sortBy === 'updatedAt') {
-          va = new Date(a.updatedAt).getTime()
-          vb = new Date(b.updatedAt).getTime()
-        } else if (sortBy === 'estimateHours') {
-          va = a.estimateHours ?? Infinity
-          vb = b.estimateHours ?? Infinity
-        }
-        if (va < vb) return sortDir === 'asc' ? -1 : 1
-        if (va > vb) return sortDir === 'asc' ? 1 : -1
-        return 0
-      })
-    }
-
-    return filtered
-  }, [rawTasks, quickFilter, dueDateRange, sortBy, sortDir])
-  const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
-
-  const handleExport = () => {
-    const rows: ExportTaskRow[] = tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      kind: t.kind,
-      status: t.status,
-      priority: t.priority,
-      startsAt: t.startsAt,
-      dueAt: t.dueAt,
-      estimateHours: t.estimateHours,
-      actualHours: t.actualHours,
-      progressPercent: t.progressPercent,
-      assigneeEmail: t.assignee?.email ?? null,
-      assigneeName: t.assignee?.name ?? null,
-      reporterEmail: t.reporter.email,
-      projectName: t.project.name,
-      phaseTitle: t.phase?.title ?? null,
-      tags: t.tags.map((tg) => tg.tag.name),
-      createdAt: t.createdAt,
-      closedAt: t.closedAt,
-    }))
-    const projectSlug = activeProject?.name.replace(/\s+/g, '-').toLowerCase() ?? 'all'
-    const statusSlug = status ?? 'all'
-    const date = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
-    downloadTasksCsv(rows, `tasks-${projectSlug}-${statusSlug}-${date}.csv`)
-  }
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  // API already returns the correct page; pagedTasks = tasks after client-side sort/filter
-  const pagedTasks = tasks
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      const next = new Set<string>()
-      for (const id of prev) if (taskById.has(id)) next.add(id)
-      return next.size === prev.size ? prev : next
-    })
-  }, [taskById])
-  const deletableTasks = useMemo(() => tasks.filter(canDeleteTask), [tasks, canDeleteTask])
-  const deletableIds = useMemo(() => deletableTasks.map((t) => t.id), [deletableTasks])
-  const deletableSelected = useMemo(
-    () =>
-      Array.from(selectedIds).filter((id) => {
-        const t = taskById.get(id)
-        return t ? canDeleteTask(t) : false
-      }),
-    [selectedIds, taskById, canDeleteTask],
-  )
-  const allDeletableSelected = deletableIds.length > 0 && deletableIds.every((id) => selectedIds.has(id))
-  const someDeletableSelected = deletableSelected.length > 0 && !allDeletableSelected
-  const toggleAllSelection = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (allDeletableSelected) for (const id of deletableIds) next.delete(id)
-      else for (const id of deletableIds) next.add(id)
-      return next
-    })
-  }
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-  const clearSelection = () => setSelectedIds(new Set())
-
-  const [trashView, setTrashView] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _reasonRef = useRef('')
-
-  const deleteOne = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      api(`/api/tasks/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      }),
-    onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
-      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
-      setSelectedIds((prev) => {
-        if (!prev.has(id)) return prev
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-      notifySuccess({ message: 'Task dipindahkan ke Trash.' })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const deleteBulk = useMutation({
-    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
-      api<{ deleted: number; denied: number; deniedIds: string[] }>('/api/tasks/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, reason }),
-      }),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
-      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
-      clearSelection()
-      const tail = res.denied > 0 ? ` (${res.denied} ditolak)` : ''
-      notifySuccess({ message: `${res.deleted} task dipindahkan ke Trash${tail}.` })
-    },
-    onError: (err) => notifyError(err),
-  })
-
-  const confirmDeleteOne = (t: TaskListItem) => {
-    modals.open({
-      title: 'Hapus task ini?',
-      size: 'sm',
-      children: (
-        <DeleteReasonModal
-          label={`"${t.title}" akan dipindahkan ke Trash. Bisa di-restore dalam 30 hari.`}
-          onConfirm={(reason) => deleteOne.mutate({ id: t.id, reason })}
-        />
-      ),
-    })
-  }
-
-  const confirmDeleteSelected = () => {
-    const ids = deletableSelected
-    if (ids.length === 0) return
-    modals.open({
-      title: `Hapus ${ids.length} task terpilih?`,
-      size: 'sm',
-      children: (
-        <DeleteReasonModal
-          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
-          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
-        />
-      ),
-    })
-  }
-
-  const confirmDeleteByIds = (ids: string[]) => {
-    if (ids.length === 0) return
-    modals.open({
-      title: `Hapus ${ids.length} task terpilih?`,
-      size: 'sm',
-      children: (
-        <DeleteReasonModal
-          label={`${ids.length} task akan dipindahkan ke Trash. Hanya task yang kamu miliki yang ikut terhapus.`}
-          onConfirm={(reason) => deleteBulk.mutate({ ids, reason })}
-        />
-      ),
-    })
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [
-    activeProjectId,
-    status,
-    kind,
-    mine,
-    tagFilter,
-    phaseFilter,
-    search,
-    quickFilter,
-    dueDateRange,
-    priorityFilter,
-    sortBy,
-    sortDir,
-  ])
-
-  // Reset filter yang project-scoped saat berpindah project
-  useEffect(() => {
-    setPhaseFilter(null)
-    setTagFilter(null)
-  }, [activeProjectId])
+  const {
+    projects, writableProjects, activeProjectId, activeProject, canDeleteTask,
+    tasksQ, tagsQ, phasesQ, chartTasksQ,
+    rawTasks, tasks, total, totalPages, safePage,
+    status, setStatus, kind, setKind, mine, setMine,
+    tagFilter, setTagFilter, phaseFilter, setPhaseFilter,
+    search, setSearch, quickFilter, setQuickFilter,
+    dueDateRange, setDueDateRange, priorityFilter, setPriorityFilter,
+    sortBy, setSortBy, sortDir, setSortDir, showClearAll, clearAllFilters,
+    view, setView, showCharts, setShowCharts, trashView, setTrashView,
+    page, setPage,
+    selectedIds, toggleSelection, toggleAllSelection, clearSelection,
+    allDeletableSelected, someDeletableSelected, deletableTasks, deletableSelected,
+    create, bulkCreate, deleteOne, deleteBulk,
+    openTask, closeTask, changeProject,
+    confirmDeleteOne, confirmDeleteByIds, confirmDeleteSelected, handleExport,
+    drawerTaskId, createOpen, setCreateOpen,
+  } = useTasksPanelState({ projectId, onProjectChange, canWriteOverride })
 
   return (
     <Stack gap="md">
-      {activeProject ? (
+      {activeProject && (
         <Group gap={6} wrap="nowrap">
-          {onBackToProjects ? (
+          {onBackToProjects && (
             <Tooltip label="Back to projects">
-              <ActionIcon variant="subtle" size="sm" onClick={onBackToProjects}>
-                <TbArrowLeft size={14} />
-              </ActionIcon>
+              <ActionIcon variant="subtle" size="sm" onClick={onBackToProjects}><TbArrowLeft size={14} /></ActionIcon>
             </Tooltip>
-          ) : null}
-          <Text
-            size="xs"
-            c="dimmed"
-            style={{ cursor: onBackToProjects ? 'pointer' : undefined }}
-            onClick={onBackToProjects}
-          >
-            Projects
-          </Text>
+          )}
+          <Text size="xs" c="dimmed" style={{ cursor: onBackToProjects ? 'pointer' : undefined }} onClick={onBackToProjects}>Projects</Text>
           <TbChevronRight size={12} style={{ opacity: 0.5 }} />
-          <Text size="xs" c="dimmed">
-            {activeProject.name}
-          </Text>
+          <Text size="xs" c="dimmed">{activeProject.name}</Text>
           <TbChevronRight size={12} style={{ opacity: 0.5 }} />
-          <Text size="xs" fw={500}>
-            Tasks
-          </Text>
+          <Text size="xs" fw={500}>Tasks</Text>
         </Group>
-      ) : null}
+      )}
+
       <Group justify="space-between">
         <div>
           <Title order={3}>{activeProject ? `${activeProject.name} · Tasks` : 'Tasks'}</Title>
           <Text c="dimmed" size="sm">
-            {activeProject
-              ? `All tasks, bugs, and QC items in ${activeProject.name}.`
-              : 'Unified task + bug + QC view across your projects.'}
+            {activeProject ? `All tasks, bugs, and QC items in ${activeProject.name}.` : 'Unified task + bug + QC view across your projects.'}
           </Text>
         </div>
         <Group gap="xs">
           <Tooltip label={showCharts ? 'Hide dashboard' : 'Show dashboard'}>
-            <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}>
-              <TbChartBar size={16} />
-            </ActionIcon>
+            <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}><TbChartBar size={16} /></ActionIcon>
           </Tooltip>
           <Tooltip label={trashView ? 'Kembali ke task' : 'Lihat Trash'}>
-            <ActionIcon
-              variant={trashView ? 'filled' : 'light'}
-              color={trashView ? 'red' : 'gray'}
-              onClick={() => setTrashView((v) => !v)}
-            >
+            <ActionIcon variant={trashView ? 'filled' : 'light'} color={trashView ? 'red' : 'gray'} onClick={() => setTrashView((v) => !v)}>
               <TbTrash size={16} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Refresh">
-            <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}>
-              <TbRefresh size={16} />
-            </ActionIcon>
+            <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}><TbRefresh size={16} /></ActionIcon>
           </Tooltip>
           <Tooltip
             label={
-              activeProjectId && canWriteOverride === false
-                ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
-                : writableProjects.length === 0
-                  ? 'Tidak ada proyek yang bisa ditulis'
-                  : ''
+              activeProjectId && canWriteOverride === false ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
+                : writableProjects.length === 0 ? 'Tidak ada proyek yang bisa ditulis' : ''
             }
             disabled={!((activeProjectId && canWriteOverride === false) || writableProjects.length === 0)}
           >
@@ -724,659 +95,75 @@ export function TasksPanel({
         </Group>
       </Group>
 
-      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0 ? (
+      {showCharts && (chartTasksQ.data?.tasks ?? rawTasks).length > 0 && (
         <TaskDashboardOverlay tasks={chartTasksQ.data?.tasks ?? rawTasks} />
-      ) : null}
-
-      {activeProjectId && (phasesQ.data?.phases.length ?? 0) > 0 && (
-        <Card withBorder padding="xs" radius="md">
-          <Group gap={6} wrap="wrap" align="center">
-            <Group gap={4} align="center" mr={4}>
-              <Text size="xs" fw={600} c="dimmed">
-                Fase
-              </Text>
-              <Tooltip
-                label={
-                  <Stack gap={4}>
-                    <Text size="xs" fw={600}>Apa itu Fase?</Text>
-                    <Text size="xs">Fase adalah tahapan atau sprint dalam proyek — misalnya Planning, Development, Testing, Release. Setiap task bisa dimasukkan ke satu fase agar lebih mudah dilacak per tahapan.</Text>
-                    <Text size="xs" fw={600} mt={2}>Cara pakai filter ini</Text>
-                    <Text size="xs">• Klik fase untuk filter — klik lagi untuk reset</Text>
-                    <Text size="xs">• Angka di setiap pill = jumlah task dalam fase</Text>
-                    <Text size="xs">• "Tanpa Fase" = task yang belum masuk fase manapun</Text>
-                    <Text size="xs" c="dimmed" mt={2}>Kelola fase di tab Fase pada halaman detail proyek.</Text>
-                  </Stack>
-                }
-                withArrow
-                position="bottom-start"
-                multiline
-                w={300}
-              >
-                <TbInfoCircle size={12} style={{ color: 'var(--mantine-color-dimmed)', cursor: 'help' }} />
-              </Tooltip>
-            </Group>
-            <PhasePill
-              label="Semua"
-              active={phaseFilter === null}
-              color="blue"
-              onClick={() => setPhaseFilter(null)}
-            />
-            {phasesQ.data!.phases.map((p) => (
-              <PhasePill
-                key={p.id}
-                label={p.title}
-                count={p._count.tasks}
-                active={phaseFilter === p.id}
-                color={p.status === 'COMPLETED' ? 'green' : p.status === 'ACTIVE' ? 'blue' : 'gray'}
-                onClick={() => setPhaseFilter(phaseFilter === p.id ? null : p.id)}
-              />
-            ))}
-            <PhasePill
-              label="Tanpa Fase"
-              active={phaseFilter === 'none'}
-              color="gray"
-              onClick={() => setPhaseFilter(phaseFilter === 'none' ? null : 'none')}
-            />
-          </Group>
-        </Card>
       )}
 
-      <Card withBorder padding="sm" radius="md">
-        <Stack gap="sm">
-          {/* ─── Scope ─── */}
-          <Divider
-            label={
-              <Group gap={4}>
-                <TbFilter size={11} />
-                <Text size="xs" c="dimmed" fw={600}>
-                  Scope
-                </Text>
-              </Group>
-            }
-            labelPosition="left"
-          />
-          <Group gap="sm" wrap="wrap" align="center">
-            {activeProject ? (
-              <Badge
-                color="blue"
-                variant="light"
-                size="lg"
-                leftSection={<TbTag size={12} />}
-                rightSection={
-                  <ActionIcon
-                    size="xs"
-                    variant="transparent"
-                    color="blue"
-                    onClick={() => changeProject(null)}
-                    aria-label="Clear project filter"
-                  >
-                    <TbX size={12} />
-                  </ActionIcon>
-                }
-              >
-                {activeProject.name}
-              </Badge>
-            ) : (
-              <Select
-                placeholder="All projects"
-                data={projects.map((p) => ({ value: p.id, label: p.name }))}
-                value={activeProjectId}
-                onChange={changeProject}
-                clearable
-                size="xs"
-                w={220}
-              />
-            )}
-            <Switch
-              label="Assigned to me"
-              checked={mine}
-              onChange={(e) => setMine(e.currentTarget.checked)}
-              size="sm"
-            />
-          </Group>
+      {activeProjectId && (
+        <TasksPhaseBar phases={phasesQ.data?.phases ?? []} phaseFilter={phaseFilter} onPhaseChange={setPhaseFilter} />
+      )}
 
-          {/* ─── Tipe Task ─── */}
-          <Divider
-            label={
-              <Text size="xs" c="dimmed" fw={600}>
-                Tipe Task
-              </Text>
-            }
-            labelPosition="left"
-          />
-          <Group gap="sm" wrap="wrap" align="center">
-            <Select
-              placeholder="All kinds"
-              data={['TASK', 'BUG', 'QC']}
-              value={kind}
-              onChange={setKind}
-              clearable
-              size="xs"
-              w={130}
-            />
-            <Select
-              placeholder="All statuses"
-              data={['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED']}
-              value={status}
-              onChange={setStatus}
-              clearable
-              size="xs"
-              w={160}
-            />
-            <Select
-              placeholder="All priorities"
-              data={[
-                { value: 'CRITICAL', label: 'Critical' },
-                { value: 'HIGH', label: 'High' },
-                { value: 'MEDIUM', label: 'Medium' },
-                { value: 'LOW', label: 'Low' },
-              ]}
-              value={priorityFilter}
-              onChange={setPriorityFilter}
-              clearable
-              size="xs"
-              w={140}
-            />
-            {activeProjectId && tagsQ.data?.tags.length ? (
-              <Select
-                placeholder="All tags"
-                leftSection={<TbTag size={12} />}
-                data={tagsQ.data.tags.map((t) => ({ value: t.id, label: t.name }))}
-                value={tagFilter}
-                onChange={setTagFilter}
-                clearable
-                size="xs"
-                w={155}
-              />
-            ) : null}
-          </Group>
-
-          {/* ─── Urutan ─── */}
-          <Divider
-            label={
-              <Text size="xs" c="dimmed" fw={600}>
-                Urutan
-              </Text>
-            }
-            labelPosition="left"
-          />
-          <Group gap="sm" wrap="wrap" align="center">
-            <Select
-              placeholder="Default order"
-              data={[
-                { value: 'dueAt', label: 'Due date' },
-                { value: 'priority', label: 'Priority' },
-                { value: 'title', label: 'Title (A–Z)' },
-                { value: 'createdAt', label: 'Created' },
-                { value: 'updatedAt', label: 'Updated' },
-                { value: 'estimateHours', label: 'Estimate hours' },
-              ]}
-              value={sortBy}
-              onChange={setSortBy}
-              clearable
-              size="xs"
-              w={170}
-            />
-            <Tooltip label={sortDir === 'asc' ? 'Ascending — klik untuk DESC' : 'Descending — klik untuk ASC'}>
-              <ActionIcon
-                variant="light"
-                size="sm"
-                disabled={!sortBy}
-                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-              >
-                {sortDir === 'asc' ? <TbSortAscending size={14} /> : <TbSortDescending size={14} />}
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-
-          {/* ─── Tanggal ─── */}
-          <Divider
-            label={
-              <Text size="xs" c="dimmed" fw={600}>
-                Tanggal Due
-              </Text>
-            }
-            labelPosition="left"
-          />
-          <Group gap="sm" wrap="wrap" align="center">
-            <DatePickerInput
-              type="range"
-              placeholder="Semua due date"
-              value={dueDateRange}
-              onChange={(v) => setDueDateRange(v as [Date | null, Date | null])}
-              clearable
-              size="xs"
-              w={260}
-              valueFormat="DD MMM YYYY"
-              getDayProps={(raw) => {
-                const date = new Date(raw)
-                const t = new Date()
-                const isToday =
-                  date.getDate() === t.getDate() &&
-                  date.getMonth() === t.getMonth() &&
-                  date.getFullYear() === t.getFullYear()
-                if (!isToday) return {}
-                return {
-                  style: {
-                    backgroundColor: 'var(--mantine-color-orange-6)',
-                    color: '#fff',
-                    fontWeight: 700,
-                    borderRadius: 4,
-                  },
-                }
-              }}
-            />
-          </Group>
-
-          {/* ─── Cari & Tampilan ─── */}
-          <Divider />
-          <Group gap="sm" wrap="wrap" align="center">
-            <TextInput
-              placeholder="Cari judul atau deskripsi"
-              leftSection={<TbSearch size={12} />}
-              value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
-              size="xs"
-              w={230}
-            />
-            <Text size="xs" c="dimmed" fw={500}>
-              Quick
-            </Text>
-            <Badge
-              color={quickFilter === 'openOnly' ? 'blue' : 'gray'}
-              variant={quickFilter === 'openOnly' ? 'filled' : 'light'}
-              size="sm"
-              style={{ cursor: 'pointer' }}
-              onClick={() => setQuickFilter(quickFilter === 'openOnly' ? null : 'openOnly')}
-            >
-              Open only
-            </Badge>
-            <Divider orientation="vertical" />
-            <Text size="xs" c="dimmed" fw={500}>
-              Attention
-            </Text>
-            <Badge
-              color={quickFilter === 'overdue' ? 'red' : 'gray'}
-              variant={quickFilter === 'overdue' ? 'filled' : 'light'}
-              size="sm"
-              leftSection={<TbAlertTriangle size={10} />}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setQuickFilter(quickFilter === 'overdue' ? null : 'overdue')}
-            >
-              Overdue
-            </Badge>
-            <Badge
-              color={quickFilter === 'unassigned' ? 'orange' : 'gray'}
-              variant={quickFilter === 'unassigned' ? 'filled' : 'light'}
-              size="sm"
-              leftSection={<TbUserQuestion size={10} />}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setQuickFilter(quickFilter === 'unassigned' ? null : 'unassigned')}
-            >
-              Unassigned
-            </Badge>
-            <Badge
-              color={quickFilter === 'blocked' ? 'gray' : 'gray'}
-              variant={quickFilter === 'blocked' ? 'filled' : 'light'}
-              size="sm"
-              leftSection={<TbLock size={10} />}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setQuickFilter(quickFilter === 'blocked' ? null : 'blocked')}
-            >
-              Blocked
-            </Badge>
-            <Badge
-              color={quickFilter === 'nodue' ? 'gray' : 'gray'}
-              variant={quickFilter === 'nodue' ? 'filled' : 'light'}
-              size="sm"
-              leftSection={<TbCalendarOff size={10} />}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setQuickFilter(quickFilter === 'nodue' ? null : 'nodue')}
-            >
-              No due date
-            </Badge>
-            {(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy || phaseFilter) && (
-              <Button
-                variant="subtle"
-                color="gray"
-                size="compact-xs"
-                onClick={() => {
-                  setQuickFilter(null)
-                  setSearch('')
-                  setDueDateRange([null, null])
-                  setPriorityFilter(null)
-                  setSortBy(null)
-                  setSortDir('asc')
-                  setPhaseFilter(null)
-                }}
-              >
-                Clear all
-              </Button>
-            )}
-            <SegmentedControl
-              size="xs"
-              value={view}
-              onChange={(v) => setView(v as 'table' | 'gantt' | 'kanban')}
-              data={[
-                { value: 'table', label: 'Table' },
-                { value: 'kanban', label: 'Kanban' },
-                { value: 'gantt', label: 'Gantt' },
-              ]}
-              ml="auto"
-            />
-            <Tooltip
-              label={`Download CSV (${total > 0 ? `${total} task` : 'kosong'}${status ? ` · ${status}` : ' · semua status'} · halaman ini)`}
-              withArrow
-            >
-              <ActionIcon variant="light" color="teal" size="sm" onClick={handleExport} disabled={tasks.length === 0}>
-                <TbDownload size={14} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Stack>
-      </Card>
+      <TasksFilterBar
+        activeProject={activeProject} projects={projects} activeProjectId={activeProjectId}
+        status={status} onStatusChange={setStatus} kind={kind} onKindChange={setKind}
+        mine={mine} onMineChange={setMine} tagFilter={tagFilter} onTagFilterChange={setTagFilter}
+        tags={tagsQ.data?.tags ?? []} search={search} onSearchChange={setSearch}
+        quickFilter={quickFilter} onQuickFilterChange={setQuickFilter}
+        dueDateRange={dueDateRange} onDueDateRangeChange={setDueDateRange}
+        priorityFilter={priorityFilter} onPriorityFilterChange={setPriorityFilter}
+        sortBy={sortBy} onSortByChange={setSortBy} sortDir={sortDir}
+        onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        view={view} onViewChange={setView} onProjectChange={changeProject}
+        total={total} taskCount={tasks.length} onExport={handleExport}
+        showClearAll={showClearAll} onClearAll={clearAllFilters}
+      />
 
       {trashView ? (
         <TasksTrashView projectId={activeProjectId} />
       ) : view === 'kanban' ? (
         <TasksKanbanView
           projectId={activeProjectId ?? null}
-          filters={{
-            kind: kind || null,
-            mine,
-            tagId: tagFilter || null,
-            phaseId: phaseFilter || null,
-            search: search.trim() || undefined,
-            priority: priorityFilter || null,
-          }}
-          canWrite={
-            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
-          }
-          onSelect={(id) => openTask(id)}
+          filters={{ kind: kind || null, mine, tagId: tagFilter || null, phaseId: phaseFilter || null, search: search.trim() || undefined, priority: priorityFilter || null }}
+          canWrite={activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0}
+          onSelect={openTask}
           onDeleteOne={confirmDeleteOne}
           onDeleteSelected={confirmDeleteByIds}
           canDeleteTask={canDeleteTask}
         />
       ) : tasks.length === 0 && !tasksQ.isLoading ? (
-        <Card withBorder p="xl" radius="md">
+        <div style={{ borderRadius: 8, border: '1px solid var(--mantine-color-default-border)', padding: 40 }}>
           <Stack align="center" gap="sm">
             <TbListCheck size={40} />
             <Text fw={500}>{activeProject ? `No tasks in ${activeProject.name} yet` : 'No tasks found'}</Text>
             <Text size="sm" c="dimmed" ta="center">
-              {writableProjects.length === 0
-                ? 'Join a project to start creating tasks.'
-                : activeProject
-                  ? 'Kick things off by creating the first task for this project.'
-                  : 'Try clearing filters or creating a new task.'}
+              {writableProjects.length === 0 ? 'Join a project to start creating tasks.'
+                : activeProject ? 'Kick things off by creating the first task for this project.'
+                : 'Try clearing filters or creating a new task.'}
             </Text>
-            {writableProjects.length > 0 ? (
+            {writableProjects.length > 0 && (
               <Group gap="xs">
-                {activeProjectId && canWriteOverride === false ? null : (
-                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
-                    New Task
-                  </Button>
+                {!(activeProjectId && canWriteOverride === false) && (
+                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>New Task</Button>
                 )}
-                {activeProject ? (
-                  <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>
-                    View all tasks
-                  </Button>
-                ) : null}
+                {activeProject && <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>View all tasks</Button>}
               </Group>
-            ) : null}
+            )}
           </Stack>
-        </Card>
+        </div>
       ) : view === 'gantt' ? (
-        <TasksGanttView tasks={tasks} onSelect={(id) => openTask(id)} />
+        <TasksGanttView tasks={tasks} onSelect={openTask} />
       ) : (
-        <Card withBorder padding={0} radius="md">
-          {deletableSelected.length > 0 && (
-            <Group
-              justify="space-between"
-              px="md"
-              py="xs"
-              style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
-            >
-              <Group gap="xs">
-                <Text size="xs" c="dimmed">
-                  {deletableSelected.length} terpilih
-                  {allDeletableSelected && deletableTasks.length > 1 ? ' (semua)' : ''}
-                </Text>
-                <Button size="compact-xs" variant="subtle" onClick={clearSelection}>
-                  Bersihkan
-                </Button>
-              </Group>
-              <Button
-                size="compact-xs"
-                color="red"
-                variant="filled"
-                leftSection={<TbTrash size={12} />}
-                disabled={deleteBulk.isPending}
-                loading={deleteBulk.isPending}
-                onClick={confirmDeleteSelected}
-              >
-                Hapus terpilih
-              </Button>
-            </Group>
-          )}
-          <Table.ScrollContainer minWidth={activeProject ? 1080 : 1220}>
-            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" layout="fixed">
-              <Table.Thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                <Table.Tr>
-                  <Table.Th style={{ width: 36 }}>
-                    <Tooltip
-                      label={allDeletableSelected ? 'Bersihkan pilihan' : `Pilih semua ${deletableTasks.length} task`}
-                    >
-                      <Checkbox
-                        size="xs"
-                        aria-label="Pilih semua task"
-                        checked={allDeletableSelected}
-                        indeterminate={someDeletableSelected}
-                        onChange={toggleAllSelection}
-                        disabled={deletableTasks.length === 0}
-                      />
-                    </Tooltip>
-                  </Table.Th>
-                  <Table.Th style={STICKY_COL_HEADER}>Title</Table.Th>
-                  {activeProject ? null : <Table.Th style={{ width: 140 }}>Project</Table.Th>}
-                  <Table.Th style={{ width: 90 }}>Kind</Table.Th>
-                  <Table.Th style={{ width: 130 }}>Status</Table.Th>
-                  <Table.Th style={{ width: 110 }}>Priority</Table.Th>
-                  <Table.Th style={{ width: 150 }}>Assignee</Table.Th>
-                  {activeProject ? <Table.Th style={{ width: 110 }}>Fase</Table.Th> : null}
-                  <Table.Th style={{ width: 110 }}>Due</Table.Th>
-                  <Table.Th style={{ width: 90 }}>Hours</Table.Th>
-                  <Table.Th style={{ width: 110 }}>Progress</Table.Th>
-                  <Table.Th style={{ width: 110 }}>Updated</Table.Th>
-                  <Table.Th style={{ width: 40 }} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {pagedTasks.map((t) => {
-                  const variance =
-                    t.estimateHours != null && t.actualHours != null ? t.actualHours - t.estimateHours : null
-                  const blocked = t._count.blockedBy > 0 && t.status !== 'CLOSED'
-                  const deletable = canDeleteTask(t)
-                  const checked = selectedIds.has(t.id)
-                  return (
-                    <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => openTask(t.id)}>
-                      <Table.Td onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          size="xs"
-                          aria-label={`Select task ${t.title}`}
-                          checked={checked}
-                          onChange={() => toggleSelection(t.id)}
-                          disabled={!deletable}
-                        />
-                      </Table.Td>
-                      <Table.Td style={STICKY_COL_CELL}>
-                        <Stack gap={2}>
-                          <Group gap={6} wrap="nowrap">
-                            <Text size="sm" fw={500} lineClamp={1}>
-                              {t.title}
-                            </Text>
-                            {blocked ? (
-                              <Tooltip label={`Blocked by ${t._count.blockedBy} task(s)`}>
-                                <Badge size="xs" color="gray" variant="filled">
-                                  blocked
-                                </Badge>
-                              </Tooltip>
-                            ) : null}
-                          </Group>
-                          {t.tags.length > 0 && (
-                            <Group gap={4} wrap="wrap">
-                              {t.tags.slice(0, 4).map((tt) => (
-                                <Badge key={tt.tagId} size="xs" color={tt.tag.color} variant="light">
-                                  {tt.tag.name}
-                                </Badge>
-                              ))}
-                              {t.tags.length > 4 && (
-                                <Text size="xs" c="dimmed">
-                                  +{t.tags.length - 4}
-                                </Text>
-                              )}
-                            </Group>
-                          )}
-                        </Stack>
-                      </Table.Td>
-                      {activeProject ? null : (
-                        <Table.Td>
-                          <Text size="xs" c="dimmed">
-                            {t.project.name}
-                          </Text>
-                        </Table.Td>
-                      )}
-                      <Table.Td>
-                        <Badge color={KIND_COLOR[t.kind]} variant="light" size="sm">
-                          {t.kind}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={STATUS_COLOR[t.status]} variant="light" size="sm">
-                          {t.status.replace('_', ' ')}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={PRIORITY_COLOR[t.priority]} variant="dot" size="sm">
-                          {t.priority}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        {t.assignee ? (
-                          <Tooltip label={t.assignee.name} withArrow>
-                            <Group gap={6} wrap="nowrap">
-                              <UserAvatar name={t.assignee.name} image={t.assignee.image} size={20} color="blue" />
-                              <Text size="xs" truncate style={{ maxWidth: 90 }}>
-                                {t.assignee.name.split(' ')[0]}
-                              </Text>
-                            </Group>
-                          </Tooltip>
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            —
-                          </Text>
-                        )}
-                      </Table.Td>
-                      {activeProject ? (
-                        <Table.Td>
-                          {t.phase ? (
-                            <Badge size="xs" variant="light" color="indigo">
-                              {t.phase.title}
-                            </Badge>
-                          ) : (
-                            <Text size="xs" c="dimmed">—</Text>
-                          )}
-                        </Table.Td>
-                      ) : null}
-                      <Table.Td>
-                        {t.dueAt ? (
-                          (() => {
-                            const dueMs = new Date(t.dueAt).getTime()
-                            const overdue = t.status !== 'CLOSED' && dueMs < Date.now()
-                            return (
-                              <Text size="xs" c={overdue ? 'red' : 'dimmed'} fw={overdue ? 600 : undefined}>
-                                {new Date(t.dueAt).toLocaleDateString('id-ID')}
-                              </Text>
-                            )
-                          })()
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            —
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Tooltip
-                          label={
-                            t.estimateHours != null || t.actualHours != null
-                              ? `estimate: ${t.estimateHours ?? '—'}h · actual: ${t.actualHours ?? '—'}h${variance != null ? ` · ${variance > 0 ? '+' : ''}${variance.toFixed(1)}h` : ''}`
-                              : 'No hours logged'
-                          }
-                        >
-                          <Group gap={4} wrap="nowrap">
-                            <TbClock size={12} />
-                            <Text size="xs" c={variance != null && variance > 0 ? 'red' : 'dimmed'}>
-                              {t.actualHours != null
-                                ? `${t.actualHours}h`
-                                : t.estimateHours != null
-                                  ? `~${t.estimateHours}h`
-                                  : '—'}
-                            </Text>
-                          </Group>
-                        </Tooltip>
-                      </Table.Td>
-                      <Table.Td style={{ minWidth: 90 }}>
-                        {t.progressPercent != null ? (
-                          <Stack gap={2}>
-                            <Text size="xs" c="dimmed">
-                              {t.progressPercent}%
-                            </Text>
-                            <Progress
-                              value={t.progressPercent}
-                              size="xs"
-                              color={t.status === 'CLOSED' ? 'green' : 'blue'}
-                            />
-                          </Stack>
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            —
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" c="dimmed">
-                          {new Date(t.updatedAt).toLocaleDateString()}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td onClick={(e) => e.stopPropagation()}>
-                        {deletable ? (
-                          <Tooltip label="Hapus task">
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              color="red"
-                              onClick={() => confirmDeleteOne(t)}
-                              loading={deleteOne.isPending && deleteOne.variables?.id === t.id}
-                            >
-                              <TbTrash size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                        ) : null}
-                      </Table.Td>
-                    </Table.Tr>
-                  )
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-          {total > PAGE_SIZE && (
-            <Group justify="space-between" p="md">
-              <Text size="xs" c="dimmed">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, total)} dari {total}
-              </Text>
-              <Pagination value={safePage} onChange={setPage} total={totalPages} size="sm" />
-            </Group>
-          )}
-        </Card>
+        <TasksTableView
+          tasks={tasks} activeProject={activeProject} total={total} page={page} setPage={setPage}
+          safePage={safePage} totalPages={totalPages} PAGE_SIZE={PAGE_SIZE}
+          selectedIds={selectedIds} toggleSelection={toggleSelection} toggleAllSelection={toggleAllSelection}
+          clearSelection={clearSelection} allDeletableSelected={allDeletableSelected}
+          someDeletableSelected={someDeletableSelected} deletableTasks={deletableTasks}
+          deletableSelected={deletableSelected} deleteBulkPending={deleteBulk.isPending}
+          deleteOnePending={deleteOne.isPending} deleteOneId={deleteOne.variables?.id}
+          onDeleteOne={confirmDeleteOne} onDeleteSelected={confirmDeleteSelected}
+          canDeleteTask={canDeleteTask} onOpen={openTask}
+        />
       )}
 
       <CreateTaskModal
@@ -1401,10 +188,7 @@ export function TasksPanel({
         overlayProps={{ blur: 4, backgroundOpacity: 0.45 }}
         transitionProps={{ transition: 'fade-up', duration: 220 }}
         radius="lg"
-        styles={{
-          content: { maxHeight: '90vh' },
-          body: { padding: 'var(--mantine-spacing-lg)' },
-        }}
+        styles={{ content: { maxHeight: '90vh' }, body: { padding: 'var(--mantine-spacing-lg)' } }}
       >
         {drawerTaskId && <TaskDetailView taskId={drawerTaskId} onBack={closeTask} />}
       </Modal>

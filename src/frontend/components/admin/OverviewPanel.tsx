@@ -1,259 +1,63 @@
-import {
-  ActionIcon,
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Progress,
-  SimpleGrid,
-  Skeleton,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Button, Group, SimpleGrid, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
-import {
-  TbActivity,
-  TbAlertTriangle,
-  TbCalendarEvent,
-  TbFileReport,
-  TbFlame,
-  TbHeartbeat,
-  TbInfoCircle,
-  TbListCheck,
-  TbRefresh,
-  TbShieldCheck,
-  TbTarget,
-  type TbUsers,
-  TbUsersGroup,
-} from 'react-icons/tb'
+import { useMemo } from 'react'
+import { TbFileReport, TbHeartbeat, TbListCheck, TbRefresh, TbTarget, TbUsersGroup } from 'react-icons/tb'
 import { EmptyState } from '@/frontend/components/shared/EmptyState'
 import { SectionSkeleton } from '@/frontend/components/shared/LoadingState'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
-import type { Role } from '@/frontend/hooks/useAuth'
 import { type AnalyticsData, AnalyticsSection } from './AnalyticsSection'
-
-interface AdminUser {
-  id: string
-  role: Role
-  blocked: boolean
-}
-
-interface ProjectRow {
-  id: string
-  status: 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
-}
-
-interface TaskRow {
-  id: string
-  status: 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
-  dueAt: string | null
-}
-
-interface AuditLogEntry {
-  id: string
-  userId: string | null
-  action: string
-  detail: string | null
-  createdAt: string
-  user: { name: string; email: string; image?: string | null } | null
-}
-
-type RiskSeverity = 'none' | 'low' | 'medium' | 'high'
-
-interface RiskReport {
-  severity: RiskSeverity
-  summary: {
-    overdueTasks: number
-    staleTasks: number
-    pastDueProjects: number
-    missingEnv: number
-  }
-  overdueTasks: Array<{
-    id: string
-    title: string
-    priority: string
-    daysOverdue: number | null
-    assignee: string | null
-    project: string
-    projectId: string
-  }>
-  staleTasks: Array<{
-    id: string
-    title: string
-    priority: string
-    daysStale: number
-    assignee: string | null
-    project: string
-    projectId: string
-  }>
-  pastDueProjects: Array<{ id: string; name: string; priority: string; owner: string; daysOverdue: number | null }>
-  missingEnv: string[]
-}
-
-interface HealthRow {
-  id: string
-  name: string
-  status: string
-  priority: string
-  owner: string
-  endsAt: string | null
-  daysUntilDue: number | null
-  pastDue: boolean
-  openTasks: number
-  overdueTasks: number
-  blockedTasks: number
-  closed7d: number
-  extensions: number
-  score: number
-  grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
-}
-
-interface LoadRow {
-  userId: string | null
-  email: string | null
-  name: string
-  role: string | null
-  image?: string | null
-  open: number
-  estimateHours: number
-  highPriority: number
-  overdue: number
-  closed7d: number
-  overloaded: boolean
-}
-
-interface UpcomingEvent {
-  id: string
-  title: string
-  startsAt: string
-  endsAt: string | null
-  location: string | null
-  tags: Array<{ tagId: string; tag: { name: string; color: string } }>
-  project: { id: string; name: string } | null
-}
-
-const SEVERITY_COLOR: Record<RiskSeverity, string> = {
-  none: 'teal',
-  low: 'blue',
-  medium: 'orange',
-  high: 'red',
-}
-
-const GRADE_COLOR: Record<string, string> = {
-  A: 'teal',
-  B: 'green',
-  C: 'yellow',
-  D: 'orange',
-  E: 'red',
-  F: 'red',
-}
-
-const PRIORITY_COLOR: Record<string, string> = {
-  LOW: 'gray',
-  MEDIUM: 'blue',
-  HIGH: 'orange',
-  CRITICAL: 'red',
-}
-
-const ACTION_COLOR: Record<string, string> = {
-  LOGIN: 'green',
-  LOGOUT: 'gray',
-  LOGIN_FAILED: 'orange',
-  LOGIN_BLOCKED: 'red',
-  ROLE_CHANGED: 'violet',
-  BLOCKED: 'red',
-  UNBLOCKED: 'teal',
-  PROJECT_MEMBER_ROLE_CHANGED: 'grape',
-  TASK_CREATED: 'blue',
-  AGENT_APPROVED: 'teal',
-  AGENT_REVOKED: 'red',
-}
-
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  const hours = Math.floor(mins / 60)
-  const days = Math.floor(hours / 24)
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  if (mins > 0) return `${mins}m ago`
-  return 'just now'
-}
+import { KpiCard } from './overviewpanel/KpiCard'
+import { PortfolioHealthSection } from './overviewpanel/PortfolioHealthSection'
+import { RecentActivityCard } from './overviewpanel/RecentActivityCard'
+import { RedFlagsSection } from './overviewpanel/RedFlagsSection'
+import { TeamLoadSection } from './overviewpanel/TeamLoadSection'
+import { UpcomingEventsCard } from './overviewpanel/UpcomingEventsCard'
+import type { AdminUser, AuditLogEntry, HealthRow, LoadRow, ProjectRow, RiskReport, TaskRow, UpcomingEvent } from './overviewpanel/types'
+import { useFreshness } from './overviewpanel/useFreshness'
 
 export function OverviewPanel() {
   const navigate = useNavigate()
 
   const usersQ = useQuery({
     queryKey: ['admin', 'overview', 'users'],
-    queryFn: () =>
-      fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()) as Promise<{ users: AdminUser[] }>,
+    queryFn: () => fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()) as Promise<{ users: AdminUser[] }>,
     refetchInterval: 30_000,
   })
-
   const projectsQ = useQuery({
     queryKey: ['admin', 'overview', 'projects'],
-    queryFn: () =>
-      fetch('/api/projects', { credentials: 'include' }).then((r) => r.json()) as Promise<{ projects: ProjectRow[] }>,
+    queryFn: () => fetch('/api/projects', { credentials: 'include' }).then((r) => r.json()) as Promise<{ projects: ProjectRow[] }>,
     refetchInterval: 30_000,
   })
-
   const tasksQ = useQuery({
     queryKey: ['admin', 'overview', 'tasks'],
-    queryFn: () =>
-      fetch('/api/tasks?limit=500', { credentials: 'include' }).then((r) => r.json()) as Promise<{ tasks: TaskRow[] }>,
+    queryFn: () => fetch('/api/tasks?limit=500', { credentials: 'include' }).then((r) => r.json()) as Promise<{ tasks: TaskRow[] }>,
     refetchInterval: 30_000,
   })
-
   const auditQ = useQuery({
     queryKey: ['admin', 'overview', 'audit'],
-    queryFn: () =>
-      fetch('/api/admin/logs/audit?limit=8', { credentials: 'include' }).then((r) => r.json()) as Promise<{
-        logs: AuditLogEntry[]
-      }>,
+    queryFn: () => fetch('/api/admin/logs/audit?limit=8', { credentials: 'include' }).then((r) => r.json()) as Promise<{ logs: AuditLogEntry[] }>,
     refetchInterval: 30_000,
   })
-
   const risksQ = useQuery({
     queryKey: ['admin', 'overview', 'risks'],
-    queryFn: () =>
-      fetch('/api/admin/overview/risks', { credentials: 'include' }).then((r) => r.json()) as Promise<RiskReport>,
+    queryFn: () => fetch('/api/admin/overview/risks', { credentials: 'include' }).then((r) => r.json()) as Promise<RiskReport>,
     refetchInterval: 30_000,
   })
-
   const healthQ = useQuery({
     queryKey: ['admin', 'overview', 'health'],
-    queryFn: () =>
-      fetch('/api/admin/overview/health?limit=12', { credentials: 'include' }).then((r) => r.json()) as Promise<{
-        count: number
-        projects: HealthRow[]
-      }>,
+    queryFn: () => fetch('/api/admin/overview/health?limit=12', { credentials: 'include' }).then((r) => r.json()) as Promise<{ count: number; projects: HealthRow[] }>,
     refetchInterval: 60_000,
   })
-
   const loadQ = useQuery({
     queryKey: ['admin', 'overview', 'load'],
-    queryFn: () =>
-      fetch('/api/admin/overview/load?includeUnassigned=false&limit=12', { credentials: 'include' }).then((r) =>
-        r.json(),
-      ) as Promise<{ count: number; rows: LoadRow[] }>,
+    queryFn: () => fetch('/api/admin/overview/load?includeUnassigned=false&limit=12', { credentials: 'include' }).then((r) => r.json()) as Promise<{ count: number; rows: LoadRow[] }>,
     refetchInterval: 60_000,
   })
-
   const analyticsQ = useQuery({
     queryKey: ['admin', 'overview', 'analytics'],
-    queryFn: () =>
-      fetch('/api/admin/overview/analytics', { credentials: 'include' }).then((r) =>
-        r.json(),
-      ) as Promise<AnalyticsData>,
+    queryFn: () => fetch('/api/admin/overview/analytics', { credentials: 'include' }).then((r) => r.json()) as Promise<AnalyticsData>,
     refetchInterval: 60_000,
   })
-
   const eventsQ = useQuery<{ events: UpcomingEvent[] }>({
     queryKey: ['events', 'badge'],
     queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
@@ -262,77 +66,33 @@ export function OverviewPanel() {
 
   const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || auditQ.isLoading
   const fetching =
-    usersQ.isFetching ||
-    projectsQ.isFetching ||
-    tasksQ.isFetching ||
-    auditQ.isFetching ||
-    risksQ.isFetching ||
-    healthQ.isFetching ||
-    loadQ.isFetching ||
-    analyticsQ.isFetching ||
-    eventsQ.isFetching
+    usersQ.isFetching || projectsQ.isFetching || tasksQ.isFetching || auditQ.isFetching ||
+    risksQ.isFetching || healthQ.isFetching || loadQ.isFetching || analyticsQ.isFetching || eventsQ.isFetching
 
   const stats = useMemo(() => {
     const users = usersQ.data?.users ?? []
     const projects = projectsQ.data?.projects ?? []
     const tasks = tasksQ.data?.tasks ?? []
     const now = Date.now()
-
     const blocked = users.filter((u) => u.blocked).length
     const activeProjects = projects.filter((p) => p.status === 'ACTIVE').length
     const openTasks = tasks.filter((t) => t.status !== 'CLOSED').length
-    const overdueTasks = tasks.filter(
-      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < now,
-    ).length
-
-    return {
-      totalUsers: users.length,
-      blocked,
-      activeProjects,
-      totalProjects: projects.length,
-      openTasks,
-      overdueTasks,
-    }
+    const overdueTasks = tasks.filter((t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < now).length
+    return { totalUsers: users.length, blocked, activeProjects, totalProjects: projects.length, openTasks, overdueTasks }
   }, [usersQ.data, projectsQ.data, tasksQ.data])
 
   const refetchAll = () => {
-    usersQ.refetch()
-    projectsQ.refetch()
-    tasksQ.refetch()
-    auditQ.refetch()
-    risksQ.refetch()
-    healthQ.refetch()
-    loadQ.refetch()
-    analyticsQ.refetch()
-    eventsQ.refetch()
+    usersQ.refetch(); projectsQ.refetch(); tasksQ.refetch(); auditQ.refetch()
+    risksQ.refetch(); healthQ.refetch(); loadQ.refetch(); analyticsQ.refetch(); eventsQ.refetch()
   }
-
-  const logs = auditQ.data?.logs ?? []
 
   const lastFetchedAt = useMemo(() => {
     const updates = [
-      usersQ.dataUpdatedAt,
-      projectsQ.dataUpdatedAt,
-      tasksQ.dataUpdatedAt,
-      auditQ.dataUpdatedAt,
-      risksQ.dataUpdatedAt,
-      healthQ.dataUpdatedAt,
-      loadQ.dataUpdatedAt,
-      analyticsQ.dataUpdatedAt,
-      eventsQ.dataUpdatedAt,
+      usersQ.dataUpdatedAt, projectsQ.dataUpdatedAt, tasksQ.dataUpdatedAt, auditQ.dataUpdatedAt,
+      risksQ.dataUpdatedAt, healthQ.dataUpdatedAt, loadQ.dataUpdatedAt, analyticsQ.dataUpdatedAt, eventsQ.dataUpdatedAt,
     ].filter((t) => t > 0)
     return updates.length ? Math.min(...updates) : 0
-  }, [
-    usersQ.dataUpdatedAt,
-    projectsQ.dataUpdatedAt,
-    tasksQ.dataUpdatedAt,
-    auditQ.dataUpdatedAt,
-    risksQ.dataUpdatedAt,
-    healthQ.dataUpdatedAt,
-    loadQ.dataUpdatedAt,
-    analyticsQ.dataUpdatedAt,
-    eventsQ.dataUpdatedAt,
-  ])
+  }, [usersQ.dataUpdatedAt, projectsQ.dataUpdatedAt, tasksQ.dataUpdatedAt, auditQ.dataUpdatedAt, risksQ.dataUpdatedAt, healthQ.dataUpdatedAt, loadQ.dataUpdatedAt, analyticsQ.dataUpdatedAt, eventsQ.dataUpdatedAt])
 
   const freshness = useFreshness(lastFetchedAt)
 
@@ -341,24 +101,16 @@ export function OverviewPanel() {
       <Group justify="space-between">
         <div>
           <Title order={2}>Ringkasan Admin</Title>
-          <Text c="dimmed" size="sm">
-            Ringkasan sistem real-time. Auto-refresh 30 detik.
-          </Text>
+          <Text c="dimmed" size="sm">Ringkasan sistem real-time. Auto-refresh 30 detik.</Text>
         </div>
         <Group gap="xs">
-          {freshness && (
-            <Text size="xs" c="dimmed">
-              updated {freshness}
-            </Text>
-          )}
+          {freshness && <Text size="xs" c="dimmed">updated {freshness}</Text>}
           <Button
             leftSection={<TbFileReport size={16} />}
             size="xs"
             variant="light"
             color="violet"
-            onClick={() => {
-              window.location.href = '/admin/report'
-            }}
+            onClick={() => { window.location.href = '/admin/report' }}
           >
             Laporan Lengkap
           </Button>
@@ -372,118 +124,38 @@ export function OverviewPanel() {
 
       <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
         <KpiCard
-          label="Total Pengguna"
-          value={stats.totalUsers}
+          label="Total Pengguna" value={stats.totalUsers}
           sub={stats.blocked > 0 ? `${stats.blocked} diblokir` : 'tidak ada yang diblokir'}
           subColor={stats.blocked > 0 ? 'red' : undefined}
-          icon={TbUsersGroup}
-          color="violet"
+          icon={TbUsersGroup} color="violet"
           onClick={() => navigate({ to: '/admin', search: { tab: 'users' } })}
           loading={loading}
           info="Jumlah seluruh akun terdaftar (semua role). Sub-label menampilkan berapa user yang saat ini diblokir. Klik untuk membuka tab Pengguna."
         />
         <KpiCard
-          label="Proyek Aktif"
-          value={stats.activeProjects}
+          label="Proyek Aktif" value={stats.activeProjects}
           sub={`dari ${stats.totalProjects} total`}
-          icon={TbTarget}
-          color="blue"
+          icon={TbTarget} color="blue"
           onClick={() => navigate({ to: '/admin', search: { tab: 'projects' } })}
           loading={loading}
           info="Project berstatus ACTIVE dari total semua project (termasuk DRAFT, ON_HOLD, COMPLETED, CANCELLED). Klik untuk membuka tab Proyek."
         />
         <KpiCard
-          label="Task Terbuka"
-          value={stats.openTasks}
+          label="Task Terbuka" value={stats.openTasks}
           sub={stats.overdueTasks > 0 ? `${stats.overdueTasks} overdue` : 'tidak ada yang overdue'}
           subColor={stats.overdueTasks > 0 ? 'red' : undefined}
-          icon={TbListCheck}
-          color="red"
+          icon={TbListCheck} color="red"
           onClick={() => navigate({ to: '/admin', search: { tab: 'tasks' } })}
           loading={loading}
           info="Task yang belum CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED). Sub-label menghitung yang sudah lewat dueAt. Klik untuk membuka tab Triase Task."
         />
       </SimpleGrid>
 
-      {/* Events Mendatang — tampil sebelum Red Flags */}
-      {(() => {
-        const events = eventsQ.data?.events ?? []
-        const todayKey = new Date().toISOString().slice(0, 10)
-        const weekKey = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-        const todayEvents = events.filter((e) => e.startsAt.slice(0, 10) === todayKey)
-        const weekEvents = events.filter((e) => {
-          const k = e.startsAt.slice(0, 10)
-          return k > todayKey && k <= weekKey
-        })
-        const shown = [...todayEvents, ...weekEvents].slice(0, 6)
-        if (!eventsQ.data && eventsQ.isLoading) return null
-        if (shown.length === 0) return null
-        return (
-          <Card withBorder radius="md" p="md">
-            <Group justify="space-between" mb="sm">
-              <Group gap="xs">
-                <TbCalendarEvent size={16} />
-                <Title order={5}>Events Mendatang</Title>
-                {todayEvents.length > 0 && (
-                  <Badge size="xs" color="red" variant="filled">
-                    {todayEvents.length} hari ini
-                  </Badge>
-                )}
-                {weekEvents.length > 0 && (
-                  <Badge size="xs" color="blue" variant="light">
-                    {weekEvents.length} minggu ini
-                  </Badge>
-                )}
-              </Group>
-              <Text
-                size="xs"
-                c="blue"
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate({ to: '/pm', search: { tab: 'events' } })}
-              >
-                Lihat semua →
-              </Text>
-            </Group>
-            <Stack gap={4}>
-              {shown.map((e) => {
-                const isToday = e.startsAt.slice(0, 10) === todayKey
-                return (
-                  <Group
-                    key={e.id}
-                    gap="sm"
-                    wrap="nowrap"
-                    style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 8px' }}
-                    onClick={() => navigate({ to: '/pm', search: { tab: 'events', eventId: e.id } })}
-                  >
-                    <TbCalendarEvent
-                      size={13}
-                      color={`var(--mantine-color-${isToday ? 'red' : 'blue'}-5)`}
-                      style={{ flexShrink: 0 }}
-                    />
-                    <Text size="sm" truncate style={{ flex: 1 }}>
-                      {e.title}
-                    </Text>
-                    {e.tags.slice(0, 2).map((t) => (
-                      <Badge key={t.tagId} size="xs" color={t.tag.color} variant="light">
-                        {t.tag.name}
-                      </Badge>
-                    ))}
-                    <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                      {isToday
-                        ? new Date(e.startsAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                        : new Date(e.startsAt).toLocaleDateString('id-ID', {
-                            weekday: 'short',
-                            day: 'numeric',
-                            month: 'short',
-                          })}
-                    </Text>
-                  </Group>
-                )
-              })}
-            </Stack>
-          </Card>
-        )
-      })()}
+      <UpcomingEventsCard
+        events={eventsQ.data?.events ?? []}
+        isLoading={eventsQ.isLoading}
+        navigate={navigate}
+      />
 
       {risksQ.isLoading ? (
         <SectionSkeleton height={220} />
@@ -497,8 +169,7 @@ export function OverviewPanel() {
         <PortfolioHealthSection rows={healthQ.data.projects} navigate={navigate} />
       ) : healthQ.data ? (
         <EmptyState
-          icon={TbHeartbeat}
-          color="blue"
+          icon={TbHeartbeat} color="blue"
           title="Kesehatan Portfolio"
           message="Belum ada project aktif. Buat project untuk melihat skor kesehatan A–F."
           ctaLabel="Buka Projects"
@@ -512,8 +183,7 @@ export function OverviewPanel() {
         <TeamLoadSection rows={loadQ.data.rows} />
       ) : loadQ.data ? (
         <EmptyState
-          icon={TbUsersGroup}
-          color="violet"
+          icon={TbUsersGroup} color="violet"
           title="Beban Tim"
           message="Belum ada task aktif yang di-assign. Team load akan muncul saat user punya beban kerja."
         />
@@ -525,423 +195,7 @@ export function OverviewPanel() {
         <AnalyticsSection data={analyticsQ.data} />
       ) : null}
 
-      <Card withBorder padding="md" radius="md">
-        <Stack gap="sm">
-          <Group gap="xs" justify="space-between">
-            <Group gap="xs">
-              <TbActivity size={16} />
-              <Title order={5}>Aktivitas Terbaru</Title>
-              <Tooltip
-                multiline
-                w={320}
-                withArrow
-                label="8 entri terakhir dari audit log: login/logout, perubahan role, block/unblock user, persetujuan/revoke agent, dan perubahan peran project-member. Badge berwarna menunjukkan jenis aksi."
-              >
-                <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-                  <TbInfoCircle size={14} />
-                </ThemeIcon>
-              </Tooltip>
-            </Group>
-            <Text size="xs" c="dimmed">
-              last 8 entries
-            </Text>
-          </Group>
-          {auditQ.isLoading && (
-            <Stack gap="xs">
-              {['a', 'b', 'c', 'd'].map((k) => (
-                <Group key={k} gap="sm" wrap="nowrap">
-                  <Skeleton height={18} width={80} radius="sm" />
-                  <Skeleton height={14} style={{ flex: 1 }} radius="sm" />
-                  <Skeleton height={12} width={50} radius="sm" />
-                </Group>
-              ))}
-            </Stack>
-          )}
-          {logs.length === 0 && !auditQ.isLoading && (
-            <Text size="sm" c="dimmed" ta="center" py="md">
-              Belum ada aktivitas.
-            </Text>
-          )}
-          {logs.map((log) => (
-            <Group key={log.id} gap="sm" wrap="nowrap" align="flex-start">
-              <Badge color={ACTION_COLOR[log.action] ?? 'gray'} variant="light" size="sm">
-                {log.action}
-              </Badge>
-              {log.user && (
-                <UserAvatar
-                  name={log.user.name}
-                  image={log.user.image}
-                  size={20}
-                  color="blue"
-                  style={{ flexShrink: 0 }}
-                />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Text size="sm" lineClamp={1}>
-                  <Text component="span" fw={500}>
-                    {log.user?.name ?? 'system'}
-                  </Text>
-                  {log.detail ? (
-                    <Text component="span" c="dimmed">
-                      {' '}
-                      — {log.detail}
-                    </Text>
-                  ) : null}
-                </Text>
-              </div>
-              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                {formatRelative(log.createdAt)}
-              </Text>
-            </Group>
-          ))}
-        </Stack>
-      </Card>
-
+      <RecentActivityCard logs={auditQ.data?.logs ?? []} isLoading={auditQ.isLoading} />
     </Stack>
   )
-}
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  subColor,
-  icon: Icon,
-  color,
-  onClick,
-  loading,
-  info,
-}: {
-  label: string
-  value: number
-  sub?: string
-  subColor?: string
-  icon: typeof TbUsers
-  color: string
-  onClick?: () => void
-  loading?: boolean
-  info?: string
-}) {
-  return (
-    <Card withBorder padding="lg" radius="md" style={onClick ? { cursor: 'pointer' } : undefined} onClick={onClick}>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-          <Group gap={4} wrap="nowrap">
-            <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-              {label}
-            </Text>
-            {info && (
-              <Tooltip multiline w={280} withArrow label={info}>
-                <ThemeIcon
-                  variant="subtle"
-                  color="gray"
-                  size="xs"
-                  radius="xl"
-                  style={{ cursor: 'help' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <TbInfoCircle size={12} />
-                </ThemeIcon>
-              </Tooltip>
-            )}
-          </Group>
-          {loading ? (
-            <Skeleton height={28} width={60} radius="sm" my={2} />
-          ) : (
-            <Text fw={700} size="xl">
-              {value}
-            </Text>
-          )}
-          {loading ? (
-            <Skeleton height={12} width={100} radius="sm" />
-          ) : (
-            sub && (
-              <Text size="xs" c={subColor ?? 'dimmed'}>
-                {sub}
-              </Text>
-            )
-          )}
-        </Stack>
-        <ThemeIcon variant="light" color={color} size="lg" radius="md">
-          <Icon size={20} />
-        </ThemeIcon>
-      </Group>
-    </Card>
-  )
-}
-
-function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: ReturnType<typeof useNavigate> }) {
-  const s = risks.summary
-  const nothing = s.overdueTasks + s.staleTasks + s.pastDueProjects + s.missingEnv === 0
-
-  if (nothing) {
-    return (
-      <Alert color="teal" icon={<TbShieldCheck size={18} />} variant="light">
-        <Text size="sm" fw={500}>
-          Semua sistem hijau — tidak ada red flag saat ini.
-        </Text>
-      </Alert>
-    )
-  }
-
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Group gap="xs" justify="space-between" mb="sm">
-        <Group gap="xs">
-          <ThemeIcon variant="light" color={SEVERITY_COLOR[risks.severity]} size="md" radius="md">
-            <TbFlame size={16} />
-          </ThemeIcon>
-          <Title order={5}>Sinyal Peringatan</Title>
-          <Badge color={SEVERITY_COLOR[risks.severity]} variant="light" size="sm">
-            {risks.severity.toUpperCase()}
-          </Badge>
-          <Tooltip
-            multiline
-            w={320}
-            withArrow
-            label="Ringkasan isu yang butuh perhatian saat ini: tugas lewat tenggat, tugas IN_PROGRESS yang mandek, proyek telat, dan variabel env wajib yang belum diisi. Severity dihitung otomatis (high/medium/low/none) dari kombinasi sinyal tersebut."
-          >
-            <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-              <TbInfoCircle size={14} />
-            </ThemeIcon>
-          </Tooltip>
-        </Group>
-      </Group>
-
-      <SimpleGrid cols={{ base: 2, md: 3, lg: 6 }} spacing="xs" mb="md">
-        <RiskStat label="Overdue tasks" value={s.overdueTasks} color={s.overdueTasks > 0 ? 'red' : 'gray'} />
-        <RiskStat label="Stale IN_PROGRESS" value={s.staleTasks} color={s.staleTasks > 0 ? 'orange' : 'gray'} />
-        <RiskStat label="Past-due projects" value={s.pastDueProjects} color={s.pastDueProjects > 0 ? 'red' : 'gray'} />
-        <RiskStat label="Missing env" value={s.missingEnv} color={s.missingEnv > 0 ? 'red' : 'gray'} />
-      </SimpleGrid>
-
-      {risks.missingEnv.length > 0 && (
-        <Alert color="red" variant="light" mb="xs">
-          <Text size="xs" fw={500}>
-            Missing env: {risks.missingEnv.join(', ')}
-          </Text>
-        </Alert>
-      )}
-
-      {risks.overdueTasks.length > 0 && (
-        <Stack gap={4} mb="sm">
-          <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-            Overdue — top 5
-          </Text>
-          {risks.overdueTasks.slice(0, 5).map((t) => (
-            <Group key={t.id} gap="xs" wrap="nowrap">
-              <Badge size="xs" color={PRIORITY_COLOR[t.priority] ?? 'gray'} variant="outline">
-                {t.priority}
-              </Badge>
-              <Text
-                size="sm"
-                style={{ flex: 1, cursor: 'pointer' }}
-                truncate
-                onClick={() => navigate({ to: '/admin', search: { tab: 'projects' } })}
-              >
-                {t.title}
-              </Text>
-              <Text size="xs" c="red">
-                {t.daysOverdue ?? 0}d overdue
-              </Text>
-              <Text size="xs" c="dimmed" style={{ minWidth: 120, textAlign: 'right' }} truncate>
-                {t.assignee ?? 'unassigned'}
-              </Text>
-            </Group>
-          ))}
-        </Stack>
-      )}
-
-      {risks.pastDueProjects.length > 0 && (
-        <Stack gap={4}>
-          <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-            Past-due projects
-          </Text>
-          {risks.pastDueProjects.slice(0, 3).map((p) => (
-            <Group key={p.id} gap="xs" wrap="nowrap">
-              <Badge size="xs" color={PRIORITY_COLOR[p.priority] ?? 'gray'} variant="outline">
-                {p.priority}
-              </Badge>
-              <Text size="sm" style={{ flex: 1 }} truncate>
-                {p.name}
-              </Text>
-              <Text size="xs" c="red">
-                {p.daysOverdue ?? 0}d past
-              </Text>
-              <Text size="xs" c="dimmed" style={{ minWidth: 120, textAlign: 'right' }} truncate>
-                {p.owner}
-              </Text>
-            </Group>
-          ))}
-        </Stack>
-      )}
-    </Card>
-  )
-}
-
-function RiskStat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-        {label}
-      </Text>
-      <Text fw={700} size="lg" c={value > 0 ? color : undefined}>
-        {value}
-      </Text>
-    </div>
-  )
-}
-
-function PortfolioHealthSection({ rows, navigate }: { rows: HealthRow[]; navigate: ReturnType<typeof useNavigate> }) {
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Group gap="xs" mb="sm">
-        <ThemeIcon variant="light" color="blue" size="md" radius="md">
-          <TbHeartbeat size={16} />
-        </ThemeIcon>
-        <Title order={5}>Kesehatan Portfolio</Title>
-        <Tooltip
-          multiline
-          w={340}
-          withArrow
-          label="Skor kesehatan 0–100 per project (A–F). Mulai dari 100 dan dikurangi: -35 jika past-due, -5 per overdue task (max 25), -3 per blocked task (max 15), -10 jika extensions >2, tambahan -5 jika >4, -10 jika project ACTIVE tanpa aktivitas. Diurutkan dari skor terburuk."
-        >
-          <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-            <TbInfoCircle size={14} />
-          </ThemeIcon>
-        </Tooltip>
-        <Text size="xs" c="dimmed">
-          sorted by score (worst first)
-        </Text>
-      </Group>
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="xs">
-        {rows.map((r) => (
-          <Card
-            key={r.id}
-            withBorder
-            padding="sm"
-            radius="md"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate({ to: '/admin', search: { tab: 'projects' } })}
-          >
-            <Group justify="space-between" wrap="nowrap" align="flex-start">
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <Text size="sm" fw={600} truncate>
-                  {r.name}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  {r.status} · {r.openTasks} open · {r.closed7d} closed/7d
-                </Text>
-                {(r.overdueTasks > 0 || r.blockedTasks > 0 || r.pastDue) && (
-                  <Group gap={4} mt={4}>
-                    {r.overdueTasks > 0 && (
-                      <Badge size="xs" color="red" variant="light">
-                        {r.overdueTasks} overdue
-                      </Badge>
-                    )}
-                    {r.blockedTasks > 0 && (
-                      <Badge size="xs" color="orange" variant="light">
-                        {r.blockedTasks} blocked
-                      </Badge>
-                    )}
-                    {r.pastDue && (
-                      <Badge size="xs" color="red" variant="filled">
-                        past-due
-                      </Badge>
-                    )}
-                  </Group>
-                )}
-              </div>
-              <Badge color={GRADE_COLOR[r.grade] ?? 'gray'} variant="filled" size="lg">
-                {r.grade}
-              </Badge>
-            </Group>
-          </Card>
-        ))}
-      </SimpleGrid>
-    </Card>
-  )
-}
-
-function TeamLoadSection({ rows }: { rows: LoadRow[] }) {
-  const maxOpen = Math.max(1, ...rows.map((r) => r.open))
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Group gap="xs" mb="sm">
-        <ThemeIcon variant="light" color="violet" size="md" radius="md">
-          <TbUsersGroup size={16} />
-        </ThemeIcon>
-        <Title order={5}>Beban Tim</Title>
-        <Tooltip
-          multiline
-          w={340}
-          withArrow
-          label="Beban kerja per user: jumlah task open, total estimasi jam, task prioritas tinggi, dan task overdue. User ditandai 'overloaded' jika open ≥10, estimasi >80 jam, atau overdue ≥3. Bar progress relatif terhadap user dengan open terbanyak."
-        >
-          <ThemeIcon variant="subtle" color="gray" size="sm" radius="xl" style={{ cursor: 'help' }}>
-            <TbInfoCircle size={14} />
-          </ThemeIcon>
-        </Tooltip>
-        <Text size="xs" c="dimmed">
-          sorted by open tasks
-        </Text>
-      </Group>
-      <Stack gap={8}>
-        {rows.map((r) => (
-          <Group key={r.userId ?? 'none'} gap="sm" wrap="nowrap">
-            <Group gap="xs" wrap="nowrap" style={{ minWidth: 160, flex: '0 0 160px' }}>
-              <UserAvatar name={r.name} image={r.image} size={28} color="blue" style={{ flexShrink: 0 }} />
-              <div style={{ minWidth: 0 }}>
-                <Text size="sm" fw={500} truncate>
-                  {r.name}
-                </Text>
-                <Text size="xs" c="dimmed" truncate>
-                  {r.role ?? '—'}
-                </Text>
-              </div>
-            </Group>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Progress
-                value={(r.open / maxOpen) * 100}
-                color={r.overloaded ? 'red' : r.open > maxOpen * 0.6 ? 'orange' : 'teal'}
-                size="md"
-              />
-            </div>
-            <Text size="xs" fw={500} style={{ minWidth: 64, textAlign: 'right' }}>
-              {r.open} open
-            </Text>
-            <Text size="xs" c="dimmed" style={{ minWidth: 70, textAlign: 'right' }}>
-              {r.estimateHours}h est
-            </Text>
-            {r.overdue > 0 && (
-              <Badge size="xs" color="red" variant="light">
-                {r.overdue} overdue
-              </Badge>
-            )}
-            {r.overloaded && (
-              <Badge size="xs" color="red" variant="filled">
-                overloaded
-              </Badge>
-            )}
-          </Group>
-        ))}
-      </Stack>
-    </Card>
-  )
-}
-
-function useFreshness(timestamp: number) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5_000)
-    return () => clearInterval(id)
-  }, [])
-  if (!timestamp) return null
-  const seconds = Math.max(0, Math.round((now - timestamp) / 1000))
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.round(minutes / 60)
-  return `${hours}h ago`
 }

@@ -1,41 +1,23 @@
 import {
   ActionIcon,
   Badge,
-  Button,
   Card,
-  CopyButton,
-  Drawer,
   Group,
   Loader,
   Pagination,
-  ScrollArea,
   SegmentedControl,
   Stack,
   Table,
   Text,
-  Textarea,
   Tooltip,
-  TypographyStylesProvider,
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { TbCheck, TbCopy, TbEye, TbRefresh, TbSend, TbTrash } from 'react-icons/tb'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { TbEye, TbRefresh, TbSend, TbTrash } from 'react-icons/tb'
 import type { ReportHistoryRange } from '../../lib/report-history'
-
-type SendTrigger = 'cron' | 'manual' | 'custom'
-
-interface HistoryEntry {
-  id: string
-  sentAt: string
-  ok: boolean
-  message: string
-  trigger: SendTrigger
-  markdown?: string | null
-}
+import { fmtTs, type HistoryEntry, PreviewDrawer, TRIGGER_COLOR, TRIGGER_LABEL } from './ReportHistoryPreviewDrawer'
 
 interface HistoryResponse {
   history: HistoryEntry[]
@@ -54,112 +36,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-const TRIGGER_COLOR: Record<string, string> = { cron: 'blue', manual: 'violet', custom: 'teal' }
-const TRIGGER_LABEL: Record<string, string> = { cron: 'Otomatis', manual: 'Manual', custom: 'Custom' }
-
 const RANGE_OPTS: { value: ReportHistoryRange; label: string }[] = [
   { value: '1m', label: '1 Bulan' },
   { value: '3m', label: '3 Bulan' },
   { value: 'all', label: 'Semua' },
 ]
-
-function fmtTs(iso: string) {
-  return new Date(iso).toLocaleString('id-ID', {
-    timeZone: 'Asia/Jakarta',
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-type PreviewMode = 'normal' | 'markdown'
-
-interface PreviewDrawerProps {
-  entry: HistoryEntry | null
-  onClose: () => void
-}
-
-function PreviewDrawer({ entry, onClose }: PreviewDrawerProps) {
-  const [mode, setMode] = useState<PreviewMode>('normal')
-  return (
-    <Drawer
-      opened={!!entry}
-      onClose={onClose}
-      title={
-        entry ? (
-          <Stack gap={2}>
-            <Text fw={600} size="sm">
-              Preview Laporan
-            </Text>
-            <Group gap={6}>
-              <Text size="xs" c="dimmed">
-                {entry ? fmtTs(entry.sentAt) : ''}
-              </Text>
-              <Badge size="xs" variant="light" color={TRIGGER_COLOR[entry.trigger] ?? 'gray'}>
-                {TRIGGER_LABEL[entry.trigger] ?? entry.trigger}
-              </Badge>
-              <Badge size="xs" variant="light" color={entry.ok ? 'teal' : 'red'}>
-                {entry.ok ? 'OK' : 'Gagal'}
-              </Badge>
-            </Group>
-          </Stack>
-        ) : null
-      }
-      position="right"
-      size="xl"
-      padding="md"
-    >
-      {entry?.markdown && (
-        <Stack gap="sm" style={{ height: '100%' }}>
-          <Group justify="space-between">
-            <SegmentedControl
-              size="xs"
-              value={mode}
-              onChange={(v) => setMode(v as PreviewMode)}
-              data={[
-                { value: 'normal', label: 'Normal' },
-                { value: 'markdown', label: 'Markdown' },
-              ]}
-            />
-            <CopyButton value={entry.markdown} timeout={2000}>
-              {({ copied, copy }) => (
-                <Button
-                  size="xs"
-                  variant="light"
-                  color={copied ? 'teal' : 'blue'}
-                  leftSection={copied ? <TbCheck size={13} /> : <TbCopy size={13} />}
-                  onClick={copy}
-                >
-                  {copied ? 'Tersalin!' : 'Copy'}
-                </Button>
-              )}
-            </CopyButton>
-          </Group>
-
-          {mode === 'normal' ? (
-            <ScrollArea style={{ flex: 1 }} type="auto">
-              <TypographyStylesProvider>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.markdown}</ReactMarkdown>
-              </TypographyStylesProvider>
-            </ScrollArea>
-          ) : (
-            <Textarea
-              value={entry.markdown}
-              readOnly
-              autosize
-              minRows={20}
-              maxRows={50}
-              styles={{ input: { fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 } }}
-            />
-          )}
-        </Stack>
-      )}
-    </Drawer>
-  )
-}
 
 export function ReportHistoryPanel({ showDelete }: { showDelete?: boolean }) {
   const qc = useQueryClient()

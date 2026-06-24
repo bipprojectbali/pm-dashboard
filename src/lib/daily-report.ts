@@ -1,175 +1,16 @@
-import { computeAdminOverview, computeProjectHealth, computeRiskReport, computeTeamLoad } from './admin-overview'
 import { getSetting, setSetting } from './app-settings'
 import { appLog } from './applog'
-import { buildSnapshotContext, captureSnapshot } from './daily-snapshot'
+import { callClaudeAPI } from './daily-report.claude-client'
+import { buildReportPrompt, DEFAULT_REPORT_INSTRUCTION } from './daily-report.prompt'
+import { sendToTelegram } from './daily-report.telegram-client'
+import { captureSnapshot } from './daily-snapshot'
 import { recordSendHistory, type SendTrigger } from './report-history'
-import { formatZonedDateLong, getReportTimezone } from './timezone'
 
-export const DEFAULT_REPORT_INSTRUCTION = `Tulis laporan manajemen harian dalam *bahasa Indonesia*. Format: Telegram Markdown (*bold*, _italic_). Padat, berbasis data, tanpa narasi berlebihan.
+export { DEFAULT_REPORT_INSTRUCTION }
 
-Struktur wajib:
-
-*📊 Laporan Harian — {TANGGAL}*
-[1 kalimat status keseluruhan: jumlah task aktif, velocity, level risiko]
-
-*Ringkasan Metrik*
-• Total task open: X | Overdue: X | Closed 7h: X | Stale: X
-• Velocity minggu ini: X task/minggu
-• Risiko: [NONE/LOW/MEDIUM/HIGH]
-
-*Status Project* (hanya project ACTIVE)
-Untuk setiap project: nama, grade (A–F), skor, open/overdue/blocked, sisa hari. Satu baris per project.
-
-*Performa Tim*
-Untuk setiap anggota: nama, open task, overdue, closed 7h. Tandai OVERLOADED jika relevan. Satu baris per orang.
-
-*Tindakan Diperlukan* (maks 3 poin)
-Hanya item yang membutuhkan keputusan atau eskalasi — disertai angka dan deadline konkret.
-
-*Tanggapan & Analisis*
-Penilaian singkat kondisi hari ini: apa yang berjalan baik, apa yang mengkhawatirkan, pola atau tren yang perlu diperhatikan. Berbasis angka, bukan opini umum.
-
-*Rangkuman Eksekutif*
-3–5 poin ringkas kondisi keseluruhan tim dan project. Cocok dibaca dalam 30 detik.
-
-*Saran*
-Rekomendasi konkret berbasis data — maks 3 item, masing-masing dengan alasan singkat dan metrik pendukung.
-
-*Tindakan Segera*
-Daftar aksi spesifik yang harus diambil besok, dengan penanggung jawab (jika ada dari data tim) dan target waktu.
-
-_pm-dashboard AI report_`
-
-// ─── Claude API ──────────────────────────────────────────────────────────────
-
-async function callClaudeAPI(
-  apiKey: string,
-  model: string,
-  prompt: string,
-  baseUrl?: string,
-  timeoutMs?: number,
-): Promise<string> {
-  const endpoint = baseUrl ? `${baseUrl.replace(/\/$/, '')}/v1/messages` : 'https://api.anthropic.com/v1/messages'
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-    signal: AbortSignal.timeout(timeoutMs ?? 120_000),
-  })
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
-    throw new Error(`Claude API error ${res.status}: ${err.error?.message ?? 'unknown'}`)
-  }
-  const data = (await res.json()) as { content: Array<{ type: string; text: string }> }
-  const text = data.content.find((c) => c.type === 'text')?.text
-  if (!text) throw new Error('Claude API returned no text content')
-  return text
-}
-
-// ─── Telegram ────────────────────────────────────────────────────────────────
-
-async function sendToTelegram(botToken: string, chatId: string, text: string, timeoutMs = 30_000): Promise<void> {
-  // Telegram Markdown mode: split if >4096 chars
-  const chunks: string[] = []
-  for (let i = 0; i < text.length; i += 4000) chunks.push(text.slice(i, i + 4000))
-
-  for (const chunk of chunks) {
-    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'Markdown' }),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { description?: string }
-      throw new Error(`Telegram error ${res.status}: ${err.description ?? 'unknown'}`)
-    }
-  }
-}
-
-// ─── Prompt builder ──────────────────────────────────────────────────────────
-
-async function buildReportPrompt(): Promise<string> {
-  const [overview, health, load, risk, customInstruction, snapshotContext] = await Promise.all([
-    computeAdminOverview({ recentAuditLimit: 0 }),
-    computeProjectHealth({ includeArchived: false, limit: 50 }),
-    computeTeamLoad({ includeUnassigned: false, limit: 30 }),
-    computeRiskReport(),
-    getSetting('report.promptInstruction'),
-    buildSnapshotContext(),
-  ])
-
-  const tz = await getReportTimezone()
-  const tanggal = formatZonedDateLong(tz)
-
-  const activeProjects = health.projects.filter((p) => p.status === 'ACTIVE')
-  const projectLines = activeProjects
-    .map(
-      (p) =>
-        `- *${p.name}* (${p.grade}, skor ${p.score}/100): ${p.openTasks} task open, ${p.overdueTasks} overdue` +
-        (p.daysUntilDue != null ? `, ${p.daysUntilDue} hari tersisa` : ', tanpa deadline') +
-        (p.pastDue ? ' ⚠️ LEWAT DEADLINE' : '') +
-        (p.blockedTasks > 0 ? `, ${p.blockedTasks} diblokir` : ''),
-    )
-    .join('\n')
-
-  const userLines = load.rows
-    .map(
-      (u) =>
-        `- *${u.name}*: ${u.open} open, ${u.overdue} overdue, ${u.closed7d} selesai 7h` +
-        (u.overloaded ? ' 🔴 OVERLOADED' : ''),
-    )
-    .join('\n')
-
-  const riskLines =
-    [
-      risk.summary.pastDueProjects > 0 ? `- ${risk.summary.pastDueProjects} project melewati deadline` : '',
-      risk.summary.overdueTasks > 0 ? `- ${risk.summary.overdueTasks} task overdue` : '',
-      risk.summary.staleTasks > 0 ? `- ${risk.summary.staleTasks} task stale (tidak bergerak >3 hari)` : '',
-    ]
-      .filter(Boolean)
-      .join('\n') || '- Tidak ada risiko kritis'
-
-  return `Kamu adalah manajer proyek senior yang berpengalaman dan cerdas. Tugasmu membuat laporan harian untuk tim.
-
-Tanggal: ${tanggal}
-
-═══ DATA PROJECT AKTIF (${activeProjects.length} project) ═══
-${projectLines || '- Tidak ada project aktif dengan data lengkap'}
-
-═══ DATA TIM (${load.rows.length} anggota aktif) ═══
-${userLines || '- Tidak ada data tim'}
-
-═══ KPI HARI INI ═══
-- Total task: ${overview.tasks.total}
-- Task overdue: ${overview.tasks.overdueOpen}
-- Selesai 7 hari terakhir: ${overview.tasks.closed7d}
-- Velocity minggu ini: ${overview.velocity.closed7d} task/minggu
-- Task stale: ${overview.tasks.staleInProgress}
-
-═══ SINYAL RISIKO (${risk.severity.toUpperCase()}) ═══
-${riskLines}
-${snapshotContext}
-═══ INSTRUKSI LAPORAN ═══
-${(customInstruction ?? DEFAULT_REPORT_INSTRUCTION).replace('{TANGGAL}', tanggal)}
-
-Tulis laporan sekarang:`
-}
-
-// ─── Concurrency guard ────────────────────────────────────────────────────────
 // In-memory lock: hanya satu pengiriman boleh berjalan di proses ini pada satu
 // waktu. Mencegah race antara cron + tombol manual + double-click.
 let sendInFlight: Promise<{ ok: boolean; message: string }> | null = null
-
-// ─── Public API ──────────────────────────────────────────────────────────────
 
 export function isSendInFlight(): boolean {
   return sendInFlight !== null
@@ -181,6 +22,19 @@ export async function getLastSentAt(): Promise<string | null> {
 
 export async function buildPromptOnly(): Promise<string> {
   return buildReportPrompt()
+}
+
+export async function generateReportPreview(): Promise<string> {
+  const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
+    getSetting('ai.anthropicApiKey'),
+    getSetting('ai.model'),
+    getSetting('ai.baseUrl'),
+    getSetting('ai.timeoutSeconds'),
+  ])
+  if (!apiKey) throw new Error('Anthropic API key belum dikonfigurasi')
+  const prompt = await buildReportPrompt()
+  const timeoutMs = (Number(timeoutRaw) || 120) * 1000
+  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined, timeoutMs)
 }
 
 export async function sendCustomReport(text: string): Promise<{ ok: boolean; message: string }> {
@@ -220,19 +74,6 @@ export async function sendCustomReport(text: string): Promise<{ ok: boolean; mes
   } finally {
     sendInFlight = null
   }
-}
-
-export async function generateReportPreview(): Promise<string> {
-  const [apiKey, model, baseUrl, timeoutRaw] = await Promise.all([
-    getSetting('ai.anthropicApiKey'),
-    getSetting('ai.model'),
-    getSetting('ai.baseUrl'),
-    getSetting('ai.timeoutSeconds'),
-  ])
-  if (!apiKey) throw new Error('Anthropic API key belum dikonfigurasi')
-  const prompt = await buildReportPrompt()
-  const timeoutMs = (Number(timeoutRaw) || 120) * 1000
-  return callClaudeAPI(apiKey, model ?? 'claude-opus-4-7', prompt, baseUrl ?? undefined, timeoutMs)
 }
 
 export async function generateAndSendDailyReport(

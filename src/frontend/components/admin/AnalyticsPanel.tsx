@@ -1,104 +1,29 @@
-import {
-  ActionIcon,
-  Badge,
-  Card,
-  Group,
-  SegmentedControl,
-  SimpleGrid,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-  Tooltip,
-} from '@mantine/core'
+import { ActionIcon, Group, SegmentedControl, SimpleGrid, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import type { EChartsOption } from 'echarts'
-import { Gantt, type GanttTask } from 'mantine-gantt'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TbCalendarEvent, TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
-import { toLocalDateStr } from '../../lib/dates'
+import { useMemo, useState } from 'react'
+import { TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
 import { InfoTip } from '../shared/InfoTip'
-
-type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
-type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
-
-interface AnalyticsTask {
-  id: string
-  title: string
-  status: TaskStatus
-  createdAt: string
-  updatedAt: string
-  closedAt: string | null
-  startsAt: string | null
-  dueAt: string | null
-  assignee: { id: string; name: string } | null
-  project: { id: string; name: string }
-}
-
-interface AnalyticsProject {
-  id: string
-  status: ProjectStatus
-  name: string
-}
-
-interface OverviewAnalytics {
-  projectsByStatus: Record<string, number>
-  tasksByStatus: Record<string, number>
-  taskTrend: Array<{ date: string; created: number; closed: number }>
-  timeline: Array<{
-    id: string
-    name: string
-    status: ProjectStatus
-    startsAt: string | null
-    endsAt: string | null
-    originalEndAt: string | null
-    slipped: boolean
-  }>
-  deadlineGroups: {
-    endingSoon: Array<{ id: string; name: string; daysUntil: number | null }>
-    endingMonth: Array<{ id: string; name: string; daysUntil: number | null }>
-    pastDue: Array<{ id: string; name: string; daysOverdue: number | null }>
-  }
-}
-
-const WINDOW_OPTIONS = [
-  { label: '7 hari', value: '7' },
-  { label: '30 hari', value: '30' },
-  { label: '90 hari', value: '90' },
-]
-
-const AP_PROJ_COLOR: Record<string, string> = {
-  ACTIVE: 'blue',
-  ON_HOLD: 'yellow',
-  DRAFT: 'gray',
-  COMPLETED: 'green',
-  CANCELLED: 'dark',
-}
-
-const AP_PROJ_LABEL: Record<string, string> = {
-  ACTIVE: 'Active',
-  ON_HOLD: 'On Hold',
-  DRAFT: 'Draft',
-  COMPLETED: 'Done',
-  CANCELLED: 'Cancelled',
-}
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
+import { ChartCard } from './analyticspanel/ChartCard'
+import { GanttSection } from './analyticspanel/GanttSection'
+import { StatCard } from './analyticspanel/StatCard'
+import { buildHeatmapOption, buildStatusOption, buildTrendOption } from './analyticspanel/chartBuilders.overview'
+import {
+  buildAgingWipOption,
+  buildContributorsOption,
+  buildCycleBucketsOption,
+  buildProjectWipOption,
+} from './analyticspanel/chartBuilders.tasks'
+import { WINDOW_OPTIONS, startOfDay } from './analyticspanel/constants'
+import type { AnalyticsProject, AnalyticsTask, OverviewAnalytics } from './analyticspanel/types'
+import { useAnalyticsTimeline } from './analyticspanel/useAnalyticsTimeline'
 
 export function AnalyticsPanel() {
   const [windowDays, setWindowDays] = useState<'7' | '30' | '90'>('30')
   const days = Number(windowDays)
 
-  const {
-    data: overviewData,
-    isFetching: overviewFetching,
-    refetch: refetchOverview,
-  } = useQuery({
+  const { data: overviewData, isFetching: overviewFetching, refetch: refetchOverview } = useQuery({
     queryKey: ['admin', 'analytics', 'overview', days],
     queryFn: () =>
       fetch(`/api/admin/overview/analytics?trendDays=${days}&timelineLimit=20`, {
@@ -106,11 +31,7 @@ export function AnalyticsPanel() {
       }).then((r) => r.json()) as Promise<OverviewAnalytics>,
   })
 
-  const {
-    data: tasksData,
-    isFetching: tasksFetching,
-    refetch: refetchTasks,
-  } = useQuery({
+  const { data: tasksData, isFetching: tasksFetching, refetch: refetchTasks } = useQuery({
     queryKey: ['admin', 'analytics', 'tasks'],
     queryFn: () =>
       fetch('/api/tasks?limit=500', { credentials: 'include' }).then((r) => r.json()) as Promise<{
@@ -118,11 +39,7 @@ export function AnalyticsPanel() {
       }>,
   })
 
-  const {
-    data: projectsData,
-    isFetching: projectsFetching,
-    refetch: refetchProjects,
-  } = useQuery({
+  const { data: projectsData, isFetching: projectsFetching, refetch: refetchProjects } = useQuery({
     queryKey: ['admin', 'analytics', 'projects'],
     queryFn: () =>
       fetch('/api/projects', { credentials: 'include' }).then((r) => r.json()) as Promise<{
@@ -159,378 +76,33 @@ export function AnalyticsPanel() {
     }
   }, [projects, tasks, windowStartMs])
 
-  const trendOption = useMemo<EChartsOption>(() => {
-    const trend = overviewData?.taskTrend ?? []
-    return {
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['Dibuka', 'Ditutup'], top: 0 },
-      grid: { left: 40, right: 16, top: 32, bottom: 28 },
-      xAxis: {
-        type: 'category',
-        data: trend.map((t) => t.date.slice(5)),
-        axisLabel: { fontSize: 10 },
-      },
-      yAxis: { type: 'value', minInterval: 1 },
-      series: [
-        {
-          name: 'Dibuka',
-          type: 'line',
-          smooth: true,
-          data: trend.map((t) => t.created),
-          itemStyle: { color: '#228be6' },
-          areaStyle: { opacity: 0.15 },
-        },
-        {
-          name: 'Ditutup',
-          type: 'line',
-          smooth: true,
-          data: trend.map((t) => t.closed),
-          itemStyle: { color: '#40c057' },
-          areaStyle: { opacity: 0.15 },
-        },
-      ],
-    }
-  }, [overviewData])
+  const trendOption = useMemo<EChartsOption>(
+    () => buildTrendOption(overviewData?.taskTrend ?? []),
+    [overviewData],
+  )
+  const statusOption = useMemo<EChartsOption>(
+    () => buildStatusOption(overviewData?.tasksByStatus ?? {}),
+    [overviewData],
+  )
+  const throughputHeatmapOption = useMemo<EChartsOption>(
+    () => buildHeatmapOption(overviewData?.taskTrend ?? []),
+    [overviewData],
+  )
+  const contributorsOption = useMemo<EChartsOption>(
+    () => buildContributorsOption(tasks, windowStartMs),
+    [tasks, windowStartMs],
+  )
+  const projectWipOption = useMemo<EChartsOption>(() => buildProjectWipOption(tasks), [tasks])
+  const cycleBucketsOption = useMemo<EChartsOption>(
+    () => buildCycleBucketsOption(tasks, windowStartMs),
+    [tasks, windowStartMs],
+  )
+  const agingWipOption = useMemo<EChartsOption>(() => buildAgingWipOption(tasks), [tasks])
 
-  const statusOption = useMemo<EChartsOption>(() => {
-    const buckets = overviewData?.tasksByStatus ?? {}
-    return {
-      tooltip: { trigger: 'item' },
-      legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 11 } },
-      series: [
-        {
-          type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['50%', '45%'],
-          avoidLabelOverlap: true,
-          label: { show: false },
-          data: [
-            { name: 'Open', value: buckets.OPEN ?? 0, itemStyle: { color: '#228be6' } },
-            { name: 'In Progress', value: buckets.IN_PROGRESS ?? 0, itemStyle: { color: '#7950f2' } },
-            { name: 'Ready for QC', value: buckets.READY_FOR_QC ?? 0, itemStyle: { color: '#fab005' } },
-            { name: 'Reopened', value: buckets.REOPENED ?? 0, itemStyle: { color: '#fd7e14' } },
-            { name: 'Closed', value: buckets.CLOSED ?? 0, itemStyle: { color: '#40c057' } },
-          ],
-        },
-      ],
-    }
-  }, [overviewData])
+  const { timelineTasks, timelineRows, tlStart, tlEnd, tlWrapperRef, scrollToToday } =
+    useAnalyticsTimeline(overviewData)
 
-  const contributorsOption = useMemo<EChartsOption>(() => {
-    const counts = new Map<string, number>()
-    for (const t of tasks) {
-      if (!t.closedAt || !t.assignee) continue
-      if (new Date(t.closedAt).getTime() < windowStartMs) continue
-      counts.set(t.assignee.name, (counts.get(t.assignee.name) ?? 0) + 1)
-    }
-    const sorted = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .reverse()
-    return {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 100, right: 24, top: 16, bottom: 28 },
-      xAxis: { type: 'value', minInterval: 1 },
-      yAxis: {
-        type: 'category',
-        data: sorted.map(([name]) => name),
-        axisLabel: { fontSize: 11 },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: sorted.map(([, n]) => n),
-          itemStyle: { color: '#7950f2', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', fontSize: 10 },
-        },
-      ],
-    }
-  }, [tasks, windowStartMs])
-
-  const projectWipOption = useMemo<EChartsOption>(() => {
-    const counts = new Map<string, number>()
-    for (const t of tasks) {
-      if (t.status === 'CLOSED') continue
-      counts.set(t.project.name, (counts.get(t.project.name) ?? 0) + 1)
-    }
-    const sorted = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .reverse()
-    return {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 140, right: 24, top: 16, bottom: 28 },
-      xAxis: { type: 'value', minInterval: 1 },
-      yAxis: {
-        type: 'category',
-        data: sorted.map(([name]) => name),
-        axisLabel: { fontSize: 11 },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: sorted.map(([, n]) => n),
-          itemStyle: { color: '#228be6', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', fontSize: 10 },
-        },
-      ],
-    }
-  }, [tasks])
-
-  const cycleBucketsOption = useMemo<EChartsOption>(() => {
-    const buckets = { '≤1d': 0, '1–3d': 0, '3–7d': 0, '1–2w': 0, '2w–1m': 0, '>1m': 0 }
-    for (const t of tasks) {
-      if (!t.closedAt) continue
-      if (new Date(t.closedAt).getTime() < windowStartMs) continue
-      const start = new Date(t.startsAt ?? t.createdAt).getTime()
-      const end = new Date(t.closedAt).getTime()
-      const d = (end - start) / (1000 * 60 * 60 * 24)
-      if (!Number.isFinite(d) || d < 0) continue
-      if (d <= 1) buckets['≤1d']++
-      else if (d <= 3) buckets['1–3d']++
-      else if (d <= 7) buckets['3–7d']++
-      else if (d <= 14) buckets['1–2w']++
-      else if (d <= 30) buckets['2w–1m']++
-      else buckets['>1m']++
-    }
-    const labels = Object.keys(buckets)
-    return {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 40, right: 16, top: 16, bottom: 28 },
-      xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
-      yAxis: { type: 'value', minInterval: 1 },
-      series: [
-        {
-          type: 'bar',
-          data: labels.map((k) => buckets[k as keyof typeof buckets]),
-          itemStyle: {
-            color: (p: { dataIndex: number }) => {
-              const palette = ['#40c057', '#51cf66', '#94d82d', '#fab005', '#fd7e14', '#fa5252']
-              return palette[p.dataIndex] ?? '#868e96'
-            },
-            borderRadius: [4, 4, 0, 0],
-          },
-          label: { show: true, position: 'top', fontSize: 10 },
-        },
-      ],
-    }
-  }, [tasks, windowStartMs])
-
-  const agingWipOption = useMemo<EChartsOption>(() => {
-    const now = Date.now()
-    const open = tasks
-      .filter((t) => t.status !== 'CLOSED')
-      .map((t) => {
-        const anchor = new Date(t.updatedAt ?? t.createdAt).getTime()
-        return {
-          title: t.title,
-          project: t.project.name,
-          status: t.status,
-          ageDays: Math.max(0, Math.round((now - anchor) / (1000 * 60 * 60 * 24))),
-        }
-      })
-      .sort((a, b) => b.ageDays - a.ageDays)
-      .slice(0, 12)
-      .reverse()
-    const statusColor: Record<TaskStatus, string> = {
-      OPEN: '#228be6',
-      IN_PROGRESS: '#7950f2',
-      READY_FOR_QC: '#fab005',
-      REOPENED: '#fd7e14',
-      CLOSED: '#40c057',
-    }
-    return {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        formatter: (params: unknown) => {
-          const arr = params as Array<{ dataIndex: number; value: number; name: string }>
-          const row = open[arr[0].dataIndex]
-          if (!row) return ''
-          return `<b>${row.title}</b><br/>${row.project}<br/>${row.status} · ${row.ageDays} hari`
-        },
-      },
-      grid: { left: 140, right: 48, top: 16, bottom: 28 },
-      xAxis: { type: 'value', name: 'hari', nameTextStyle: { fontSize: 10 } },
-      yAxis: {
-        type: 'category',
-        data: open.map((r) => (r.title.length > 22 ? `${r.title.slice(0, 22)}…` : r.title)),
-        axisLabel: { fontSize: 10 },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: open.map((r) => ({ value: r.ageDays, itemStyle: { color: statusColor[r.status] } })),
-          label: { show: true, position: 'right', fontSize: 10, formatter: '{c}d' },
-          itemStyle: { borderRadius: [0, 4, 4, 0] },
-        },
-      ],
-    }
-  }, [tasks])
-
-  const throughputHeatmapOption = useMemo<EChartsOption>(() => {
-    const trend = overviewData?.taskTrend ?? []
-    if (trend.length === 0) return { series: [] }
-    const first = new Date(trend[0].date)
-    const firstDow = first.getDay()
-    const weeks: Array<Array<{ date: string; closed: number } | null>> = []
-    let week: Array<{ date: string; closed: number } | null> = new Array(firstDow).fill(null)
-    for (const t of trend) {
-      week.push({ date: t.date, closed: t.closed })
-      if (week.length === 7) {
-        weeks.push(week)
-        week = []
-      }
-    }
-    if (week.length > 0) {
-      while (week.length < 7) week.push(null)
-      weeks.push(week)
-    }
-    const data: Array<[number, number, number]> = []
-    let max = 0
-    const cellDate = new Map<string, string>()
-    for (let wi = 0; wi < weeks.length; wi++) {
-      const w = weeks[wi]
-      for (let di = 0; di < w.length; di++) {
-        const cell = w[di]
-        if (!cell) continue
-        data.push([wi, 6 - di, cell.closed])
-        if (cell.closed > max) max = cell.closed
-        cellDate.set(`${wi},${6 - di}`, cell.date)
-      }
-    }
-    const dayLabels = ['Min', 'Sab', 'Jum', 'Kam', 'Rab', 'Sel', 'Sen']
-    return {
-      tooltip: {
-        formatter: (params: unknown) => {
-          const p = params as { data: [number, number, number] }
-          const date = cellDate.get(`${p.data[0]},${p.data[1]}`) ?? ''
-          return `${date}<br/><b>${p.data[2]}</b> task ditutup`
-        },
-      },
-      grid: { left: 40, right: 16, top: 16, bottom: 24 },
-      xAxis: {
-        type: 'category',
-        data: weeks.map((_, i) => `W${i + 1}`),
-        splitArea: { show: true },
-        axisLabel: { fontSize: 9 },
-      },
-      yAxis: {
-        type: 'category',
-        data: dayLabels,
-        splitArea: { show: true },
-        axisLabel: { fontSize: 10 },
-      },
-      visualMap: {
-        min: 0,
-        max: Math.max(1, max),
-        calculable: false,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: 0,
-        show: false,
-        inRange: { color: ['#e9ecef', '#74c0fc', '#228be6', '#1864ab'] },
-      },
-      series: [
-        {
-          type: 'heatmap',
-          data,
-          label: { show: false },
-          itemStyle: { borderRadius: 2, borderWidth: 1, borderColor: 'var(--mantine-color-body)' },
-        },
-      ],
-    }
-  }, [overviewData])
-
-  const timelineTasks = useMemo<GanttTask[]>(() => {
-    const rows = overviewData?.timeline ?? []
-    const now = new Date()
-    const weekOut = new Date(Date.now() + 7 * 86_400_000)
-    return rows
-      .filter((r) => r.startsAt || r.endsAt)
-      .sort((a, b) => (a.endsAt ?? '').localeCompare(b.endsAt ?? ''))
-      .slice(0, 12)
-      .map((r) => {
-        const start = r.startsAt ? new Date(r.startsAt) : now
-        const end = r.endsAt ? new Date(r.endsAt) : weekOut
-        const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000))
-        const suffix = [AP_PROJ_LABEL[r.status] ?? r.status, r.slipped ? '⚠ slipped' : ''].filter(Boolean).join(' · ')
-        return {
-          id: r.id,
-          label: `${r.name}  —  ${suffix}`,
-          startDate: toLocalDateStr(start),
-          duration,
-          progress: 0,
-          color: r.slipped ? 'orange' : (AP_PROJ_COLOR[r.status] ?? 'blue'),
-        }
-      })
-  }, [overviewData])
-
-  const { tlStart, tlEnd } = useMemo(() => {
-    const ms = timelineTasks.flatMap((t) => {
-      const s = new Date(t.startDate).getTime()
-      return [s, s + t.duration * 86_400_000]
-    })
-    return {
-      tlStart: ms.length ? new Date(Math.min(...ms) - 7 * 86_400_000) : undefined,
-      tlEnd: ms.length ? new Date(Math.max(...ms) + 14 * 86_400_000) : undefined,
-    }
-  }, [timelineTasks])
-
-  // month view: effectiveColWidth = max(22/6, 7) ≈ 7px per day
-  const AP_EFFECTIVE_DAY_PX = Math.max(22 / 6, 7)
-  const tlWrapperRef = useRef<HTMLDivElement>(null)
-
-  const scrollToToday = useCallback(() => {
-    if (!tlStart) return
-    const body = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineBody"]')
-    if (!body) return
-    const daysSinceStart = Math.floor((Date.now() - tlStart.getTime()) / 86_400_000)
-    body.scrollTo({
-      left: Math.max(0, daysSinceStart * AP_EFFECTIVE_DAY_PX - body.clientWidth / 2),
-      behavior: 'smooth',
-    })
-  }, [tlStart, AP_EFFECTIVE_DAY_PX])
-
-  useEffect(() => {
-    if (!tlStart) return
-    let attempts = 0
-    const tryScroll = () => {
-      const content = tlWrapperRef.current?.querySelector<HTMLElement>('[class*="timelineContent"]')
-      if (!content || content.offsetWidth < 200) {
-        if (++attempts < 40) {
-          setTimeout(tryScroll, 80)
-          return
-        }
-        return
-      }
-      scrollToToday()
-    }
-    setTimeout(tryScroll, 80)
-  }, [tlStart, scrollToToday]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // rows dari overviewData untuk sidebar (sebelum transform ke GanttTask)
-  const timelineRows = useMemo(() => {
-    const rows = overviewData?.timeline ?? []
-    const now = new Date()
-    const weekOut = new Date(Date.now() + 7 * 86_400_000)
-    return rows
-      .filter((r) => r.startsAt || r.endsAt)
-      .sort((a, b) => (a.endsAt ?? '').localeCompare(b.endsAt ?? ''))
-      .slice(0, 12)
-      .map((r) => ({
-        ...r,
-        start: r.startsAt ? new Date(r.startsAt) : now,
-        end: r.endsAt ? new Date(r.endsAt) : weekOut,
-      }))
-  }, [overviewData])
-
-  const refetchAll = () => {
-    refetchOverview()
-    refetchTasks()
-    refetchProjects()
-  }
-
+  const refetchAll = () => { refetchOverview(); refetchTasks(); refetchProjects() }
   const isFetching = overviewFetching || tasksFetching || projectsFetching
 
   return (
@@ -566,277 +138,62 @@ export function AnalyticsPanel() {
       </Group>
 
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
-        <StatCard
-          label="Proyek Aktif"
-          value={stats.activeProjects.toString()}
-          icon={TbTarget}
-          color="blue"
-          tip="Jumlah project dengan status ACTIVE. Proyek DRAFT / ON_HOLD / COMPLETED / CANCELLED tidak dihitung."
-        />
-        <StatCard
-          label="Task Terbuka"
-          value={stats.openTasks.toString()}
-          icon={TbListCheck}
-          color="violet"
-          tip="Task dengan status selain CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED)."
-        />
-        <StatCard
-          label={`Ditutup (${days}h)`}
-          value={stats.closedInWindow.toString()}
-          icon={TbCheck}
-          color="green"
-          tip={`Task dengan closedAt dalam ${days} hari terakhir. Indikator velocity tim.`}
-        />
-        <StatCard
-          label="Avg Cycle"
-          value={stats.avgCycleDays > 0 ? `${stats.avgCycleDays}h` : '—'}
-          icon={TbClock}
-          color="orange"
-          tip="Rata-rata durasi (hari) antara startsAt dan closedAt untuk task CLOSED. Semakin kecil = tim lebih responsif."
-        />
+        <StatCard label="Proyek Aktif" value={stats.activeProjects.toString()} icon={TbTarget} color="blue"
+          tip="Jumlah project dengan status ACTIVE. Proyek DRAFT / ON_HOLD / COMPLETED / CANCELLED tidak dihitung." />
+        <StatCard label="Task Terbuka" value={stats.openTasks.toString()} icon={TbListCheck} color="violet"
+          tip="Task dengan status selain CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED)." />
+        <StatCard label={`Ditutup (${days}h)`} value={stats.closedInWindow.toString()} icon={TbCheck} color="green"
+          tip={`Task dengan closedAt dalam ${days} hari terakhir. Indikator velocity tim.`} />
+        <StatCard label="Avg Cycle" value={stats.avgCycleDays > 0 ? `${stats.avgCycleDays}h` : '—'} icon={TbClock} color="orange"
+          tip="Rata-rata durasi (hari) antara startsAt dan closedAt untuk task CLOSED. Semakin kecil = tim lebih responsif." />
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <ChartCard
-          title="Throughput"
-          subtitle={`Dibuka vs ditutup, ${days} hari terakhir`}
-          tip="Jumlah task dibuka (biru) vs ditutup (hijau) per hari. Line sejajar = velocity sustainable; create >> close = backlog menumpuk."
-        >
+        <ChartCard title="Throughput" subtitle={`Dibuka vs ditutup, ${days} hari terakhir`}
+          tip="Jumlah task dibuka (biru) vs ditutup (hijau) per hari. Line sejajar = velocity sustainable; create >> close = backlog menumpuk.">
           <EChart option={trendOption} height={260} />
         </ChartCard>
-        <ChartCard
-          title="Status Task"
-          subtitle="Seluruh task"
-          tip="Pie distribusi task per status OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED / CLOSED. Lihat bottleneck: READY_FOR_QC menumpuk = QC lambat, REOPENED banyak = quality issue."
-        >
+        <ChartCard title="Status Task" subtitle="Seluruh task"
+          tip="Pie distribusi task per status OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED / CLOSED. Lihat bottleneck: READY_FOR_QC menumpuk = QC lambat, REOPENED banyak = quality issue.">
           <EChart option={statusOption} height={260} />
         </ChartCard>
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <ChartCard
-          title="Heatmap Task Ditutup"
-          subtitle={`${days} hari — intensitas per hari`}
-          tip="Grid kalender: warna lebih gelap = lebih banyak task ditutup pada hari itu. Deteksi pola kerja mingguan (mis. sprint Jumat) atau blank spot (libur, blocked)."
-        >
+        <ChartCard title="Heatmap Task Ditutup" subtitle={`${days} hari — intensitas per hari`}
+          tip="Grid kalender: warna lebih gelap = lebih banyak task ditutup pada hari itu. Deteksi pola kerja mingguan (mis. sprint Jumat) atau blank spot (libur, blocked).">
           <EChart option={throughputHeatmapOption} height={220} />
         </ChartCard>
-        <ChartCard
-          title="Distribusi Cycle Time"
-          subtitle={`Task CLOSED di ${days} hari, bucket durasi`}
-          tip="Histogram durasi dari startsAt ke closedAt, bucket: ≤1h, 1–3h, 3–7h, 1–2w, 2w–1bln, >1bln. Tail panjang = ada task molor panjang."
-        >
+        <ChartCard title="Distribusi Cycle Time" subtitle={`Task CLOSED di ${days} hari, bucket durasi`}
+          tip="Histogram durasi dari startsAt ke closedAt, bucket: ≤1h, 1–3h, 3–7h, 1–2w, 2w–1bln, >1bln. Tail panjang = ada task molor panjang.">
           <EChart option={cycleBucketsOption} height={220} />
         </ChartCard>
       </SimpleGrid>
 
-      <ChartCard
-        title={`Timeline Proyek${timelineTasks.length > 0 ? ` · ${timelineTasks.length} projects` : ''}`}
-        subtitle="Oranye = slipped deadline · read-only"
-        tip="Gantt chart startsAt → endsAt tiap proyek ACTIVE. Oranye = slipped (deadline pernah diperpanjang via extension)."
-      >
-        {timelineTasks.length > 0 && (
-          <Group gap={6} mb="xs" wrap="wrap">
-            {Object.entries(AP_PROJ_COLOR).map(([s, c]) => (
-              <Badge key={s} size="xs" color={c} variant="dot">
-                {AP_PROJ_LABEL[s] ?? s}
-              </Badge>
-            ))}
-            <Badge size="xs" color="orange" variant="dot">
-              Slipped
-            </Badge>
-          </Group>
-        )}
-        {timelineTasks.length > 0 && (
-          <Group justify="flex-end" mb="xs">
-            <Tooltip label="Scroll ke hari ini" withArrow>
-              <ActionIcon variant="light" size="sm" color="red" onClick={scrollToToday}>
-                <TbCalendarEvent size={13} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        )}
-        {timelineTasks.length === 0 ? (
-          <Text size="sm" c="dimmed" ta="center" py="lg">
-            Belum ada project aktif dengan jadwal.
-          </Text>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              height: Math.max(200, timelineTasks.length * 42 + 60),
-              border: '1px solid var(--mantine-color-default-border)',
-              borderRadius: 'var(--mantine-radius-md)',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Custom sidebar */}
-            <div
-              style={{
-                width: 180,
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                borderRight: '1px solid var(--mantine-color-default-border)',
-              }}
-            >
-              <div
-                style={{
-                  height: 56,
-                  flexShrink: 0,
-                  borderBottom: '1px solid var(--mantine-color-default-border)',
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  padding: '0 10px 8px',
-                }}
-              >
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.06em' }}>
-                  Proyek
-                </Text>
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
-                {timelineRows.map((r) => (
-                  <div
-                    key={r.id}
-                    style={{
-                      height: 42,
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0 10px',
-                      gap: 6,
-                      borderBottom: '1px solid var(--mantine-color-default-border)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: '50%',
-                        backgroundColor: r.slipped
-                          ? '#b86d2a'
-                          : `var(--mantine-color-${AP_PROJ_COLOR[r.status] ?? 'blue'}-6)`,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Text size="xs" fw={500} truncate title={r.name}>
-                      {r.name}
-                    </Text>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Gantt timeline */}
-            <div ref={tlWrapperRef} style={{ flex: 1, overflow: 'hidden' }}>
-              <Gantt
-                tasks={timelineTasks}
-                viewMode="month"
-                startDate={tlStart}
-                endDate={tlEnd}
-                columnWidth={22}
-                rowHeight={42}
-                taskListWidth={0}
-                showTodayMarker
-                showTitle
-                styles={{ taskList: { display: 'none' } }}
-              />
-            </div>
-          </div>
-        )}
-      </ChartCard>
+      <GanttSection
+        timelineTasks={timelineTasks}
+        timelineRows={timelineRows}
+        tlStart={tlStart}
+        tlEnd={tlEnd}
+        tlWrapperRef={tlWrapperRef}
+        onScrollToToday={scrollToToday}
+      />
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <ChartCard
-          title="Aging WIP"
-          subtitle="Task terbuka paling lama tidak bergerak (top 12)"
-          tip="Top 12 task non-CLOSED dengan updatedAt terlama. Kandidat kuat untuk ditutup, di-split, atau di-close sebagai wont-fix."
-        >
+        <ChartCard title="Aging WIP" subtitle="Task terbuka paling lama tidak bergerak (top 12)"
+          tip="Top 12 task non-CLOSED dengan updatedAt terlama. Kandidat kuat untuk ditutup, di-split, atau di-close sebagai wont-fix.">
           <EChart option={agingWipOption} height={320} />
         </ChartCard>
-        <ChartCard
-          title="WIP per Proyek"
-          subtitle="Task terbuka per proyek (top 10)"
-          tip="Project dengan jumlah task non-CLOSED paling banyak. WIP tinggi = fokus terpecah; pertimbangkan limit WIP per project."
-        >
+        <ChartCard title="WIP per Proyek" subtitle="Task terbuka per proyek (top 10)"
+          tip="Project dengan jumlah task non-CLOSED paling banyak. WIP tinggi = fokus terpecah; pertimbangkan limit WIP per project.">
           <EChart option={projectWipOption} height={320} />
         </ChartCard>
       </SimpleGrid>
 
-      <ChartCard
-        title="Kontributor Teratas"
-        subtitle={`Task ditutup, ${days} hari terakhir (top 10)`}
-        tip="User dengan jumlah task CLOSED terbanyak di window. Proxy untuk kontribusi output; bukan ukuran kualitas atau kompleksitas."
-      >
+      <ChartCard title="Kontributor Teratas" subtitle={`Task ditutup, ${days} hari terakhir (top 10)`}
+        tip="User dengan jumlah task CLOSED terbanyak di window. Proxy untuk kontribusi output; bukan ukuran kualitas atau kompleksitas.">
         <EChart option={contributorsOption} height={320} />
       </ChartCard>
     </Stack>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  tip,
-}: {
-  label: string
-  value: string
-  icon: typeof TbTarget
-  color: string
-  tip?: string
-}) {
-  return (
-    <Card withBorder padding="lg" radius="md">
-      <Group justify="space-between" align="flex-start">
-        <div style={{ flex: 1 }}>
-          <Group gap={4} wrap="nowrap">
-            <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-              {label}
-            </Text>
-            {tip && <InfoTip label={tip} size={12} />}
-          </Group>
-          <Text fw={700} size="xl">
-            {value}
-          </Text>
-        </div>
-        <ThemeIcon variant="light" color={color} size="lg" radius="md">
-          <Icon size={20} />
-        </ThemeIcon>
-      </Group>
-    </Card>
-  )
-}
-
-function ChartCard({
-  title,
-  subtitle,
-  tip,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  tip?: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card withBorder padding="md" radius="md">
-      <Stack gap="xs">
-        <div>
-          <Group gap={4} wrap="nowrap">
-            <Text fw={600} size="sm">
-              {title}
-            </Text>
-            {tip && <InfoTip label={tip} size={12} />}
-          </Group>
-          {subtitle && (
-            <Text size="xs" c="dimmed">
-              {subtitle}
-            </Text>
-          )}
-        </div>
-        {children}
-      </Stack>
-    </Card>
   )
 }

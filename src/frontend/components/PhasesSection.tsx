@@ -1,12 +1,13 @@
-import { Badge, Button, Card, Group, Stack, Stepper, Text } from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Collapse, Group, Stack, Stepper, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { TbStack2 } from 'react-icons/tb'
+import { TbChevronDown, TbChevronRight, TbEdit, TbStack2 } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import {
   CompletePhaseModal,
   EditPhaseModal,
+  EditSummaryModal,
   formatPhaseDate,
   PHASE_STATUS_COLOR,
   PhaseActionsMenu,
@@ -34,6 +35,14 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export function PhasesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const qc = useQueryClient()
   const [isTemplating, setIsTemplating] = useState(false)
+  const [expandedSummaryIds, setExpandedSummaryIds] = useState<Set<string>>(new Set())
+  const toggleSummary = (id: string) =>
+    setExpandedSummaryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const phasesQ = useQuery({
     queryKey: ['phases', projectId],
@@ -78,12 +87,13 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   }, [phases])
 
   const openDetailModal = (phase: ProjectPhase) => {
-    modals.open({ title: phase.title, children: <PhaseDetailModal phase={phase} /> })
+    modals.open({ title: phase.title, size: 'lg', children: <PhaseDetailModal phase={phase} /> })
   }
 
   const openCompleteModal = (phase: ProjectPhase) => {
     modals.open({
       title: 'Selesaikan Fase',
+      size: 'lg',
       children: (
         <CompletePhaseModal
           phaseName={phase.title}
@@ -97,6 +107,19 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     modals.open({
       title: 'Edit Fase',
       children: <EditPhaseModal phase={phase} onSubmit={(data) => update.mutate({ id: phase.id, body: data })} />,
+    })
+  }
+
+  const openEditSummaryModal = (phase: ProjectPhase) => {
+    modals.open({
+      title: `Kesimpulan — ${phase.title}`,
+      size: 'lg',
+      children: (
+        <EditSummaryModal
+          phase={phase}
+          onConfirm={(summary) => update.mutate({ id: phase.id, body: { summary } })}
+        />
+      ),
     })
   }
 
@@ -194,31 +217,55 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
                 </Group>
               }
               description={
-                phase.startsAt || phase.endsAt ? (
-                  <Text size="xs" c="dimmed">
-                    {formatPhaseDate(phase.startsAt) ?? '?'} – {formatPhaseDate(phase.endsAt) ?? '?'}
-                  </Text>
-                ) : undefined
+                <Stack gap={4} mt={2}>
+                  {(phase.startsAt || phase.endsAt) && (
+                    <Text size="xs" c="dimmed">
+                      {formatPhaseDate(phase.startsAt) ?? '?'} – {formatPhaseDate(phase.endsAt) ?? '?'}
+                    </Text>
+                  )}
+                  {phase.status === 'COMPLETED' && (
+                    <Card withBorder radius="sm" p="xs" bg="var(--mantine-color-green-light)">
+                      <Group
+                        justify="space-between"
+                        gap={4}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => toggleSummary(phase.id)}
+                      >
+                        <Group gap={4}>
+                          {expandedSummaryIds.has(phase.id)
+                            ? <TbChevronDown size={12} color="var(--mantine-color-green-light-color)" />
+                            : <TbChevronRight size={12} color="var(--mantine-color-green-light-color)" />}
+                          <Text size="xs" fw={600} c="var(--mantine-color-green-light-color)">
+                            Kesimpulan
+                          </Text>
+                        </Group>
+                        {canManage && expandedSummaryIds.has(phase.id) && (
+                          <ActionIcon
+                            size="xs"
+                            variant="subtle"
+                            color="green"
+                            onClick={(e) => { e.stopPropagation(); openEditSummaryModal(phase) }}
+                          >
+                            <TbEdit size={12} />
+                          </ActionIcon>
+                        )}
+                      </Group>
+                      <Collapse in={expandedSummaryIds.has(phase.id)}>
+                        <Text size="xs" c={phase.summary ? undefined : 'dimmed'} style={{ whiteSpace: 'pre-wrap' }} mt={6}>
+                          {phase.summary || '—'}
+                        </Text>
+                      </Collapse>
+                    </Card>
+                  )}
+                </Stack>
               }
               color={phase.status === 'COMPLETED' ? 'green' : phase.status === 'ACTIVE' ? 'blue' : 'gray'}
             >
-              <Stack pb="sm" gap="xs">
-                {phase.description && (
-                  <Text size="xs" c="dimmed" fs="italic">
-                    {phase.description}
-                  </Text>
-                )}
-                {phase.status === 'COMPLETED' && (
-                  <Card withBorder radius="sm" p="xs" bg="var(--mantine-color-green-light)">
-                    <Text size="xs" fw={600} mb={2} c="var(--mantine-color-green-light-color)">
-                      Kesimpulan
-                    </Text>
-                    <Text size="xs" c={phase.summary ? undefined : 'dimmed'}>
-                      {phase.summary || '—'}
-                    </Text>
-                  </Card>
-                )}
-              </Stack>
+              {phase.description && (
+                <Text size="xs" c="dimmed" fs="italic" pb="sm">
+                  {phase.description}
+                </Text>
+              )}
             </Stepper.Step>
           ))}
         </Stepper>

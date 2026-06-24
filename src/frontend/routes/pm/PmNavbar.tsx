@@ -35,7 +35,7 @@ export function PmNavbar({
   return (
     <AppShell.Navbar
       p={isCollapsed ? 'xs' : 'md'}
-      style={{ background: 'light-dark(rgba(34,139,230,0.05), rgba(34,139,230,0.08))' }}
+      style={{ backgroundImage: 'linear-gradient(light-dark(rgba(34,139,230,0.05), rgba(34,139,230,0.08)), light-dark(rgba(34,139,230,0.05), rgba(34,139,230,0.08)))' }}
     >
       <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
         <Stack gap={4}>

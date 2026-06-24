@@ -248,7 +248,7 @@ function AdminPage() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ background: 'light-dark(rgba(148,103,220,0.05), rgba(148,103,220,0.08))' }}>
+      <AppShell.Navbar p={collapsed && !isMobile ? 'xs' : 'md'} style={{ backgroundImage: 'linear-gradient(light-dark(rgba(148,103,220,0.05), rgba(148,103,220,0.08)), light-dark(rgba(148,103,220,0.05), rgba(148,103,220,0.08)))' }}>
         <Stack gap={collapsed && !isMobile ? 'xs' : 'md'} style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
           {filteredNavGroups.map((group) => (
             <Stack key={group.label} gap={4}>

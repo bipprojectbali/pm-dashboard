@@ -144,7 +144,7 @@ function DevPage() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          background: 'light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08))',
+          backgroundImage: 'linear-gradient(light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)), light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)))',
         }}
       >
         <Stack

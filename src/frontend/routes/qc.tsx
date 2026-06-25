@@ -38,7 +38,7 @@ type QcSearch = { status: StatusFilter; ticketId?: string }
 
 export const Route = createFileRoute('/qc')({
   validateSearch: (search: Record<string, unknown>): QcSearch => {
-    const status = validStatuses.includes(search.status as StatusFilter) ? (search.status as StatusFilter) : 'open'
+    const status = validStatuses.includes(search.status as StatusFilter) ? (search.status as StatusFilter) : 'all'
     const ticketId = typeof search.ticketId === 'string' ? search.ticketId : undefined
     return ticketId ? { status, ticketId } : { status }
   },
@@ -281,8 +281,8 @@ function QcPage() {
                 onToggle={toggleSelect}
                 onToggleAll={toggleAll}
                 emptyHint={
-                  status === 'open'
-                    ? 'Tidak ada ticket open. Buat ticket baru kalau nemu bug.'
+                  status === 'all'
+                    ? 'Belum ada ticket. Buat ticket baru kalau nemu bug.'
                     : 'Tidak ada ticket dengan filter ini.'
                 }
               />

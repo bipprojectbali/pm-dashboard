@@ -6,18 +6,18 @@ import {
   Divider,
   Group,
   Menu,
-  MultiSelect,
   Select,
   Stack,
+  TagsInput,
   Text,
   Textarea,
   TextInput,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { modals } from '@mantine/modals'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
-import { TbCheck, TbDotsVertical, TbEdit, TbEye, TbPlayerPlay, TbPlus, TbTag, TbTrash } from 'react-icons/tb'
+import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { TbCheck, TbDotsVertical, TbEdit, TbEye, TbPlayerPlay, TbTrash } from 'react-icons/tb'
 
 export type PhaseStatus = 'PLANNING' | 'ACTIVE' | 'COMPLETED'
 
@@ -266,36 +266,38 @@ export function EditPhaseModal({
   const [status, setStatus] = useState<PhaseStatus>(phase.status)
   const [startsAt, setStartsAt] = useState<Date | null>(phase.startsAt ? new Date(phase.startsAt) : null)
   const [endsAt, setEndsAt] = useState<Date | null>(phase.endsAt ? new Date(phase.endsAt) : null)
-  const [tagIds, setTagIds] = useState<string[]>(phase.tags.map((t) => t.tagId))
-  const [localTags, setLocalTags] = useState<TagOption[]>([])
-  const [newTagName, setNewTagName] = useState('')
+  const [tagNames, setTagNames] = useState<string[]>(phase.tags.map((t) => t.tag.name))
 
-  const allTags = useMemo(
-    () => [...availableTags, ...localTags.filter((lt) => !availableTags.some((at) => at.id === lt.id))],
-    [availableTags, localTags],
-  )
+  const resolveTagIds = async (names: string[]): Promise<string[]> => {
+    const ids: string[] = []
+    for (const name of names) {
+      const existing = availableTags.find((t) => t.name.toLowerCase() === name.toLowerCase())
+      if (existing) {
+        ids.push(existing.id)
+      } else {
+        try {
+          const res = await fetch(`/api/projects/${phase.projectId}/tags`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, color: 'blue' }),
+          })
+          if (res.ok) {
+            const { tag } = (await res.json()) as { tag: TagOption }
+            ids.push(tag.id)
+            qc.invalidateQueries({ queryKey: ['tags', phase.projectId] })
+          }
+        } catch {
+          // skip if tag creation fails
+        }
+      }
+    }
+    return ids
+  }
 
-  const createTag = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await fetch(`/api/projects/${phase.projectId}/tags`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, color: 'blue' }),
-      })
-      if (!res.ok) throw new Error('Gagal membuat tag')
-      return res.json() as Promise<{ tag: TagOption }>
-    },
-    onSuccess: ({ tag }) => {
-      setLocalTags((prev) => [...prev, tag])
-      setTagIds((prev) => [...prev, tag.id])
-      setNewTagName('')
-      qc.invalidateQueries({ queryKey: ['tags', phase.projectId] })
-    },
-  })
-
-  const submit = () => {
+  const submit = async () => {
     if (!title.trim()) return
+    const tagIds = await resolveTagIds(tagNames)
     onSubmit({
       title: title.trim(),
       description: description.trim() || null,
@@ -348,38 +350,14 @@ export function EditPhaseModal({
           clearable
         />
       </Group>
-      <MultiSelect
+      <TagsInput
         label="Tags"
-        placeholder="Pilih tag"
-        data={allTags.map((t) => ({ value: t.id, label: t.name }))}
-        value={tagIds}
-        onChange={setTagIds}
-        searchable
+        placeholder="Pilih atau ketik untuk buat tag baru (Enter)"
+        data={availableTags.map((t) => t.name)}
+        value={tagNames}
+        onChange={setTagNames}
         clearable
       />
-      <Group gap="xs" wrap="nowrap">
-        <TextInput
-          size="xs"
-          placeholder="Buat tag baru…"
-          leftSection={<TbTag size={12} />}
-          value={newTagName}
-          onChange={(e) => setNewTagName(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newTagName.trim()) createTag.mutate(newTagName.trim())
-          }}
-          style={{ flex: 1 }}
-        />
-        <Button
-          size="xs"
-          variant="light"
-          leftSection={<TbPlus size={12} />}
-          disabled={!newTagName.trim() || createTag.isPending}
-          loading={createTag.isPending}
-          onClick={() => newTagName.trim() && createTag.mutate(newTagName.trim())}
-        >
-          Buat
-        </Button>
-      </Group>
       <Group justify="flex-end" gap="xs">
         <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
           Batal

@@ -7,7 +7,9 @@ import {
   Card,
   Container,
   Group,
+  Paper,
   SegmentedControl,
+  Select,
   Stack,
   Text,
   ThemeIcon,
@@ -16,10 +18,11 @@ import {
 } from '@mantine/core'
 import { useDisclosure, useMediaQuery } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { TbAlertTriangle, TbBug, TbPlus, TbRefresh } from 'react-icons/tb'
+import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
@@ -35,7 +38,7 @@ type QcSearch = { status: StatusFilter; ticketId?: string }
 
 export const Route = createFileRoute('/qc')({
   validateSearch: (search: Record<string, unknown>): QcSearch => {
-    const status = validStatuses.includes(search.status as StatusFilter) ? (search.status as StatusFilter) : 'open'
+    const status = validStatuses.includes(search.status as StatusFilter) ? (search.status as StatusFilter) : 'all'
     const ticketId = typeof search.ticketId === 'string' ? search.ticketId : undefined
     return ticketId ? { status, ticketId } : { status }
   },
@@ -96,6 +99,41 @@ function QcPage() {
   const isMobile = useMediaQuery('(max-width: 48em)')
   const [opened, { toggle }] = useDisclosure(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const queryClient = useQueryClient()
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null)
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+
+  const toggleAll = (ids: string[]) =>
+    setSelectedIds((prev) => ids.every((id) => prev.has(id)) ? new Set() : new Set(ids))
+
+  const bulkUpdateM = useMutation({
+    mutationFn: async ({ ids, newStatus }: { ids: string[]; newStatus: string }) => {
+      const results = await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/qc/tickets/${id}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus }),
+          }).then((r) => r.json()),
+        ),
+      )
+      const failed = results.filter((r) => r.error)
+      if (failed.length) throw new Error(`${failed.length} ticket gagal diupdate`)
+      return results
+    },
+    onSuccess: (_, { ids }) => {
+      notifySuccess({ message: `${ids.length} ticket diupdate.` })
+      setSelectedIds(new Set())
+      setBulkStatus(null)
+      queryClient.invalidateQueries({ queryKey: ['qc'] })
+    },
+    onError: (err) => notifyError(err),
+  })
 
   const ctxQ = useQuery({
     queryKey: ['qc', 'context'],
@@ -203,13 +241,48 @@ function QcPage() {
                   </Button>
                 </Group>
               </Group>
+              {selectedIds.size > 0 && (
+                <Paper withBorder p="sm" radius="md">
+                  <Group gap="sm" wrap="wrap">
+                    <Text size="sm" fw={500}>{selectedIds.size} ticket dipilih</Text>
+                    <Select
+                      placeholder="Pilih status baru"
+                      value={bulkStatus}
+                      onChange={setBulkStatus}
+                      size="xs"
+                      w={180}
+                      data={[
+                        { value: 'OPEN', label: 'Open' },
+                        { value: 'IN_PROGRESS', label: 'In Progress' },
+                        { value: 'READY_FOR_QC', label: 'Ready for QC' },
+                        { value: 'REOPENED', label: 'Reopened' },
+                        { value: 'CLOSED', label: 'Closed' },
+                      ]}
+                    />
+                    <Button
+                      size="xs"
+                      disabled={!bulkStatus || bulkUpdateM.isPending}
+                      loading={bulkUpdateM.isPending}
+                      onClick={() => bulkStatus && bulkUpdateM.mutate({ ids: [...selectedIds], newStatus: bulkStatus })}
+                    >
+                      Update Status
+                    </Button>
+                    <Button size="xs" variant="subtle" color="gray" onClick={() => { setSelectedIds(new Set()); setBulkStatus(null) }}>
+                      Batal
+                    </Button>
+                  </Group>
+                </Paper>
+              )}
               <TicketsTable
                 tickets={tickets}
                 loading={ticketsQ.isLoading}
                 onOpen={openTicket}
+                selectedIds={selectedIds}
+                onToggle={toggleSelect}
+                onToggleAll={toggleAll}
                 emptyHint={
-                  status === 'open'
-                    ? 'Tidak ada ticket open. Buat ticket baru kalau nemu bug.'
+                  status === 'all'
+                    ? 'Belum ada ticket. Buat ticket baru kalau nemu bug.'
                     : 'Tidak ada ticket dengan filter ini.'
                 }
               />

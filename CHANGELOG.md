@@ -7,6 +7,20 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.19] - 2026-06-25
+
+### Ditambahkan
+- **Upload screenshot di drawer ticket** — section Evidence pada detail ticket kini punya tombol "Upload Screenshot". Gambar diupload langsung saat dipilih (bisa multiple). Screenshot tampil sebagai thumbnail 4-kolom; klik thumbnail membuka lightbox modal. Evidence non-gambar (LINK) tetap tampil seperti sebelumnya.
+- **Assignee select di drawer ticket** — ADMIN/SUPER_ADMIN dapat memilih atau menghapus assignee langsung dari drawer via Select searchable + clearable. QC role melihat assignee sebagai teks read-only.
+- **Bulk update status** — checkbox per baris di tabel ticket (dengan select-all + indeterminate). Saat ≥1 dipilih, toolbar bulk muncul: pilih status baru → Update Status. Update dijalankan paralel.
+- **Kolom Tanggal** — tanggal input ticket ditampilkan di tabel; hover untuk melihat waktu lengkap.
+
+### Diubah
+- Default filter status halaman QC dari "Open" menjadi "All".
+
+### Diperbaiki
+- `evidence.label` di tipe frontend diubah ke `evidence.note` (sesuai field DB yang sebenarnya).
+
 ## [0.7.18] - 2026-06-25
 
 ### Ditambahkan

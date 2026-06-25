@@ -1,4 +1,4 @@
-import { Badge, Card, Group, Paper, Stack, Table, Text, ThemeIcon, Tooltip } from '@mantine/core'
+import { Badge, Card, Checkbox, Group, Paper, Stack, Table, Text, ThemeIcon, Tooltip } from '@mantine/core'
 import { TbCircleCheck, TbMessage, TbPaperclip } from 'react-icons/tb'
 import { type Ticket, priorityBadge, statusBadge } from './types'
 
@@ -7,11 +7,17 @@ export function TicketsTable({
   loading,
   onOpen,
   emptyHint,
+  selectedIds,
+  onToggle,
+  onToggleAll,
 }: {
   tickets: Ticket[]
   loading: boolean
   onOpen: (id: string) => void
   emptyHint: string
+  selectedIds: Set<string>
+  onToggle: (id: string) => void
+  onToggleAll: (ids: string[]) => void
 }) {
   if (loading) {
     return (
@@ -32,11 +38,24 @@ export function TicketsTable({
       </Paper>
     )
   }
+
+  const allIds = tickets.map((t) => t.id)
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id))
+  const someSelected = allIds.some((id) => selectedIds.has(id)) && !allSelected
+
   return (
     <Card withBorder radius="md" p={0}>
       <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
+            <Table.Th w={36}>
+              <Checkbox
+                size="xs"
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={() => onToggleAll(allIds)}
+              />
+            </Table.Th>
             <Table.Th>Title</Table.Th>
             <Table.Th>Priority</Table.Th>
             <Table.Th>Status</Table.Th>
@@ -49,8 +68,17 @@ export function TicketsTable({
           {tickets.map((t) => {
             const pb = priorityBadge[t.priority] ?? priorityBadge.MEDIUM
             const sb = statusBadge[t.status] ?? statusBadge.OPEN
+            const checked = selectedIds.has(t.id)
             return (
-              <Table.Tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => onOpen(t.id)}>
+              <Table.Tr
+                key={t.id}
+                style={{ cursor: 'pointer' }}
+                bg={checked ? 'var(--mantine-color-blue-light)' : undefined}
+                onClick={() => onOpen(t.id)}
+              >
+                <Table.Td onClick={(e) => { e.stopPropagation(); onToggle(t.id) }}>
+                  <Checkbox size="xs" checked={checked} onChange={() => onToggle(t.id)} />
+                </Table.Td>
                 <Table.Td>
                   <Stack gap={2}>
                     <Text size="sm" fw={500} lineClamp={1}>{t.title}</Text>
@@ -87,4 +115,3 @@ export function TicketsTable({
     </Card>
   )
 }
-

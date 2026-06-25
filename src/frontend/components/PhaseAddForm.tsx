@@ -118,7 +118,7 @@ export function PhaseAddForm({
             onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
             clearable
             size="xs"
-            w={170}
+            w={150}
           />
           <Text size="xs" c="dimmed">
             –
@@ -130,7 +130,16 @@ export function PhaseAddForm({
             onChange={(v) => setEndsAt(v ? new Date(v as unknown as string) : null)}
             clearable
             size="xs"
-            w={170}
+            w={150}
+          />
+          <TagsInput
+            placeholder="Tag (Enter untuk buat)"
+            data={availableTags.map((t) => t.name)}
+            value={tagNames}
+            onChange={setTagNames}
+            size="xs"
+            clearable
+            style={{ flex: 1 }}
           />
           <Button
             leftSection={<TbPlus size={13} />}
@@ -142,14 +151,6 @@ export function PhaseAddForm({
             Tambah
           </Button>
         </Group>
-        <TagsInput
-          placeholder="Tag (Enter untuk tambah/buat)"
-          data={availableTags.map((t) => t.name)}
-          value={tagNames}
-          onChange={setTagNames}
-          size="xs"
-          clearable
-        />
       </Stack>
     </Card>
   )

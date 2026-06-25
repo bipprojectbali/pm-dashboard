@@ -37,7 +37,7 @@ export async function listProjectPhasesHandler({ request, params, set }: CtxWith
   }
   const phases = await prisma.projectPhase.findMany({
     where: { projectId: params.id },
-    include: { _count: { select: { tasks: true } } },
+    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
   })
   return { phases }
@@ -75,7 +75,7 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
       order: body.order ?? (last?.order ?? -1) + 1,
     },
-    include: { _count: { select: { tasks: true } } },
+    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
   })
   audit(auth.userId, 'PHASE_CREATED', `${params.id} ${phase.title}`, getIp(request))
   emitInvalidate('phases', { projectId: params.id })
@@ -98,6 +98,7 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
   const body = (await request.json()) as {
     title?: string; description?: string | null; summary?: string | null
     status?: string; startsAt?: string | null; endsAt?: string | null; order?: number
+    tagIds?: string[]
   }
   if (body.status && !(PHASE_STATUS_VALUES as readonly string[]).includes(body.status)) {
     set.status = 400
@@ -111,10 +112,18 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
   if (body.startsAt !== undefined) data.startsAt = body.startsAt ? new Date(body.startsAt) : null
   if (body.endsAt !== undefined) data.endsAt = body.endsAt ? new Date(body.endsAt) : null
   if (body.order !== undefined) data.order = body.order
+  if (body.tagIds !== undefined) {
+    await prisma.phaseTag.deleteMany({ where: { phaseId: params.id } })
+    if (body.tagIds.length)
+      await prisma.phaseTag.createMany({
+        data: body.tagIds.map((tagId) => ({ phaseId: params.id, tagId })),
+        skipDuplicates: true,
+      })
+  }
   const phase = await prisma.projectPhase.update({
     where: { id: params.id },
     data,
-    include: { _count: { select: { tasks: true } } },
+    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
   })
   audit(auth.userId, 'PHASE_UPDATED', `${existing.projectId}/${params.id} ${Object.keys(data).join(',')}`, getIp(request))
   emitInvalidate('phases', { projectId: existing.projectId })

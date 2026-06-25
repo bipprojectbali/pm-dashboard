@@ -6,6 +6,7 @@ import {
   Divider,
   Group,
   Menu,
+  MultiSelect,
   Select,
   Stack,
   Text,
@@ -32,6 +33,13 @@ export interface ProjectPhase {
   createdAt: string
   updatedAt: string
   _count: { tasks: number }
+  tags: Array<{ tagId: string; tag: { id: string; name: string; color: string } }>
+}
+
+export interface TagOption {
+  id: string
+  name: string
+  color: string
 }
 
 export const PHASE_STATUS_COLOR: Record<PhaseStatus, string> = {
@@ -65,6 +73,11 @@ export function PhaseDetailModal({ phase }: { phase: ProjectPhase }) {
         <Badge size="sm" variant="default" color="gray">
           {phase._count.tasks} task
         </Badge>
+        {phase.tags.map(({ tag }) => (
+          <Badge key={tag.id} size="sm" color={tag.color} variant="light">
+            {tag.name}
+          </Badge>
+        ))}
       </Group>
       {range && (
         <div>
@@ -239,9 +252,11 @@ export function PhaseActionsMenu({
 
 export function EditPhaseModal({
   phase,
+  availableTags,
   onSubmit,
 }: {
   phase: ProjectPhase
+  availableTags: TagOption[]
   onSubmit: (data: Record<string, unknown>) => void
 }) {
   const [title, setTitle] = useState(phase.title)
@@ -249,6 +264,7 @@ export function EditPhaseModal({
   const [status, setStatus] = useState<PhaseStatus>(phase.status)
   const [startsAt, setStartsAt] = useState<Date | null>(phase.startsAt ? new Date(phase.startsAt) : null)
   const [endsAt, setEndsAt] = useState<Date | null>(phase.endsAt ? new Date(phase.endsAt) : null)
+  const [tagIds, setTagIds] = useState<string[]>(phase.tags.map((t) => t.tagId))
 
   const submit = () => {
     if (!title.trim()) return
@@ -258,6 +274,7 @@ export function EditPhaseModal({
       status,
       startsAt: startsAt ? startsAt.toISOString() : null,
       endsAt: endsAt ? endsAt.toISOString() : null,
+      tagIds,
     })
     modals.closeAll()
   }
@@ -303,6 +320,17 @@ export function EditPhaseModal({
           clearable
         />
       </Group>
+      {availableTags.length > 0 && (
+        <MultiSelect
+          label="Tags"
+          placeholder="Pilih tag"
+          data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+          value={tagIds}
+          onChange={setTagIds}
+          searchable
+          clearable
+        />
+      )}
       <Group justify="flex-end" gap="xs">
         <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
           Batal

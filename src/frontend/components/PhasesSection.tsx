@@ -1,8 +1,8 @@
-import { ActionIcon, Badge, Button, Card, Collapse, Group, Stack, Stepper, Text } from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Collapse, Group, Select, Stack, Stepper, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { TbChevronDown, TbChevronRight, TbEdit, TbStack2 } from 'react-icons/tb'
+import { TbChevronDown, TbChevronRight, TbEdit, TbStack2, TbTag } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import {
   CompletePhaseModal,
@@ -13,6 +13,7 @@ import {
   PhaseActionsMenu,
   PhaseDetailModal,
   type ProjectPhase,
+  type TagOption,
 } from './PhaseModals'
 import { PhaseAddForm } from './PhaseAddForm'
 
@@ -36,6 +37,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   const qc = useQueryClient()
   const [isTemplating, setIsTemplating] = useState(false)
   const [expandedSummaryIds, setExpandedSummaryIds] = useState<Set<string>>(new Set())
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
   const toggleSummary = (id: string) =>
     setExpandedSummaryIds((prev) => {
       const next = new Set(prev)
@@ -48,6 +50,12 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     queryKey: ['phases', projectId],
     queryFn: () => api<{ phases: ProjectPhase[] }>(`/api/projects/${projectId}/phases`),
   })
+
+  const tagsQ = useQuery({
+    queryKey: ['tags', projectId],
+    queryFn: () => api<{ tags: TagOption[] }>(`/api/projects/${projectId}/tags`),
+  })
+  const availableTags = tagsQ.data?.tags ?? []
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['phases', projectId] })
@@ -78,7 +86,11 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     onError: (err) => notifyError(err),
   })
 
-  const phases = phasesQ.data?.phases ?? []
+  const allPhases = phasesQ.data?.phases ?? []
+  const phases = useMemo(
+    () => (tagFilter ? allPhases.filter((p) => p.tags.some((t) => t.tagId === tagFilter)) : allPhases),
+    [allPhases, tagFilter],
+  )
 
   const stepperActive = useMemo(() => {
     const idx = phases.findIndex((p) => p.status === 'ACTIVE')
@@ -106,7 +118,13 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   const openEditModal = (phase: ProjectPhase) => {
     modals.open({
       title: 'Edit Fase',
-      children: <EditPhaseModal phase={phase} onSubmit={(data) => update.mutate({ id: phase.id, body: data })} />,
+      children: (
+        <EditPhaseModal
+          phase={phase}
+          availableTags={availableTags}
+          onSubmit={(data) => update.mutate({ id: phase.id, body: data })}
+        />
+      ),
     })
   }
 
@@ -163,6 +181,18 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
 
   return (
     <Stack gap="md">
+      {availableTags.length > 0 && (
+        <Select
+          size="xs"
+          placeholder="Filter by tag"
+          leftSection={<TbTag size={13} />}
+          data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+          value={tagFilter}
+          onChange={setTagFilter}
+          clearable
+          w={200}
+        />
+      )}
       {phasesQ.isLoading ? (
         <Text size="xs" c="dimmed">
           Loading…
@@ -200,6 +230,11 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
                   <Badge size="xs" variant="default" color="gray">
                     {phase._count.tasks} task
                   </Badge>
+                  {phase.tags.map(({ tag }) => (
+                    <Badge key={tag.id} size="xs" color={tag.color} variant="light">
+                      {tag.name}
+                    </Badge>
+                  ))}
                   {canManage ? (
                     <PhaseActionsMenu
                       phase={phase}

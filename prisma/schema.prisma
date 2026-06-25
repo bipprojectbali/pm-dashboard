@@ -257,6 +257,7 @@ model ProjectPhase {
 
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks       Task[]
+  tags        PhaseTag[]
 
   @@index([projectId])
   @@index([projectId, status])
@@ -357,6 +358,7 @@ model Tag {
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks      TaskTag[]
   milestones MilestoneTag[]
+  phases     PhaseTag[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -385,6 +387,18 @@ model MilestoneTag {
   @@id([milestoneId, tagId])
   @@index([tagId])
   @@map("milestone_tag")
+}
+
+model PhaseTag {
+  phaseId String
+  tagId   String
+
+  phase ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  tag   Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([phaseId, tagId])
+  @@index([tagId])
+  @@map("phase_tag")
 }
 
 model TaskDependency {

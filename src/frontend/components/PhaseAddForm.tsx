@@ -1,8 +1,8 @@
 import { Button, Card, Group, MultiSelect, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useMutation } from '@tanstack/react-query'
-import { useState } from 'react'
-import { TbPlus } from 'react-icons/tb'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { TbPlus, TbTag } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import type { TagOption } from './PhaseModals'
 
@@ -37,10 +37,18 @@ export function PhaseAddForm({
   availableTags: TagOption[]
   onSuccess: () => void
 }) {
+  const qc = useQueryClient()
   const [title, setTitle] = useState('')
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [endsAt, setEndsAt] = useState<Date | null>(null)
   const [tagIds, setTagIds] = useState<string[]>([])
+  const [localTags, setLocalTags] = useState<TagOption[]>([])
+  const [newTagName, setNewTagName] = useState('')
+
+  const allTags = useMemo(
+    () => [...availableTags, ...localTags.filter((lt) => !availableTags.some((at) => at.id === lt.id))],
+    [availableTags, localTags],
+  )
 
   const create = useMutation({
     mutationFn: (body: PhaseCreateInput) => createPhase(projectId, body),
@@ -49,8 +57,30 @@ export function PhaseAddForm({
       setStartsAt(null)
       setEndsAt(null)
       setTagIds([])
+      setLocalTags([])
+      setNewTagName('')
       notifySuccess({ message: 'Fase dibuat.' })
       onSuccess()
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  const createTag = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetch(`/api/projects/${projectId}/tags`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: 'blue' }),
+      })
+      if (!res.ok) throw new Error('Gagal membuat tag')
+      return res.json() as Promise<{ tag: TagOption }>
+    },
+    onSuccess: ({ tag }) => {
+      setLocalTags((prev) => [...prev, tag])
+      setTagIds((prev) => [...prev, tag.id])
+      setNewTagName('')
+      qc.invalidateQueries({ queryKey: ['tags', projectId] })
     },
     onError: (err) => notifyError(err),
   })
@@ -115,14 +145,36 @@ export function PhaseAddForm({
         </Group>
         <MultiSelect
           placeholder="Tag (opsional)"
-          data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+          data={allTags.map((t) => ({ value: t.id, label: t.name }))}
           value={tagIds}
           onChange={setTagIds}
           size="xs"
           searchable
           clearable
-          disabled={availableTags.length === 0}
         />
+        <Group gap="xs" wrap="nowrap">
+          <TextInput
+            size="xs"
+            placeholder="Buat tag baru…"
+            leftSection={<TbTag size={12} />}
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newTagName.trim()) createTag.mutate(newTagName.trim())
+            }}
+            style={{ flex: 1 }}
+          />
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<TbPlus size={12} />}
+            disabled={!newTagName.trim() || createTag.isPending}
+            loading={createTag.isPending}
+            onClick={() => newTagName.trim() && createTag.mutate(newTagName.trim())}
+          >
+            Buat
+          </Button>
+        </Group>
       </Stack>
     </Card>
   )

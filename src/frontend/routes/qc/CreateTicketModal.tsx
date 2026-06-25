@@ -1,6 +1,7 @@
-import { Button, Group, Modal, Select, Stack, Textarea, TextInput } from '@mantine/core'
+import { ActionIcon, Box, Button, Group, Image, Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { TbPhoto, TbTrash, TbX } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 
 export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
@@ -10,6 +11,9 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM')
   const [route, setRoute] = useState('')
   const [evidence, setEvidence] = useState('')
+  const [images, setImages] = useState<File[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!opened) {
@@ -18,15 +22,27 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
       setPriority('MEDIUM')
       setRoute('')
       setEvidence('')
+      setImages([])
+      setPreviews((prev) => { prev.forEach(URL.revokeObjectURL); return [] })
     }
   }, [opened])
 
+  const addImages = (files: FileList | null) => {
+    if (!files) return
+    const newFiles = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    setImages((prev) => [...prev, ...newFiles])
+    setPreviews((prev) => [...prev, ...newFiles.map((f) => URL.createObjectURL(f))])
+  }
+
+  const removeImage = (i: number) => {
+    URL.revokeObjectURL(previews[i])
+    setImages((prev) => prev.filter((_, idx) => idx !== i))
+    setPreviews((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
   const createM = useMutation({
     mutationFn: async () => {
-      const urls = evidence
-        .split('\n')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
+      const urls = evidence.split('\n').map((s) => s.trim()).filter(Boolean)
       const res = await fetch('/api/qc/tickets', {
         method: 'POST',
         credentials: 'include',
@@ -41,6 +57,16 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Gagal membuat ticket')
+      const ticketId: string = json.ticket.id
+      for (const file of images) {
+        const form = new FormData()
+        form.append('file', file)
+        await fetch(`/api/qc/tickets/${ticketId}/evidence/upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: form,
+        })
+      }
       return json
     },
     onSuccess: () => {
@@ -92,6 +118,45 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
             onChange={(e) => setRoute(e.currentTarget.value)}
           />
         </Group>
+
+        <Box>
+          <Text size="sm" fw={500} mb={6}>Screenshot (optional)</Text>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => addImages(e.currentTarget.files)}
+          />
+          {previews.length > 0 && (
+            <SimpleGrid cols={4} spacing="xs" mb="xs">
+              {previews.map((src, i) => (
+                <Box key={src} style={{ position: 'relative' }}>
+                  <Image src={src} radius="sm" h={80} fit="cover" />
+                  <ActionIcon
+                    size="xs"
+                    color="red"
+                    variant="filled"
+                    style={{ position: 'absolute', top: 2, right: 2 }}
+                    onClick={() => removeImage(i)}
+                  >
+                    <TbX size={10} />
+                  </ActionIcon>
+                </Box>
+              ))}
+            </SimpleGrid>
+          )}
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<TbPhoto size={13} />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Pilih Gambar
+          </Button>
+        </Box>
+
         <Textarea
           label="Evidence URLs (optional, one per line)"
           placeholder="https://...&#10;https://..."

@@ -1,15 +1,17 @@
-import { Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Button, Card, Group, Stack, TagsInput, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TbPlus } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
+import type { TagOption } from './PhaseModals'
 
 type PhaseCreateInput = {
   title: string
   status: string
   startsAt: string | null
   endsAt: string | null
+  tagIds: string[]
 }
 
 async function createPhase(projectId: string, body: PhaseCreateInput) {
@@ -26,10 +28,20 @@ async function createPhase(projectId: string, body: PhaseCreateInput) {
   return res.json()
 }
 
-export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSuccess: () => void }) {
+export function PhaseAddForm({
+  projectId,
+  availableTags,
+  onSuccess,
+}: {
+  projectId: string
+  availableTags: TagOption[]
+  onSuccess: () => void
+}) {
+  const qc = useQueryClient()
   const [title, setTitle] = useState('')
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [endsAt, setEndsAt] = useState<Date | null>(null)
+  const [tagNames, setTagNames] = useState<string[]>([])
 
   const create = useMutation({
     mutationFn: (body: PhaseCreateInput) => createPhase(projectId, body),
@@ -37,19 +49,49 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
       setTitle('')
       setStartsAt(null)
       setEndsAt(null)
+      setTagNames([])
       notifySuccess({ message: 'Fase dibuat.' })
       onSuccess()
     },
     onError: (err) => notifyError(err),
   })
 
-  const submit = () => {
+  const resolveTagIds = async (names: string[]): Promise<string[]> => {
+    const ids: string[] = []
+    for (const name of names) {
+      const existing = availableTags.find((t) => t.name.toLowerCase() === name.toLowerCase())
+      if (existing) {
+        ids.push(existing.id)
+      } else {
+        try {
+          const res = await fetch(`/api/projects/${projectId}/tags`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, color: 'blue' }),
+          })
+          if (res.ok) {
+            const { tag } = (await res.json()) as { tag: TagOption }
+            ids.push(tag.id)
+            qc.invalidateQueries({ queryKey: ['tags', projectId] })
+          }
+        } catch {
+          // skip if tag creation fails
+        }
+      }
+    }
+    return ids
+  }
+
+  const submit = async () => {
     if (!title.trim() || create.isPending) return
+    const tagIds = await resolveTagIds(tagNames)
     create.mutate({
       title: title.trim(),
       status: 'PLANNING',
       startsAt: startsAt?.toISOString() ?? null,
       endsAt: endsAt?.toISOString() ?? null,
+      tagIds,
     })
   }
 
@@ -76,7 +118,7 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
             onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
             clearable
             size="xs"
-            w={170}
+            w={150}
           />
           <Text size="xs" c="dimmed">
             –
@@ -88,7 +130,16 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
             onChange={(v) => setEndsAt(v ? new Date(v as unknown as string) : null)}
             clearable
             size="xs"
-            w={170}
+            w={150}
+          />
+          <TagsInput
+            placeholder="Tag (Enter untuk buat)"
+            data={availableTags.map((t) => t.name)}
+            value={tagNames}
+            onChange={setTagNames}
+            size="xs"
+            clearable
+            style={{ flex: 1 }}
           />
           <Button
             leftSection={<TbPlus size={13} />}

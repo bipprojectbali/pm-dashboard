@@ -330,3 +330,61 @@ describe('GET /api/tasks?phaseId=X — filter by phase', () => {
     expect(body.tasks.length).toBeGreaterThan(0)
   })
 })
+
+describe('Phase tags', () => {
+  let phaseId = ''
+  let tagId = ''
+
+  beforeAll(async () => {
+    const phase = await prisma.projectPhase.create({
+      data: { projectId, title: 'Tag Test Phase', status: 'PLANNING', order: 99 },
+    })
+    phaseId = phase.id
+    const tag = await prisma.tag.create({
+      data: { projectId, name: 'frontend', color: 'blue' },
+    })
+    tagId = tag.id
+  })
+
+  test('PATCH /api/phases/:id dengan tagIds → tags tersimpan', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/phases/${phaseId}`, {
+        method: 'PATCH',
+        headers: { cookie: `session=${ownerToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagIds: [tagId] }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.phase.tags).toHaveLength(1)
+    expect(body.phase.tags[0].tagId).toBe(tagId)
+    expect(body.phase.tags[0].tag.name).toBe('frontend')
+  })
+
+  test('GET /api/projects/:id/phases → phases include tags', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects/${projectId}/phases`, {
+        headers: { cookie: `session=${ownerToken}` },
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    const phase = body.phases.find((p: { id: string }) => p.id === phaseId)
+    expect(phase).toBeDefined()
+    expect(Array.isArray(phase.tags)).toBe(true)
+    expect(phase.tags.some((t: { tagId: string }) => t.tagId === tagId)).toBe(true)
+  })
+
+  test('PATCH dengan tagIds=[] → hapus semua tags', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/phases/${phaseId}`, {
+        method: 'PATCH',
+        headers: { cookie: `session=${ownerToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagIds: [] }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.phase.tags).toHaveLength(0)
+  })
+})

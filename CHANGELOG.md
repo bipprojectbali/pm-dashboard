@@ -7,6 +7,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.16] - 2026-06-25
+
+### Ditambahkan
+- **Phase Tags** — fase/sprint kini bisa diberi tag dari pool tag project. Tag muncul sebagai badge di stepper dan bisa dipakai untuk filter fase. Input tag menggunakan `TagsInput`: ketik nama tag yang sudah ada untuk memilih dari suggestion, ketik nama baru lalu Enter untuk membuat tag baru otomatis saat fase disimpan.
+- **Pagination fase** — stepper fase kini dipaginasi 10 per halaman saat total fase lebih dari 10. Menampilkan counter "X–Y dari Z fase" dan kontrol halaman; halaman reset otomatis saat filter tag berubah.
+
+### Diperbaiki
+- Modal yang dibuka via `modals.open()` kini bisa menggunakan hook TanStack Query (`useQuery`, `useMutation`, `useQueryClient`) — sebelumnya crash blank karena `QueryClientProvider` berada di dalam `ModalsProvider`.
+
 ## [0.7.15] - 2026-06-24
 
 ### Ditambahkan

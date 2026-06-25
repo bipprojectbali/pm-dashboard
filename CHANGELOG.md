@@ -7,6 +7,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.18] - 2026-06-25
+
+### Ditambahkan
+- **Upload screenshot saat buat QC ticket** — form "New QC Ticket" kini punya tombol "Pilih Gambar" untuk melampirkan satu atau lebih screenshot. Gambar ditampilkan sebagai thumbnail 4-kolom dengan tombol ✕ per gambar. Setelah ticket dibuat, setiap gambar diupload ke endpoint baru `POST /api/qc/tickets/:id/evidence/upload` dan otomatis tersimpan sebagai evidence `SCREENSHOT`.
+- **Endpoint upload** `POST /api/qc/tickets/:id/evidence/upload` — terima `multipart/form-data` field `file` (image only, validasi MIME + ukuran via `UPLOAD_MAX_BYTES`). File disimpan di `UPLOADS_DIR/evidence/:ticketId/` dengan nama UUID acak. Balas `{ evidence }` dengan `kind: SCREENSHOT` dan URL yang bisa diakses via `/api/evidence/:file`.
+
 ## [0.7.16] - 2026-06-25
 
 ### Ditambahkan

@@ -53,7 +53,7 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
   }
   const body = (await request.json()) as {
     title?: string; description?: string | null; status?: string
-    startsAt?: string | null; endsAt?: string | null; order?: number
+    startsAt?: string | null; endsAt?: string | null; order?: number; tagIds?: string[]
   }
   if (!body.title?.trim()) { set.status = 400; return { error: 'title wajib diisi' } }
   if (body.status && !(PHASE_STATUS_VALUES as readonly string[]).includes(body.status)) {
@@ -74,6 +74,9 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
       startsAt: body.startsAt ? new Date(body.startsAt) : null,
       endsAt: body.endsAt ? new Date(body.endsAt) : null,
       order: body.order ?? (last?.order ?? -1) + 1,
+      tags: body.tagIds?.length
+        ? { createMany: { data: body.tagIds.map((tagId) => ({ tagId })), skipDuplicates: true } }
+        : undefined,
     },
     include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
   })

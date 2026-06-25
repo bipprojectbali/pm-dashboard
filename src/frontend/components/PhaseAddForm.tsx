@@ -1,15 +1,17 @@
-import { Button, Card, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Button, Card, Group, MultiSelect, Stack, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TbPlus } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
+import type { TagOption } from './PhaseModals'
 
 type PhaseCreateInput = {
   title: string
   status: string
   startsAt: string | null
   endsAt: string | null
+  tagIds: string[]
 }
 
 async function createPhase(projectId: string, body: PhaseCreateInput) {
@@ -26,10 +28,19 @@ async function createPhase(projectId: string, body: PhaseCreateInput) {
   return res.json()
 }
 
-export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSuccess: () => void }) {
+export function PhaseAddForm({
+  projectId,
+  availableTags,
+  onSuccess,
+}: {
+  projectId: string
+  availableTags: TagOption[]
+  onSuccess: () => void
+}) {
   const [title, setTitle] = useState('')
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [endsAt, setEndsAt] = useState<Date | null>(null)
+  const [tagIds, setTagIds] = useState<string[]>([])
 
   const create = useMutation({
     mutationFn: (body: PhaseCreateInput) => createPhase(projectId, body),
@@ -37,6 +48,7 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
       setTitle('')
       setStartsAt(null)
       setEndsAt(null)
+      setTagIds([])
       notifySuccess({ message: 'Fase dibuat.' })
       onSuccess()
     },
@@ -50,6 +62,7 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
       status: 'PLANNING',
       startsAt: startsAt?.toISOString() ?? null,
       endsAt: endsAt?.toISOString() ?? null,
+      tagIds,
     })
   }
 
@@ -100,6 +113,17 @@ export function PhaseAddForm({ projectId, onSuccess }: { projectId: string; onSu
             Tambah
           </Button>
         </Group>
+        {availableTags.length > 0 && (
+          <MultiSelect
+            placeholder="Tag (opsional)"
+            data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+            value={tagIds}
+            onChange={setTagIds}
+            size="xs"
+            searchable
+            clearable
+          />
+        )}
       </Stack>
     </Card>
   )

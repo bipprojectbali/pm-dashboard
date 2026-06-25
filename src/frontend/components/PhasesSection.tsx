@@ -306,7 +306,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
         </Stepper>
       )}
 
-      {canManage && <PhaseAddForm projectId={projectId} onSuccess={invalidate} />}
+      {canManage && <PhaseAddForm projectId={projectId} availableTags={availableTags} onSuccess={invalidate} />}
     </Stack>
   )
 }

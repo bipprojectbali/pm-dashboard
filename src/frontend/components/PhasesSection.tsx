@@ -181,18 +181,17 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
 
   return (
     <Stack gap="md">
-      {availableTags.length > 0 && (
-        <Select
-          size="xs"
-          placeholder="Filter by tag"
-          leftSection={<TbTag size={13} />}
-          data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
-          value={tagFilter}
-          onChange={setTagFilter}
-          clearable
-          w={200}
-        />
-      )}
+      <Select
+        size="xs"
+        placeholder="Filter by tag"
+        leftSection={<TbTag size={13} />}
+        data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+        value={tagFilter}
+        onChange={setTagFilter}
+        clearable
+        w={200}
+        disabled={availableTags.length === 0}
+      />
       {phasesQ.isLoading ? (
         <Text size="xs" c="dimmed">
           Loading…

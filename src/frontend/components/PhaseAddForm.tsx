@@ -113,17 +113,16 @@ export function PhaseAddForm({
             Tambah
           </Button>
         </Group>
-        {availableTags.length > 0 && (
-          <MultiSelect
-            placeholder="Tag (opsional)"
-            data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
-            value={tagIds}
-            onChange={setTagIds}
-            size="xs"
-            searchable
-            clearable
-          />
-        )}
+        <MultiSelect
+          placeholder="Tag (opsional)"
+          data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
+          value={tagIds}
+          onChange={setTagIds}
+          size="xs"
+          searchable
+          clearable
+          disabled={availableTags.length === 0}
+        />
       </Stack>
     </Card>
   )

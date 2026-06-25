@@ -1,7 +1,7 @@
-import { ActionIcon, Badge, Button, Card, Collapse, Group, Select, Stack, Stepper, Text } from '@mantine/core'
+import { ActionIcon, Badge, Button, Card, Collapse, Group, Pagination, Select, Stack, Stepper, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { TbChevronDown, TbChevronRight, TbEdit, TbStack2, TbTag } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import {
@@ -86,10 +86,22 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
     onError: (err) => notifyError(err),
   })
 
+  const PAGE_SIZE = 10
+  const [page, setPage] = useState(1)
+
   const allPhases = phasesQ.data?.phases ?? []
   const phases = useMemo(
     () => (tagFilter ? allPhases.filter((p) => p.tags.some((t) => t.tagId === tagFilter)) : allPhases),
     [allPhases, tagFilter],
+  )
+
+  useEffect(() => setPage(1), [tagFilter])
+
+  const totalPages = Math.ceil(phases.length / PAGE_SIZE)
+  const pageOffset = (page - 1) * PAGE_SIZE
+  const paginatedPhases = useMemo(
+    () => phases.slice(pageOffset, pageOffset + PAGE_SIZE),
+    [phases, pageOffset],
   )
 
   const stepperActive = useMemo(() => {
@@ -214,8 +226,8 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
           )}
         </Stack>
       ) : (
-        <Stepper active={stepperActive} orientation="vertical" size="sm">
-          {phases.map((phase) => (
+        <Stepper active={stepperActive - pageOffset} orientation="vertical" size="sm">
+          {paginatedPhases.map((phase) => (
             <Stepper.Step
               key={phase.id}
               label={
@@ -303,6 +315,15 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
             </Stepper.Step>
           ))}
         </Stepper>
+      )}
+
+      {totalPages > 1 && (
+        <Group justify="space-between" align="center">
+          <Text size="xs" c="dimmed">
+            {pageOffset + 1}–{Math.min(pageOffset + PAGE_SIZE, phases.length)} dari {phases.length} fase
+          </Text>
+          <Pagination value={page} onChange={setPage} total={totalPages} size="xs" />
+        </Group>
       )}
 
       {canManage && <PhaseAddForm projectId={projectId} availableTags={availableTags} onSuccess={invalidate} />}

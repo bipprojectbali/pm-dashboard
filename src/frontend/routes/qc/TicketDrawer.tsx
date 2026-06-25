@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useSession } from '@/frontend/hooks/useAuth'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+
+interface AdminUser { id: string; name: string; email: string; role: string; blocked: boolean }
 import { TicketComments } from './TicketComments'
 import { TicketDrawerHeader } from './TicketDrawerHeader'
 import { TicketEvidence } from './TicketEvidence'
@@ -14,6 +16,16 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
   const queryClient = useQueryClient()
   const { data: sessionData } = useSession()
   const canDelete = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
+  const canAssign = canDelete
+
+  const usersQ = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () =>
+      fetch('/api/admin/users', { credentials: 'include' })
+        .then((r) => r.json() as Promise<{ users: AdminUser[] }>),
+    enabled: canAssign,
+    staleTime: 60_000,
+  })
 
   const detailQ = useQuery({
     queryKey: ['qc', 'ticket', ticketId],
@@ -162,6 +174,22 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
               disabled={patchM.isPending}
             />
           </Group>
+          {canAssign ? (
+            <Select
+              label="Assignee"
+              placeholder="Belum di-assign"
+              value={ticket.assignee?.id ?? null}
+              onChange={(v) => patchM.mutate({ assigneeId: v ?? null })}
+              data={(usersQ.data?.users ?? [])
+                .filter((u) => !u.blocked)
+                .map((u) => ({ value: u.id, label: `${u.name} (${u.role})` }))}
+              clearable
+              searchable
+              disabled={patchM.isPending || usersQ.isLoading}
+            />
+          ) : ticket.assignee ? (
+            <Text size="sm"><Text span c="dimmed" size="xs">Assignee: </Text>{ticket.assignee.name}</Text>
+          ) : null}
           <TicketEvidence evidence={ticket.evidence} ticketId={ticketId} />
           <TicketComments comments={ticket.comments} ticketId={ticketId} />
           <TicketTimeline statusChanges={ticket.statusChanges} />

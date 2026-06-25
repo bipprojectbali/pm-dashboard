@@ -69,12 +69,14 @@ export function qcWriteRoutes() {
         priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
         status?: 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
         route?: string | null
+        assigneeId?: string | null
       }
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title
       if (body.description !== undefined) data.description = body.description
       if (body.priority !== undefined) data.priority = body.priority
       if (body.route !== undefined) data.route = body.route
+      if (body.assigneeId !== undefined) data.assigneeId = body.assigneeId ?? null
       if (body.status !== undefined && body.status !== existing.status) {
         data.status = body.status
         if (body.status === 'CLOSED') data.closedAt = new Date()

@@ -61,6 +61,7 @@ export function TicketsTable({
             <Table.Th>Status</Table.Th>
             <Table.Th>Reporter</Table.Th>
             <Table.Th>Assignee</Table.Th>
+            <Table.Th>Tanggal</Table.Th>
             <Table.Th>Activity</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -96,6 +97,13 @@ export function TicketsTable({
                 </Table.Td>
                 <Table.Td>
                   <Text size="xs" c="dimmed">{t.assignee?.name ?? '—'}</Text>
+                </Table.Td>
+                <Table.Td>
+                  <Tooltip label={new Date(t.createdAt).toLocaleString('id-ID')}>
+                    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {new Date(t.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </Tooltip>
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs">

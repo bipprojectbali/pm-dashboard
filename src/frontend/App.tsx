@@ -48,12 +48,12 @@ export function App() {
       <ColorSchemeScript defaultColorScheme="auto" />
       <MantineProvider theme={appTheme} cssVariablesResolver={cssVariablesResolver} defaultColorScheme="auto">
         <Notifications position="top-right" zIndex={2000} autoClose={4000} />
-        <ModalsProvider>
-          <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <ModalsProvider>
             <RealtimeBridge />
             <RouterProvider router={router} />
-          </QueryClientProvider>
-        </ModalsProvider>
+          </ModalsProvider>
+        </QueryClientProvider>
       </MantineProvider>
     </>
   )

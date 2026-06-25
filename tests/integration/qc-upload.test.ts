@@ -85,4 +85,23 @@ describe('QC ticket image upload', () => {
     }))
     expect(res.status).toBe(404)
   })
+
+  it('uploaded screenshot appears in ticket detail evidence list', async () => {
+    const imgBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const form = new FormData()
+    form.append('file', new File([imgBytes], 'drawer-shot.png', { type: 'image/png' }))
+    await app.handle(new Request(`http://localhost/api/qc/tickets/${ticketId}/evidence/upload`, {
+      method: 'POST',
+      headers: { Cookie: `session=${qcToken}` },
+      body: form,
+    }))
+    const detailRes = await app.handle(new Request(`http://localhost/api/qc/tickets/${ticketId}`, {
+      headers: { Cookie: `session=${qcToken}` },
+    }))
+    expect(detailRes.status).toBe(200)
+    const { ticket } = await detailRes.json()
+    const screenshots = ticket.evidence.filter((e: { kind: string }) => e.kind === 'SCREENSHOT')
+    expect(screenshots.length).toBeGreaterThanOrEqual(1)
+    expect(screenshots.some((e: { note: string }) => e.note?.includes('drawer-shot.png'))).toBe(true)
+  })
 })

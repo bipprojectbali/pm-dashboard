@@ -14,7 +14,7 @@ export interface Ticket {
 export interface TicketDetail extends Ticket {
   description: string
   tags: { tag: { id: string; name: string; color: string } }[]
-  evidence: { id: string; url: string; kind: string; label: string | null; createdAt: string }[]
+  evidence: { id: string; url: string; kind: string; note: string | null; createdAt: string }[]
   comments: {
     id: string
     body: string

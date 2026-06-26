@@ -15,7 +15,7 @@ Default to using Bun instead of Node.js.
 - `src/frontend/` — React 19 + Vite 8 + TanStack Router (routes, components, hooks)
 - `src/lib/` — single-purpose helpers: `db` (Prisma client), `redis`, `applog`, `presence`, `webhook-tokens`, `github`, `github-summary`, `self-project`, `admin-overview`, `effort`, `retro`, `chat`, `chat-documents`, `extensions`
 - `prisma/` — `schema.prisma` + single baseline migration + `seed.ts` (dev only)
-- `scripts/mcp/` — local stdio MCP (23 tool modules, 112 tools); `scripts/mcp-deploy/` — deploy wrapper
+- `scripts/mcp/` — local stdio MCP (23 tool domains, 111 tools); `scripts/mcp-deploy/` — deploy wrapper
 - `tests/unit/`, `tests/integration/` — `bun:test`
 
 ## Commands

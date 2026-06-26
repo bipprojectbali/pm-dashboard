@@ -1,21 +1,16 @@
-import { ActionIcon, Badge, Button, Card, Collapse, Group, Pagination, Select, Stack, Stepper, Text } from '@mantine/core'
+import { Button, Group, Pagination, Select, Stack, Stepper, Text } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { TbChevronDown, TbChevronRight, TbEdit, TbStack2, TbTag } from 'react-icons/tb'
+import { TbStack2, TbTag } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
-import {
-  CompletePhaseModal,
-  EditPhaseModal,
-  EditSummaryModal,
-  formatPhaseDate,
-  PHASE_STATUS_COLOR,
-  PhaseActionsMenu,
-  PhaseDetailModal,
-  type ProjectPhase,
-  type TagOption,
-} from './PhaseModals'
 import { PhaseAddForm } from './PhaseAddForm'
+import { PhaseDetailModal } from './PhaseDetailModal'
+import { EditPhaseModal } from './PhaseEditModal'
+import { PhaseStepDescription } from './PhaseStepDescription'
+import { PhaseStepLabel } from './PhaseStepLabel'
+import { CompletePhaseModal, EditSummaryModal } from './PhaseSummaryModals'
+import { type ProjectPhase, type TagOption } from './phase.types'
 
 const TEMPLATE_PHASES = [
   { title: 'Planning', description: 'Perencanaan scope, requirements, dan timeline' },
@@ -231,79 +226,24 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
             <Stepper.Step
               key={phase.id}
               label={
-                <Group gap={6} wrap="nowrap">
-                  <Text size="sm" fw={500} style={{ cursor: 'pointer' }} onClick={() => openDetailModal(phase)}>
-                    {phase.title}
-                  </Text>
-                  <Badge size="xs" color={PHASE_STATUS_COLOR[phase.status]} variant="light">
-                    {phase.status}
-                  </Badge>
-                  <Badge size="xs" variant="default" color="gray">
-                    {phase._count.tasks} task
-                  </Badge>
-                  {phase.tags.map(({ tag }) => (
-                    <Badge key={tag.id} size="xs" color={tag.color} variant="light">
-                      {tag.name}
-                    </Badge>
-                  ))}
-                  {canManage ? (
-                    <PhaseActionsMenu
-                      phase={phase}
-                      onView={() => openDetailModal(phase)}
-                      onStart={() => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } })}
-                      onComplete={() => openCompleteModal(phase)}
-                      onEdit={() => openEditModal(phase)}
-                      onDelete={() => openDeleteModal(phase)}
-                    />
-                  ) : (
-                    <Button size="compact-xs" variant="subtle" color="gray" onClick={() => openDetailModal(phase)}>
-                      Detail
-                    </Button>
-                  )}
-                </Group>
+                <PhaseStepLabel
+                  phase={phase}
+                  canManage={canManage}
+                  onView={() => openDetailModal(phase)}
+                  onStart={() => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } })}
+                  onComplete={() => openCompleteModal(phase)}
+                  onEdit={() => openEditModal(phase)}
+                  onDelete={() => openDeleteModal(phase)}
+                />
               }
               description={
-                <Stack gap={4} mt={2}>
-                  {(phase.startsAt || phase.endsAt) && (
-                    <Text size="xs" c="dimmed">
-                      {formatPhaseDate(phase.startsAt) ?? '?'} – {formatPhaseDate(phase.endsAt) ?? '?'}
-                    </Text>
-                  )}
-                  {phase.status === 'COMPLETED' && (
-                    <Card withBorder radius="sm" p="xs" bg="var(--mantine-color-green-light)">
-                      <Group
-                        justify="space-between"
-                        gap={4}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => toggleSummary(phase.id)}
-                      >
-                        <Group gap={4}>
-                          {expandedSummaryIds.has(phase.id)
-                            ? <TbChevronDown size={12} color="var(--mantine-color-green-light-color)" />
-                            : <TbChevronRight size={12} color="var(--mantine-color-green-light-color)" />}
-                          <Text size="xs" fw={600} c="var(--mantine-color-green-light-color)">
-                            Kesimpulan
-                          </Text>
-                        </Group>
-                        {canManage && expandedSummaryIds.has(phase.id) && (
-                          <ActionIcon
-                            size="xs"
-                            variant="subtle"
-                            color="green"
-                            onClick={(e) => { e.stopPropagation(); openEditSummaryModal(phase) }}
-                          >
-                            <TbEdit size={12} />
-                          </ActionIcon>
-                        )}
-                      </Group>
-                      <Collapse in={expandedSummaryIds.has(phase.id)}>
-                        <Text size="xs" c={phase.summary ? undefined : 'dimmed'} style={{ whiteSpace: 'pre-wrap' }} mt={6}>
-                          {phase.summary || '—'}
-                        </Text>
-                      </Collapse>
-                    </Card>
-                  )}
-                </Stack>
+                <PhaseStepDescription
+                  phase={phase}
+                  canManage={canManage}
+                  expanded={expandedSummaryIds.has(phase.id)}
+                  onToggleSummary={() => toggleSummary(phase.id)}
+                  onEditSummary={() => openEditSummaryModal(phase)}
+                />
               }
               color={phase.status === 'COMPLETED' ? 'green' : phase.status === 'ACTIVE' ? 'blue' : 'gray'}
             >

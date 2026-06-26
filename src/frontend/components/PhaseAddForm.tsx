@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TbPlus } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
-import type { TagOption } from './PhaseModals'
+import type { TagOption } from './phase.types'
 
 type PhaseCreateInput = {
   title: string

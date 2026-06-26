@@ -36,5 +36,5 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
   - See `@docs/CHAT-AI.md` for doc-type catalog and search algorithm.
 - **QC** (in `qc` module):
   - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list` (filter `status`/`priority`, free-text `q` over title/description/route, `sort` ∈ `priority|created|updated|title` + `order`, paginated via `page` + `limit` ≤200; returns `{ count, page, limit, total, totalPages, tickets }`), `qc_ticket_get`
-  - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`
+  - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_bulk_update` (apply same `status`/`priority`/`assigneeEmail` to up to 100 `ai-queue` tickets in one atomic `$transaction`; status changes write `TaskStatusChange`, `assigneeEmail=""`/null unassigns; ids outside self-project silently skipped), `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`
   - Operates on the one project where `isSelf=true`.

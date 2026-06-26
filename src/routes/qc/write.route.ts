@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 import { appLog } from '../../lib/applog'
 import { prisma } from '../../lib/db'
+import { notifyTaskStatusChanged } from '../../lib/notifications'
 import { emitInvalidate } from '../../lib/presence'
 import { getIp, requireAuth, writeAuditLog } from '../../lib/route-helpers'
 import { AI_QUEUE_TAG, ensureAiQueueTag, getSelfProject } from '../../lib/self-project'
@@ -60,7 +61,7 @@ export function qcWriteRoutes() {
       if (!selfProject) { set.status = 404; return { error: 'No self-project configured' } }
       const existing = await prisma.task.findFirst({
         where: { id: params.id, projectId: selfProject.id },
-        select: { id: true, status: true },
+        select: { id: true, status: true, title: true, reporterId: true, assigneeId: true },
       })
       if (!existing) { set.status = 404; return { error: 'Ticket not found' } }
       const body = (await request.json()) as {
@@ -86,6 +87,18 @@ export function qcWriteRoutes() {
         await prisma.taskStatusChange.create({
           data: { taskId: ticket.id, authorId: auth.userId, fromStatus: existing.status, toStatus: body.status },
         })
+        const actor = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
+        notifyTaskStatusChanged({
+          taskId: ticket.id,
+          projectId: ticket.projectId,
+          taskTitle: ticket.title,
+          reporterId: existing.reporterId,
+          assigneeId: ticket.assigneeId,
+          actorId: auth.userId,
+          actorName: actor?.name ?? 'Someone',
+          fromStatus: existing.status,
+          toStatus: body.status,
+        }).catch(() => {})
       }
       writeAuditLog(auth.userId, 'QC_TICKET_UPDATED', `#${ticket.id}`, getIp(request))
       emitInvalidate('qc')

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { appLog } from '../../../src/lib/applog'
 import { prisma } from '../../../src/lib/db'
+import { notifyTaskStatusChanged } from '../../../src/lib/notifications'
 import { jsonText, type ToolModule } from './shared'
 
 const AI_QUEUE_TAG = 'ai-queue'
@@ -136,9 +137,9 @@ export const ticketsTools: ToolModule = {
         },
       },
       async ({ taskId, prUrl, summary, authorEmail }) => {
-        const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, status: true, kind: true, title: true } })
+        const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, status: true, kind: true, title: true, projectId: true, reporterId: true, assigneeId: true } })
         if (!task) return jsonText({ error: 'Task not found' })
-        const author = await prisma.user.findUnique({ where: { email: authorEmail }, select: { id: true, role: true } })
+        const author = await prisma.user.findUnique({ where: { email: authorEmail }, select: { id: true, role: true, name: true } })
         if (!author) return jsonText({ error: `Author not found: ${authorEmail}` })
         if (task.status !== 'IN_PROGRESS') {
           return jsonText({
@@ -153,6 +154,17 @@ export const ticketsTools: ToolModule = {
             data: { taskId, authorId: author.id, fromStatus: 'IN_PROGRESS', toStatus: 'READY_FOR_QC' },
           }),
         ])
+        notifyTaskStatusChanged({
+          taskId,
+          projectId: task.projectId,
+          taskTitle: task.title,
+          reporterId: task.reporterId,
+          assigneeId: task.assigneeId,
+          actorId: author.id,
+          actorName: author.name ?? 'Someone',
+          fromStatus: 'IN_PROGRESS',
+          toStatus: 'READY_FOR_QC',
+        }).catch(() => {})
         appLog('info', `MCP: ticket_submit #${taskId} → READY_FOR_QC with PR ${prUrl}`)
         return jsonText({ ok: true, taskId, newStatus: 'READY_FOR_QC', prUrl })
       },

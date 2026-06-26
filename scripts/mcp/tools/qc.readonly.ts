@@ -59,10 +59,11 @@ export const qcReadonly: ToolModule = {
           q: z.string().optional().describe('Free-text search on title/description/route (case-insensitive substring).'),
           sort: z.enum(['priority', 'created', 'updated', 'title']).optional().describe('Sort field. Default: priority then createdAt.'),
           order: z.enum(['asc', 'desc']).default('desc'),
-          limit: z.number().int().min(1).max(200).default(50),
+          page: z.number().int().min(1).default(1).describe('1-based page number.'),
+          limit: z.number().int().min(1).max(200).default(50).describe('Page size.'),
         },
       },
-      async ({ status, priority, q, sort, order, limit }) => {
+      async ({ status, priority, q, sort, order, page, limit }) => {
         const self = await getSelfProject()
         if (!self) return jsonText({ error: 'No self-project configured' })
         const sortKey = { priority: 'priority', created: 'createdAt', updated: 'updatedAt', title: 'title' } as const
@@ -71,32 +72,37 @@ export const qcReadonly: ToolModule = {
           ? [{ [sortField]: order } as never]
           : [{ priority: 'desc' as const }, { createdAt: 'desc' as const }]
         const search = q?.trim()
-        const tickets = await prisma.task.findMany({
-          where: {
-            projectId: self.id,
-            tags: { some: { tag: { name: AI_QUEUE_TAG } } },
-            ...(status ? { status } : {}),
-            ...(priority ? { priority } : {}),
-            ...(search
-              ? {
-                  OR: [
-                    { title: { contains: search, mode: 'insensitive' as const } },
-                    { description: { contains: search, mode: 'insensitive' as const } },
-                    { route: { contains: search, mode: 'insensitive' as const } },
-                  ],
-                }
-              : {}),
-          },
-          include: {
-            reporter: { select: { id: true, name: true, email: true } },
-            assignee: { select: { id: true, name: true, email: true } },
-            tags: { include: { tag: true } },
-            _count: { select: { evidence: true, comments: true } },
-          },
-          orderBy,
-          take: limit,
-        })
-        return jsonText({ count: tickets.length, selfProject: self, tickets })
+        const where = {
+          projectId: self.id,
+          tags: { some: { tag: { name: AI_QUEUE_TAG } } },
+          ...(status ? { status } : {}),
+          ...(priority ? { priority } : {}),
+          ...(search
+            ? {
+                OR: [
+                  { title: { contains: search, mode: 'insensitive' as const } },
+                  { description: { contains: search, mode: 'insensitive' as const } },
+                  { route: { contains: search, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        }
+        const [total, tickets] = await prisma.$transaction([
+          prisma.task.count({ where }),
+          prisma.task.findMany({
+            where,
+            include: {
+              reporter: { select: { id: true, name: true, email: true } },
+              assignee: { select: { id: true, name: true, email: true } },
+              tags: { include: { tag: true } },
+              _count: { select: { evidence: true, comments: true } },
+            },
+            orderBy,
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+        ])
+        return jsonText({ count: tickets.length, page, limit, total, totalPages: Math.ceil(total / limit), selfProject: self, tickets })
       },
     )
 

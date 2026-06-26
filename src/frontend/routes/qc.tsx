@@ -7,6 +7,7 @@ import {
   Card,
   Container,
   Group,
+  Pagination,
   Paper,
   SegmentedControl,
   Select,
@@ -38,7 +39,9 @@ type StatusFilter = (typeof validStatuses)[number]
 const validSorts = ['priority', 'created', 'updated', 'title'] as const
 export type SortField = (typeof validSorts)[number]
 export type SortOrder = 'asc' | 'desc'
-type QcSearch = { status: StatusFilter; ticketId?: string; q?: string; sort?: SortField; order?: SortOrder }
+type QcSearch = { status: StatusFilter; ticketId?: string; q?: string; sort?: SortField; order?: SortOrder; page?: number }
+
+const PAGE_SIZE = 25
 
 export const Route = createFileRoute('/qc')({
   validateSearch: (search: Record<string, unknown>): QcSearch => {
@@ -47,7 +50,9 @@ export const Route = createFileRoute('/qc')({
     const q = typeof search.q === 'string' && search.q.trim() ? search.q : undefined
     const sort = validSorts.includes(search.sort as SortField) ? (search.sort as SortField) : undefined
     const order = search.order === 'asc' || search.order === 'desc' ? (search.order as SortOrder) : undefined
-    return { status, ...(ticketId ? { ticketId } : {}), ...(q ? { q } : {}), ...(sort ? { sort } : {}), ...(order ? { order } : {}) }
+    const pageNum = Number(search.page)
+    const page = Number.isInteger(pageNum) && pageNum > 1 ? pageNum : undefined
+    return { status, ...(ticketId ? { ticketId } : {}), ...(q ? { q } : {}), ...(sort ? { sort } : {}), ...(order ? { order } : {}), ...(page ? { page } : {}) }
   },
   beforeLoad: async ({ context }) => {
     try {
@@ -98,7 +103,8 @@ function NoSelfProject({ role }: { role?: string }) {
 }
 
 function QcPage() {
-  const { status, ticketId, q, sort, order } = Route.useSearch()
+  const { status, ticketId, q, sort, order, page } = Route.useSearch()
+  const currentPage = page ?? 1
   const navigate = useNavigate()
   const { data: sessionData } = useSession()
   const user = sessionData?.user
@@ -119,6 +125,7 @@ function QcPage() {
       ...(q ? { q } : {}),
       ...(sort ? { sort } : {}),
       ...(order ? { order } : {}),
+      ...(page ? { page } : {}),
       ...(ticketId ? { ticketId } : {}),
       ...patch,
     }
@@ -129,7 +136,7 @@ function QcPage() {
   useEffect(() => {
     const trimmed = debouncedSearch.trim()
     if ((trimmed || undefined) === q) return
-    navigate({ to: '/qc', search: buildSearch({ q: trimmed || undefined, ticketId: undefined }) })
+    navigate({ to: '/qc', search: buildSearch({ q: trimmed || undefined, page: undefined, ticketId: undefined }) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch])
 
@@ -169,20 +176,22 @@ function QcPage() {
     queryFn: () => fetch('/api/qc/context', { credentials: 'include' }).then((r) => r.json() as Promise<QcContext>),
   })
   const ticketsQ = useQuery({
-    queryKey: ['qc', 'tickets', status, q ?? '', sort ?? '', order ?? ''],
+    queryKey: ['qc', 'tickets', status, q ?? '', sort ?? '', order ?? '', currentPage],
     queryFn: () => {
-      const params = new URLSearchParams({ status })
+      const params = new URLSearchParams({ status, page: String(currentPage), limit: String(PAGE_SIZE) })
       if (q) params.set('q', q)
       if (sort) params.set('sort', sort)
       if (order) params.set('order', order)
       return fetch(`/api/qc/tickets?${params}`, { credentials: 'include' }).then(
-        (r) => r.json() as Promise<{ tickets: Ticket[]; selfProject: SelfProject | null }>,
+        (r) => r.json() as Promise<{ tickets: Ticket[]; selfProject: SelfProject | null; total: number; totalPages: number }>,
       )
     },
     enabled: !!ctxQ.data?.selfProject,
   })
 
   const tickets = ticketsQ.data?.tickets ?? []
+  const total = ticketsQ.data?.total ?? 0
+  const totalPages = ticketsQ.data?.totalPages ?? 0
   const selfProject = ctxQ.data?.selfProject
   const stats = ctxQ.data?.stats
 
@@ -191,8 +200,11 @@ function QcPage() {
 
   const handleSort = (field: SortField) => {
     const nextOrder: SortOrder = sort === field && order === 'asc' ? 'desc' : 'asc'
-    navigate({ to: '/qc', search: buildSearch({ sort: field, order: nextOrder, ticketId: undefined }) })
+    navigate({ to: '/qc', search: buildSearch({ sort: field, order: nextOrder, page: undefined, ticketId: undefined }) })
   }
+
+  const handlePageChange = (p: number) =>
+    navigate({ to: '/qc', search: buildSearch({ page: p > 1 ? p : undefined, ticketId: undefined }) })
 
   const handleLogout = () =>
     modals.openConfirmModal({
@@ -259,7 +271,7 @@ function QcPage() {
               <Group justify="space-between" wrap="wrap">
                 <SegmentedControl
                   value={status}
-                  onChange={(v) => navigate({ to: '/qc', search: buildSearch({ status: v as StatusFilter, ticketId: undefined }) })}
+                  onChange={(v) => navigate({ to: '/qc', search: buildSearch({ status: v as StatusFilter, page: undefined, ticketId: undefined }) })}
                   data={[
                     { label: 'Open', value: 'open' },
                     { label: 'In Progress', value: 'in-progress' },
@@ -345,6 +357,21 @@ function QcPage() {
                       : 'Tidak ada ticket dengan filter ini.'
                 }
               />
+              {total > 0 && (
+                <Group justify="space-between" wrap="wrap">
+                  <Text size="xs" c="dimmed">
+                    {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, total)} dari {total} ticket
+                  </Text>
+                  {totalPages > 1 && (
+                    <Pagination
+                      value={currentPage}
+                      onChange={handlePageChange}
+                      total={totalPages}
+                      size={isMobile ? 'sm' : 'md'}
+                    />
+                  )}
+                </Group>
+              )}
             </Stack>
           )}
         </Container>

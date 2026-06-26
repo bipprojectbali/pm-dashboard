@@ -49,30 +49,39 @@ export function qcQueryRoutes() {
       const orderBy = sortField
         ? [{ [sortField]: order } as never]
         : [{ priority: 'desc' as const }, { createdAt: 'desc' as const }]
-      const tickets = await prisma.task.findMany({
-        where: {
-          projectId: selfProject.id,
-          tags: { some: { tag: { name: AI_QUEUE_TAG } } },
-          status: { in: statuses as never },
-          ...(priority ? { priority: priority as never } : {}),
-          ...(q
-            ? {
-                OR: [
-                  { title: { contains: q, mode: 'insensitive' as const } },
-                  { description: { contains: q, mode: 'insensitive' as const } },
-                  { route: { contains: q, mode: 'insensitive' as const } },
-                ],
-              }
-            : {}),
-        },
-        include: {
-          reporter: { select: { id: true, name: true, email: true, image: true } },
-          assignee: { select: { id: true, name: true, email: true, image: true } },
-          _count: { select: { evidence: true, comments: true } },
-        },
-        orderBy,
-      })
-      return { tickets, selfProject }
+      const page = Math.max(1, Number.parseInt(typeof query.page === 'string' ? query.page : '', 10) || 1)
+      const rawLimit = Number.parseInt(typeof query.limit === 'string' ? query.limit : '', 10) || 25
+      const limit = Math.min(100, Math.max(1, rawLimit))
+      const where = {
+        projectId: selfProject.id,
+        tags: { some: { tag: { name: AI_QUEUE_TAG } } },
+        status: { in: statuses as never },
+        ...(priority ? { priority: priority as never } : {}),
+        ...(q
+          ? {
+              OR: [
+                { title: { contains: q, mode: 'insensitive' as const } },
+                { description: { contains: q, mode: 'insensitive' as const } },
+                { route: { contains: q, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+      }
+      const [total, tickets] = await prisma.$transaction([
+        prisma.task.count({ where }),
+        prisma.task.findMany({
+          where,
+          include: {
+            reporter: { select: { id: true, name: true, email: true, image: true } },
+            assignee: { select: { id: true, name: true, email: true, image: true } },
+            _count: { select: { evidence: true, comments: true } },
+          },
+          orderBy,
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+      ])
+      return { tickets, selfProject, page, limit, total, totalPages: Math.ceil(total / limit) }
     })
 
     .get('/api/qc/tickets/:id', async ({ request, params, set }) => {

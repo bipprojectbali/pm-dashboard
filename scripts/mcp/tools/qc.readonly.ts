@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
+import { findSimilarTickets } from '../../../src/lib/qc-duplicates'
 import { AI_QUEUE_TAG, getSelfProject } from '../../../src/lib/self-project'
 import { jsonText, type ToolModule } from './shared'
 import { loadTicket } from './qc.helpers'
@@ -19,6 +20,23 @@ export const qcReadonly: ToolModule = {
       async () => {
         const self = await getSelfProject()
         return jsonText({ selfProject: self })
+      },
+    )
+
+    server.registerTool(
+      'qc_ticket_find_similar',
+      {
+        title: 'Find similar QC tickets',
+        description:
+          'Trigram search for open "ai-queue" tickets in the self-project whose title is similar to the given text. Use before creating a ticket to avoid duplicates. Returns [] if no self-project or pg_trgm is unavailable. CLOSED tickets are excluded.',
+        inputSchema: {
+          title: z.string().min(1),
+          limit: z.number().int().positive().max(20).optional(),
+        },
+      },
+      async ({ title, limit }) => {
+        const possibleDuplicates = await findSimilarTickets({ title, ...(limit ? { limit } : {}) })
+        return jsonText({ count: possibleDuplicates.length, possibleDuplicates })
       },
     )
 

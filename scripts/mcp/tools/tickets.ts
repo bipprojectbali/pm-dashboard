@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { appLog } from '../../../src/lib/applog'
 import { prisma } from '../../../src/lib/db'
 import { notifyTaskStatusChanged } from '../../../src/lib/notifications'
+import { getRetryCount, getRetryCounts, RETRY_ESCALATION_THRESHOLD } from '../../../src/lib/ticket-retry'
 import { jsonText, type ToolModule } from './shared'
 
 const AI_QUEUE_TAG = 'ai-queue'
@@ -64,7 +65,13 @@ export const ticketsReadonly: ToolModule = {
       },
       async ({ projectId, limit }) => {
         const all = await findAiQueueTasks(projectId)
-        return jsonText({ count: all.length, tickets: all.slice(0, limit) })
+        const page = all.slice(0, limit)
+        const retries = await getRetryCounts(page.map((t) => t.id))
+        const tickets = page.map((t) => {
+          const retryCount = retries.get(t.id) ?? 0
+          return { ...t, retryCount, shouldEscalate: retryCount >= RETRY_ESCALATION_THRESHOLD }
+        })
+        return jsonText({ count: all.length, escalationThreshold: RETRY_ESCALATION_THRESHOLD, tickets })
       },
     )
   },
@@ -79,7 +86,7 @@ export const ticketsTools: ToolModule = {
       {
         title: 'Claim next AI ticket',
         description:
-          `Atomically claim the highest-priority open/reopened task tagged "${AI_QUEUE_TAG}" by transitioning it to IN_PROGRESS (and optionally assigning to you). Returns the full ticket incl. description, evidence, comments, checklist, and project.githubRepo so you know where to work. If no ticket matches, returns { picked: false }.`,
+          `Atomically claim the highest-priority open/reopened task tagged "${AI_QUEUE_TAG}" by transitioning it to IN_PROGRESS (and optionally assigning to you). Returns the full ticket incl. description, evidence, comments, checklist, and project.githubRepo so you know where to work. Also returns retryCount (how many times a prior fix was rejected back to REOPENED) and shouldEscalate (retryCount >= ${RETRY_ESCALATION_THRESHOLD}) — if shouldEscalate is true, change strategy or ask a human instead of repeating the same fix. If no ticket matches, returns { picked: false }.`,
         inputSchema: {
           projectId: z.string().optional().describe('Scope pick to one project.'),
           claimerEmail: z
@@ -106,6 +113,9 @@ export const ticketsTools: ToolModule = {
             },
           })
           if (result.count === 1) {
+            // retryCount is computed BEFORE writing this pick's status change, so it
+            // reflects only prior READY_FOR_QC → REOPENED bounces, not this claim.
+            const retryCount = await getRetryCount(candidate.id)
             await prisma.taskStatusChange.create({
               data: {
                 taskId: candidate.id,
@@ -115,8 +125,17 @@ export const ticketsTools: ToolModule = {
               },
             })
             const full = await loadTicket(candidate.id)
-            appLog('info', `MCP: ticket_pick claimed ${candidate.id} (${candidate.title})`)
-            return jsonText({ picked: true, ticket: full })
+            appLog(
+              'info',
+              `MCP: ticket_pick claimed ${candidate.id} (${candidate.title}) retryCount=${retryCount}`,
+            )
+            return jsonText({
+              picked: true,
+              retryCount,
+              shouldEscalate: retryCount >= RETRY_ESCALATION_THRESHOLD,
+              escalationThreshold: RETRY_ESCALATION_THRESHOLD,
+              ticket: full,
+            })
           }
         }
         return jsonText({ picked: false, reason: `No tickets tagged "${AI_QUEUE_TAG}" available.` })

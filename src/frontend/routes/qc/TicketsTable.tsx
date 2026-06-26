@@ -1,5 +1,6 @@
-import { Badge, Card, Checkbox, Group, Paper, Stack, Table, Text, ThemeIcon, Tooltip } from '@mantine/core'
-import { TbCircleCheck, TbMessage, TbPaperclip } from 'react-icons/tb'
+import { Badge, Card, Checkbox, Group, Paper, Stack, Table, Text, ThemeIcon, Tooltip, UnstyledButton } from '@mantine/core'
+import { TbArrowsSort, TbCircleCheck, TbMessage, TbPaperclip, TbSortAscending, TbSortDescending } from 'react-icons/tb'
+import type { SortField, SortOrder } from '../qc'
 import { type Ticket, priorityBadge, statusBadge } from './types'
 
 export function TicketsTable({
@@ -10,6 +11,9 @@ export function TicketsTable({
   selectedIds,
   onToggle,
   onToggleAll,
+  sort,
+  order,
+  onSort,
 }: {
   tickets: Ticket[]
   loading: boolean
@@ -18,6 +22,9 @@ export function TicketsTable({
   selectedIds: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[]) => void
+  sort?: SortField
+  order?: SortOrder
+  onSort: (field: SortField) => void
 }) {
   if (loading) {
     return (
@@ -43,6 +50,21 @@ export function TicketsTable({
   const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id))
   const someSelected = allIds.some((id) => selectedIds.has(id)) && !allSelected
 
+  const SortTh = ({ field, label }: { field: SortField; label: string }) => {
+    const active = sort === field
+    const Icon = active ? (order === 'asc' ? TbSortAscending : TbSortDescending) : TbArrowsSort
+    return (
+      <Table.Th>
+        <UnstyledButton onClick={() => onSort(field)} aria-label={`Sort by ${label}`}>
+          <Group gap={4} wrap="nowrap">
+            <Text size="sm" fw={500} c={active ? undefined : 'inherit'}>{label}</Text>
+            <Icon size={13} opacity={active ? 1 : 0.4} />
+          </Group>
+        </UnstyledButton>
+      </Table.Th>
+    )
+  }
+
   return (
     <Card withBorder radius="md" p={0}>
       <Table highlightOnHover>
@@ -56,12 +78,12 @@ export function TicketsTable({
                 onChange={() => onToggleAll(allIds)}
               />
             </Table.Th>
-            <Table.Th>Title</Table.Th>
-            <Table.Th>Priority</Table.Th>
+            <SortTh field="title" label="Title" />
+            <SortTh field="priority" label="Priority" />
             <Table.Th>Status</Table.Th>
             <Table.Th>Reporter</Table.Th>
             <Table.Th>Assignee</Table.Th>
-            <Table.Th>Tanggal</Table.Th>
+            <SortTh field="created" label="Tanggal" />
             <Table.Th>Activity</Table.Th>
           </Table.Tr>
         </Table.Thead>

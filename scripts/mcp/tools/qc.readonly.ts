@@ -49,25 +49,43 @@ export const qcReadonly: ToolModule = {
       {
         title: 'List QC tickets',
         description:
-          'List QC tickets in the self-project tagged "ai-queue", optionally filtered by status/priority. Ordered priority DESC, then createdAt DESC.',
+          'List QC tickets in the self-project tagged "ai-queue", optionally filtered by status/priority and a free-text query (q matches title/description/route, case-insensitive). Default order priority DESC, then createdAt DESC; override with sort + order.',
         inputSchema: {
           status: z
             .enum(['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'])
             .optional()
             .describe('Filter by status.'),
           priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+          q: z.string().optional().describe('Free-text search on title/description/route (case-insensitive substring).'),
+          sort: z.enum(['priority', 'created', 'updated', 'title']).optional().describe('Sort field. Default: priority then createdAt.'),
+          order: z.enum(['asc', 'desc']).default('desc'),
           limit: z.number().int().min(1).max(200).default(50),
         },
       },
-      async ({ status, priority, limit }) => {
+      async ({ status, priority, q, sort, order, limit }) => {
         const self = await getSelfProject()
         if (!self) return jsonText({ error: 'No self-project configured' })
+        const sortKey = { priority: 'priority', created: 'createdAt', updated: 'updatedAt', title: 'title' } as const
+        const sortField = sort ? sortKey[sort] : null
+        const orderBy = sortField
+          ? [{ [sortField]: order } as never]
+          : [{ priority: 'desc' as const }, { createdAt: 'desc' as const }]
+        const search = q?.trim()
         const tickets = await prisma.task.findMany({
           where: {
             projectId: self.id,
             tags: { some: { tag: { name: AI_QUEUE_TAG } } },
             ...(status ? { status } : {}),
             ...(priority ? { priority } : {}),
+            ...(search
+              ? {
+                  OR: [
+                    { title: { contains: search, mode: 'insensitive' as const } },
+                    { description: { contains: search, mode: 'insensitive' as const } },
+                    { route: { contains: search, mode: 'insensitive' as const } },
+                  ],
+                }
+              : {}),
           },
           include: {
             reporter: { select: { id: true, name: true, email: true } },
@@ -75,7 +93,7 @@ export const qcReadonly: ToolModule = {
             tags: { include: { tag: true } },
             _count: { select: { evidence: true, comments: true } },
           },
-          orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+          orderBy,
           take: limit,
         })
         return jsonText({ count: tickets.length, selfProject: self, tickets })

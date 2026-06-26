@@ -14,14 +14,15 @@ import {
   Text,
   ThemeIcon,
   Title,
+  TextInput,
   Tooltip,
 } from '@mantine/core'
-import { useDisclosure, useMediaQuery } from '@mantine/hooks'
+import { useDebouncedValue, useDisclosure, useMediaQuery } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { TbAlertTriangle, TbBug, TbPlus, TbRefresh } from 'react-icons/tb'
+import { useEffect, useState } from 'react'
+import { TbAlertTriangle, TbBug, TbPlus, TbRefresh, TbSearch, TbX } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
@@ -34,13 +35,19 @@ import type { QcContext, SelfProject, Ticket } from './qc/types'
 
 const validStatuses = ['all', 'open', 'in-progress', 'ready', 'closed'] as const
 type StatusFilter = (typeof validStatuses)[number]
-type QcSearch = { status: StatusFilter; ticketId?: string }
+const validSorts = ['priority', 'created', 'updated', 'title'] as const
+export type SortField = (typeof validSorts)[number]
+export type SortOrder = 'asc' | 'desc'
+type QcSearch = { status: StatusFilter; ticketId?: string; q?: string; sort?: SortField; order?: SortOrder }
 
 export const Route = createFileRoute('/qc')({
   validateSearch: (search: Record<string, unknown>): QcSearch => {
     const status = validStatuses.includes(search.status as StatusFilter) ? (search.status as StatusFilter) : 'all'
     const ticketId = typeof search.ticketId === 'string' ? search.ticketId : undefined
-    return ticketId ? { status, ticketId } : { status }
+    const q = typeof search.q === 'string' && search.q.trim() ? search.q : undefined
+    const sort = validSorts.includes(search.sort as SortField) ? (search.sort as SortField) : undefined
+    const order = search.order === 'asc' || search.order === 'desc' ? (search.order as SortOrder) : undefined
+    return { status, ...(ticketId ? { ticketId } : {}), ...(q ? { q } : {}), ...(sort ? { sort } : {}), ...(order ? { order } : {}) }
   },
   beforeLoad: async ({ context }) => {
     try {
@@ -91,7 +98,7 @@ function NoSelfProject({ role }: { role?: string }) {
 }
 
 function QcPage() {
-  const { status, ticketId } = Route.useSearch()
+  const { status, ticketId, q, sort, order } = Route.useSearch()
   const navigate = useNavigate()
   const { data: sessionData } = useSession()
   const user = sessionData?.user
@@ -103,6 +110,28 @@ function QcPage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<string | null>(null)
+  const [searchInput, setSearchInput] = useState(q ?? '')
+  const [debouncedSearch] = useDebouncedValue(searchInput, 300)
+
+  const buildSearch = (patch: Partial<QcSearch>): QcSearch => {
+    const next: QcSearch = {
+      status,
+      ...(q ? { q } : {}),
+      ...(sort ? { sort } : {}),
+      ...(order ? { order } : {}),
+      ...(ticketId ? { ticketId } : {}),
+      ...patch,
+    }
+    for (const k of Object.keys(next) as (keyof QcSearch)[]) if (next[k] === undefined) delete next[k]
+    return next
+  }
+
+  useEffect(() => {
+    const trimmed = debouncedSearch.trim()
+    if ((trimmed || undefined) === q) return
+    navigate({ to: '/qc', search: buildSearch({ q: trimmed || undefined, ticketId: undefined }) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch])
 
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
@@ -140,11 +169,16 @@ function QcPage() {
     queryFn: () => fetch('/api/qc/context', { credentials: 'include' }).then((r) => r.json() as Promise<QcContext>),
   })
   const ticketsQ = useQuery({
-    queryKey: ['qc', 'tickets', status],
-    queryFn: () =>
-      fetch(`/api/qc/tickets?status=${status}`, { credentials: 'include' }).then(
+    queryKey: ['qc', 'tickets', status, q ?? '', sort ?? '', order ?? ''],
+    queryFn: () => {
+      const params = new URLSearchParams({ status })
+      if (q) params.set('q', q)
+      if (sort) params.set('sort', sort)
+      if (order) params.set('order', order)
+      return fetch(`/api/qc/tickets?${params}`, { credentials: 'include' }).then(
         (r) => r.json() as Promise<{ tickets: Ticket[]; selfProject: SelfProject | null }>,
-      ),
+      )
+    },
     enabled: !!ctxQ.data?.selfProject,
   })
 
@@ -152,8 +186,13 @@ function QcPage() {
   const selfProject = ctxQ.data?.selfProject
   const stats = ctxQ.data?.stats
 
-  const openTicket = (id: string) => navigate({ to: '/qc', search: { status, ticketId: id } })
-  const closeTicketDrawer = () => navigate({ to: '/qc', search: { status } })
+  const openTicket = (id: string) => navigate({ to: '/qc', search: buildSearch({ ticketId: id }) })
+  const closeTicketDrawer = () => navigate({ to: '/qc', search: buildSearch({ ticketId: undefined }) })
+
+  const handleSort = (field: SortField) => {
+    const nextOrder: SortOrder = sort === field && order === 'asc' ? 'desc' : 'asc'
+    navigate({ to: '/qc', search: buildSearch({ sort: field, order: nextOrder, ticketId: undefined }) })
+  }
 
   const handleLogout = () =>
     modals.openConfirmModal({
@@ -220,7 +259,7 @@ function QcPage() {
               <Group justify="space-between" wrap="wrap">
                 <SegmentedControl
                   value={status}
-                  onChange={(v) => navigate({ to: '/qc', search: { status: v as StatusFilter } })}
+                  onChange={(v) => navigate({ to: '/qc', search: buildSearch({ status: v as StatusFilter, ticketId: undefined }) })}
                   data={[
                     { label: 'Open', value: 'open' },
                     { label: 'In Progress', value: 'in-progress' },
@@ -231,6 +270,21 @@ function QcPage() {
                   size={isMobile ? 'xs' : 'sm'}
                 />
                 <Group gap="xs">
+                  <TextInput
+                    placeholder="Cari judul, deskripsi, route…"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.currentTarget.value)}
+                    leftSection={<TbSearch size={14} />}
+                    rightSection={
+                      searchInput ? (
+                        <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => setSearchInput('')}>
+                          <TbX size={14} />
+                        </ActionIcon>
+                      ) : null
+                    }
+                    size={isMobile ? 'xs' : 'sm'}
+                    w={isMobile ? '100%' : 260}
+                  />
                   <Tooltip label="Refresh">
                     <ActionIcon variant="light" onClick={() => ticketsQ.refetch()}>
                       <TbRefresh size={16} />
@@ -280,10 +334,15 @@ function QcPage() {
                 selectedIds={selectedIds}
                 onToggle={toggleSelect}
                 onToggleAll={toggleAll}
+                sort={sort}
+                order={order}
+                onSort={handleSort}
                 emptyHint={
-                  status === 'all'
-                    ? 'Belum ada ticket. Buat ticket baru kalau nemu bug.'
-                    : 'Tidak ada ticket dengan filter ini.'
+                  q
+                    ? `Tidak ada ticket yang cocok dengan "${q}".`
+                    : status === 'all'
+                      ? 'Belum ada ticket. Buat ticket baru kalau nemu bug.'
+                      : 'Tidak ada ticket dengan filter ini.'
                 }
               />
             </Stack>

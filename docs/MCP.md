@@ -35,6 +35,6 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
   - Admin: `chat_sync_run` (`full=false` incremental, `full=true` aggregate refresh + retro + orphan prune; returns `{ synced, pruned, failedEmbeddings, durationMs }`)
   - See `@docs/CHAT-AI.md` for doc-type catalog and search algorithm.
 - **QC** (in `qc` module):
-  - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list`, `qc_ticket_get`
+  - Readonly: `qc_self_project_get`, `qc_context`, `qc_ticket_list` (filter `status`/`priority`, free-text `q` over title/description/route, `sort` ∈ `priority|created|updated|title` + `order`, `limit` ≤200), `qc_ticket_get`
   - Admin: `qc_self_project_set`, `qc_self_project_clear`, `qc_ticket_create`, `qc_ticket_update`, `qc_ticket_delete`, `qc_ticket_comment`, `qc_ticket_evidence_add`
   - Operates on the one project where `isSelf=true`.

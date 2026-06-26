@@ -40,19 +40,37 @@ export function qcQueryRoutes() {
       }
       const statuses = statusFilter[statusParam] ?? statusFilter.all
       const priority = typeof query.priority === 'string' ? query.priority : undefined
+      const q = typeof query.q === 'string' ? query.q.trim() : ''
+      const sortKey: Record<string, 'priority' | 'createdAt' | 'updatedAt' | 'title'> = {
+        priority: 'priority', created: 'createdAt', updated: 'updatedAt', title: 'title',
+      }
+      const sortField = sortKey[typeof query.sort === 'string' ? query.sort : ''] ?? null
+      const order = query.order === 'asc' ? 'asc' : 'desc'
+      const orderBy = sortField
+        ? [{ [sortField]: order } as never]
+        : [{ priority: 'desc' as const }, { createdAt: 'desc' as const }]
       const tickets = await prisma.task.findMany({
         where: {
           projectId: selfProject.id,
           tags: { some: { tag: { name: AI_QUEUE_TAG } } },
           status: { in: statuses as never },
           ...(priority ? { priority: priority as never } : {}),
+          ...(q
+            ? {
+                OR: [
+                  { title: { contains: q, mode: 'insensitive' as const } },
+                  { description: { contains: q, mode: 'insensitive' as const } },
+                  { route: { contains: q, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
         },
         include: {
           reporter: { select: { id: true, name: true, email: true, image: true } },
           assignee: { select: { id: true, name: true, email: true, image: true } },
           _count: { select: { evidence: true, comments: true } },
         },
-        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
       })
       return { tickets, selfProject }
     })

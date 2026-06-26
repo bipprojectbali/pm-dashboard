@@ -1,11 +1,16 @@
-import { ActionIcon, Box, Button, Group, Image, Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, Group, Image, Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { useDebouncedValue } from '@mantine/hooks'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { TbPhoto, TbTrash, TbX } from 'react-icons/tb'
+import { TbAlertTriangle, TbPhoto, TbTrash, TbX } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+
+interface SimilarTicket { id: string; title: string; status: string; priority: string; score: number }
 
 export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM')
@@ -76,6 +81,26 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
     },
     onError: (err) => notifyError(err),
   })
+
+  const [debouncedTitle] = useDebouncedValue(title, 300)
+  const similarQuery = useQuery({
+    queryKey: ['qc', 'similar', debouncedTitle.trim()],
+    enabled: opened && debouncedTitle.trim().length >= 4,
+    queryFn: async () => {
+      const res = await fetch(`/api/qc/tickets/similar?title=${encodeURIComponent(debouncedTitle.trim())}`, {
+        credentials: 'include',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Gagal memeriksa duplikat')
+      return (json.possibleDuplicates ?? []) as SimilarTicket[]
+    },
+  })
+  const duplicates = similarQuery.data ?? []
+
+  const openExisting = (id: string) => {
+    onClose()
+    navigate({ to: '/qc', search: (prev) => ({ ...prev, status: prev.status ?? 'all', ticketId: id }) })
+  }
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !createM.isPending
 
@@ -165,6 +190,28 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
           autosize
           minRows={2}
         />
+        {duplicates.length > 0 && (
+          <Alert
+            color="yellow"
+            icon={<TbAlertTriangle size={16} />}
+            title="Mungkin duplikat"
+            variant="light"
+          >
+            <Text size="sm" mb={6}>
+              Ada ticket dengan judul mirip. Cek dulu sebelum membuat yang baru:
+            </Text>
+            <Stack gap={4}>
+              {duplicates.map((d) => (
+                <Group key={d.id} gap={6} wrap="nowrap">
+                  <Anchor size="sm" onClick={() => openExisting(d.id)} style={{ flex: 1 }} lineClamp={1}>
+                    {d.title}
+                  </Anchor>
+                  <Badge size="xs" variant="light" color="gray">{d.status}</Badge>
+                </Group>
+              ))}
+            </Stack>
+          </Alert>
+        )}
         <Group justify="flex-end" mt="sm">
           <Button variant="subtle" onClick={onClose}>Batal</Button>
           <Button onClick={() => createM.mutate()} disabled={!canSubmit} loading={createM.isPending}>

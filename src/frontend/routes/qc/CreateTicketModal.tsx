@@ -5,6 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { TbAlertTriangle, TbPhoto, TbTrash, TbX } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+import { EMPTY_STRUCTURED, TicketStructuredFields, type StructuredFields } from './TicketStructuredFields'
 
 interface SimilarTicket { id: string; title: string; status: string; priority: string; score: number }
 
@@ -12,7 +13,7 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const [fields, setFields] = useState<StructuredFields>(EMPTY_STRUCTURED)
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM')
   const [route, setRoute] = useState('')
   const [evidence, setEvidence] = useState('')
@@ -20,17 +21,33 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
   const [previews, setPreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const patchFields = (patch: Partial<StructuredFields>) => setFields((prev) => ({ ...prev, ...patch }))
+
+  // Auto-fill environment + version from the running server so reporters never type them.
+  const { data: versionInfo } = useQuery<{ version: string; env: string }>({
+    queryKey: ['api-version'],
+    queryFn: () => fetch('/api/version').then((r) => r.json()),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+
   useEffect(() => {
     if (!opened) {
       setTitle('')
-      setDescription('')
+      setFields(EMPTY_STRUCTURED)
       setPriority('MEDIUM')
       setRoute('')
       setEvidence('')
       setImages([])
       setPreviews((prev) => { prev.forEach(URL.revokeObjectURL); return [] })
+    } else if (versionInfo) {
+      setFields((prev) => ({
+        ...prev,
+        appVersion: prev.appVersion || versionInfo.version || '',
+        environment: prev.environment || versionInfo.env || '',
+      }))
     }
-  }, [opened])
+  }, [opened, versionInfo])
 
   const addImages = (files: FileList | null) => {
     if (!files) return
@@ -54,10 +71,15 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          description,
           priority,
           route: route || undefined,
           evidenceUrls: urls.length ? urls : undefined,
+          stepsToReproduce: fields.stepsToReproduce,
+          expected: fields.expected,
+          actual: fields.actual,
+          environment: fields.environment || undefined,
+          browser: fields.browser || undefined,
+          appVersion: fields.appVersion || undefined,
         }),
       })
       const json = await res.json()
@@ -102,7 +124,12 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
     navigate({ to: '/qc', search: (prev) => ({ ...prev, status: prev.status ?? 'all', ticketId: id }) })
   }
 
-  const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !createM.isPending
+  const canSubmit =
+    title.trim().length > 0 &&
+    fields.stepsToReproduce.trim().length > 0 &&
+    fields.expected.trim().length > 0 &&
+    fields.actual.trim().length > 0 &&
+    !createM.isPending
 
   return (
     <Modal opened={opened} onClose={onClose} title="New QC Ticket" size="lg">
@@ -115,15 +142,7 @@ export function CreateTicketModal({ opened, onClose }: { opened: boolean; onClos
           required
           maxLength={500}
         />
-        <Textarea
-          label="Description"
-          placeholder="Steps to reproduce, expected vs actual, env, etc."
-          value={description}
-          onChange={(e) => setDescription(e.currentTarget.value)}
-          minRows={5}
-          autosize
-          required
-        />
+        <TicketStructuredFields fields={fields} onChange={patchFields} />
         <Group grow>
           <Select
             label="Priority"

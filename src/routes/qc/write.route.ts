@@ -3,6 +3,7 @@ import { appLog } from '../../lib/applog'
 import { prisma } from '../../lib/db'
 import { notifyTaskStatusChanged } from '../../lib/notifications'
 import { emitInvalidate } from '../../lib/presence'
+import { resolveTicketContent } from '../../lib/qc-ticket-template'
 import { getIp, requireAuth, writeAuditLog } from '../../lib/route-helpers'
 import { AI_QUEUE_TAG, ensureAiQueueTag, getSelfProject } from '../../lib/self-project'
 
@@ -26,10 +27,21 @@ export function qcWriteRoutes() {
         priority?: string
         route?: string
         evidenceUrls?: string[]
+        stepsToReproduce?: string
+        expected?: string
+        actual?: string
+        environment?: string
+        browser?: string
+        appVersion?: string
       }
-      if (!body.title?.trim() || !body.description?.trim()) {
+      if (!body.title?.trim()) {
         set.status = 400
-        return { error: 'title dan description wajib diisi' }
+        return { error: 'title wajib diisi' }
+      }
+      const content = resolveTicketContent(body)
+      if (!content.ok) {
+        set.status = 400
+        return { error: content.error }
       }
       const tag = await ensureAiQueueTag(selfProject.id)
       const ticket = await prisma.task.create({
@@ -37,10 +49,11 @@ export function qcWriteRoutes() {
           projectId: selfProject.id,
           kind: 'BUG',
           title: body.title.trim(),
-          description: body.description.trim(),
+          description: content.description,
           priority: (body.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') ?? 'MEDIUM',
           route: body.route ?? null,
           reporterId: auth.userId,
+          ...content.columns,
           tags: { create: [{ tagId: tag.id }] },
           evidence: body.evidenceUrls?.length
             ? { create: body.evidenceUrls.map((url) => ({ url, kind: 'LINK' as const })) }

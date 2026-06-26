@@ -307,6 +307,14 @@ model Task {
   route           String?
   reporterId      String
   assigneeId      String?
+  // QC structured bug-report fields. Nullable: only QC tickets filed via the
+  // structured form populate these; legacy/free-text tickets leave them null.
+  stepsToReproduce String?
+  expected         String?
+  actual           String?
+  environment      String?
+  browser          String?
+  appVersion       String?
   startsAt        DateTime?
   dueAt           DateTime?
   estimateHours   Float?

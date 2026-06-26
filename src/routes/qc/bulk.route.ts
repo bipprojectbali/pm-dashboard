@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 import { appLog } from '../../lib/applog'
 import { prisma } from '../../lib/db'
+import { notifyTaskStatusChanged } from '../../lib/notifications'
 import { emitInvalidate } from '../../lib/presence'
 import { getIp, requireAuth, writeAuditLog } from '../../lib/route-helpers'
 import { AI_QUEUE_TAG, getSelfProject } from '../../lib/self-project'
@@ -51,7 +52,7 @@ export function qcBulkRoutes() {
         projectId: selfProject.id,
         tags: { some: { tag: { name: AI_QUEUE_TAG } } },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, title: true, reporterId: true, assigneeId: true },
     })
     if (!tickets.length) { set.status = 404; return { error: 'Tidak ada ticket cocok di self-project' } }
 
@@ -76,6 +77,26 @@ export function qcBulkRoutes() {
         }),
       )
     await prisma.$transaction([...ops, ...changes])
+
+    if (hasStatus) {
+      const changed = tickets.filter((t) => body.status !== t.status)
+      if (changed.length) {
+        const actor = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
+        for (const t of changed) {
+          notifyTaskStatusChanged({
+            taskId: t.id,
+            projectId: selfProject.id,
+            taskTitle: t.title,
+            reporterId: t.reporterId,
+            assigneeId: hasAssignee ? (body.assigneeId ?? null) : t.assigneeId,
+            actorId: auth.userId,
+            actorName: actor?.name ?? 'Someone',
+            fromStatus: t.status,
+            toStatus: body.status as never,
+          }).catch(() => {})
+        }
+      }
+    }
 
     const fields = [hasStatus && 'status', hasPriority && 'priority', hasAssignee && 'assignee'].filter(Boolean).join(',')
     writeAuditLog(auth.userId, 'QC_TICKET_BULK_UPDATED', `count=${tickets.length} fields=${fields}`, getIp(request))

@@ -1,4 +1,4 @@
-import { Drawer, Group, Select, Stack, Text } from '@mantine/core'
+import { Button, Drawer, Group, Modal, Select, Stack, Text, Textarea } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
@@ -39,6 +39,8 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
   const [draftTitle, setDraftTitle] = useState('')
   const [draftDescription, setDraftDescription] = useState('')
   const [draftRoute, setDraftRoute] = useState('')
+  const [revisionOpen, setRevisionOpen] = useState(false)
+  const [revisionReason, setRevisionReason] = useState('')
 
   useEffect(() => {
     if (!editMode && detailQ.data?.ticket) {
@@ -86,7 +88,35 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
     onError: (err) => notifyError(err),
   })
 
+  const revisionM = useMutation({
+    mutationFn: async (comment: string) => {
+      const res = await fetch(`/api/qc/tickets/${ticketId}/request-revision`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Gagal minta revisi')
+      return json
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qc'] })
+      queryClient.invalidateQueries({ queryKey: ['qc', 'ticket', ticketId] })
+      setRevisionOpen(false)
+      setRevisionReason('')
+      notifySuccess('Ticket dikembalikan ke antrean (REOPENED)')
+    },
+    onError: (err) => notifyError(err),
+  })
+
   const ticket = detailQ.data?.ticket
+
+  const submitRevision = () => {
+    const reason = revisionReason.trim()
+    if (!reason) { notifyError('Alasan revisi wajib diisi'); return }
+    revisionM.mutate(reason)
+  }
 
   const saveEdits = () => {
     if (!ticket) return
@@ -174,6 +204,16 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
               disabled={patchM.isPending}
             />
           </Group>
+          {ticket.status === 'READY_FOR_QC' && (
+            <Button
+              variant="light"
+              color="orange"
+              onClick={() => setRevisionOpen(true)}
+              disabled={patchM.isPending}
+            >
+              Minta Revisi
+            </Button>
+          )}
           {canAssign ? (
             <Select
               label="Assignee"
@@ -195,6 +235,41 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string; onClose:
           <TicketTimeline statusChanges={ticket.statusChanges} />
         </Stack>
       )}
+      <Modal
+        opened={revisionOpen}
+        onClose={() => setRevisionOpen(false)}
+        title="Minta Revisi"
+        centered
+      >
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">
+            Ticket akan dikembalikan ke antrean (REOPENED) untuk diperbaiki ulang. Jelaskan apa yang perlu direvisi —
+            komentar ini wajib diisi.
+          </Text>
+          <Textarea
+            label="Alasan revisi"
+            placeholder="Contoh: fix belum menangani kasus input kosong, masih error saat…"
+            value={revisionReason}
+            onChange={(e) => setRevisionReason(e.currentTarget.value)}
+            minRows={3}
+            autosize
+            data-autofocus
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setRevisionOpen(false)} disabled={revisionM.isPending}>
+              Batal
+            </Button>
+            <Button
+              color="orange"
+              onClick={submitRevision}
+              loading={revisionM.isPending}
+              disabled={!revisionReason.trim()}
+            >
+              Kirim & Reopen
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Drawer>
   )
 }

@@ -26,7 +26,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `ProjectMember` (projectId, userId, role) — unique per (projectId, userId)
   - `ProjectMilestone`, `ProjectExtension` — planning + audited deadline pushes
   - `ProjectPhase` (id, projectId, title, description?, summary?, status=PhaseStatus, order, startsAt?, endsAt?, timestamps) — fase/sprint per project; `summary` diisi saat menutup fase (ACTIVE→COMPLETED). Tasks link via nullable FK `phaseId` with `onDelete: SetNull`. Enum `PhaseStatus` = `PLANNING | ACTIVE | COMPLETED`.
-  - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, timestamps)
+  - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, timestamps) — plus 6 nullable QC structured bug-report columns `stepsToReproduce?`, `expected?`, `actual?`, `environment?`, `browser?`, `appVersion?` populated only by QC tickets filed via the structured create form (legacy/free-text tickets leave them null); see `@docs/QC-TICKETS.md`
   - `Tag` (id, projectId, name, color) — unique per (projectId, name)
   - `TaskTag` — m2m between Task and Tag
   - `TaskDependency` (id, taskId, blockedById) — self-relation on Task via named relations `TaskDependents`/`TaskBlockers`; unique per (taskId, blockedById)

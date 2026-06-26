@@ -7,12 +7,18 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
-## [0.7.19] - 2026-06-25
+## [0.7.19] - 2026-06-26
 
 ### Ditambahkan
+- **Form bug-report terstruktur saat buat QC ticket** — Description bebas diganti field wajib Langkah reproduksi / Hasil yang diharapkan / Hasil aktual, plus Environment / Browser / Versi opsional (`environment` + `appVersion` auto-isi dari `/api/version`). Field tersimpan sebagai kolom `Task` nullable sekaligus disusun jadi markdown `description`. Path free-text lama tetap didukung (back-compat).
+- **Peringatan duplikat saat buat ticket** — judul ticket (debounce, ≥4 karakter) dicek via trigram `pg_trgm` terhadap ticket `ai-queue` yang masih terbuka; kecocokan tampil sebagai Alert kuning berisi ticket serupa yang bisa diklik. Non-blocking — submit tetap aktif.
+- **"Minta Revisi" satu klik** — saat status ticket `READY_FOR_QC`, reviewer bisa menolak perbaikan via satu modal: alasan wajib + transisi `READY_FOR_QC → REOPENED` atomik, menggantikan dua langkah terpisah yang sering lupa menyertakan komentar.
+- **Notifikasi perubahan status ticket** — setiap transisi status QC mengirim notifikasi ke reporter + assignee (minus aktor) sehingga loop Claude↔QC muncul di bell, bukan senyap.
+- **Pencarian & sortir tabel ticket** — kotak pencarian (debounce 300ms; cocokkan judul/deskripsi/route) + header kolom sortir (Judul/Prioritas/Tanggal, klik untuk toggle asc/desc). State tersimpan di URL.
+- **Pagination tabel ticket** — daftar ticket dipaginasi 25 per halaman; state halaman di `?page=` dan reset ke 1 saat filter/pencarian/sortir berubah.
 - **Upload screenshot di drawer ticket** — section Evidence pada detail ticket kini punya tombol "Upload Screenshot". Gambar diupload langsung saat dipilih (bisa multiple). Screenshot tampil sebagai thumbnail 4-kolom; klik thumbnail membuka lightbox modal. Evidence non-gambar (LINK) tetap tampil seperti sebelumnya.
 - **Assignee select di drawer ticket** — ADMIN/SUPER_ADMIN dapat memilih atau menghapus assignee langsung dari drawer via Select searchable + clearable. QC role melihat assignee sebagai teks read-only.
-- **Bulk update status** — checkbox per baris di tabel ticket (dengan select-all + indeterminate). Saat ≥1 dipilih, toolbar bulk muncul: pilih status baru → Update Status. Update dijalankan paralel.
+- **Bulk update ticket** — checkbox per baris di tabel ticket (dengan select-all + indeterminate). Saat ≥1 dipilih, toolbar bulk muncul: ubah status/prioritas (semua role QC) atau assignee (ADMIN/SUPER_ADMIN) → "Terapkan" lewat satu PATCH atomik.
 - **Kolom Tanggal** — tanggal input ticket ditampilkan di tabel; hover untuk melihat waktu lengkap.
 
 ### Diubah

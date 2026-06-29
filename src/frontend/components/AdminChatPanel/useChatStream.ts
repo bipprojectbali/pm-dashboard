@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
+import { clearChatSession, loadChatSession, saveChatSession } from './chat-session-storage'
 import type { ChatMessage, ChatSource, SyncResult, ToolCall } from './types'
 
 export function useChatStream() {
   const qc = useQueryClient()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [systemContext, setSystemContext] = useState<string | null>(null)
-  const [contextLoadedAt, setContextLoadedAt] = useState<Date | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatSession()?.messages ?? [])
+  const [systemContext, setSystemContext] = useState<string | null>(() => loadChatSession()?.systemContext ?? null)
+  const [contextLoadedAt, setContextLoadedAt] = useState<Date | null>(() => loadChatSession()?.contextLoadedAt ?? null)
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentStream, setCurrentStream] = useState('')
@@ -36,6 +37,12 @@ export function useChatStream() {
     const id = setInterval(() => setTick((t) => t + 1), 30_000)
     return () => clearInterval(id)
   }, [])
+
+  // Persist conversation so it survives navigating away from the Chat AI tab
+  // (the tab conditionally renders AdminChatPanel, unmounting this hook).
+  useEffect(() => {
+    saveChatSession({ messages, systemContext, contextLoadedAt })
+  }, [messages, systemContext, contextLoadedAt])
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -150,6 +157,7 @@ export function useChatStream() {
   )
 
   const resetSession = () => {
+    clearChatSession()
     setMessages([])
     setSystemContext(null)
     setContextLoadedAt(null)

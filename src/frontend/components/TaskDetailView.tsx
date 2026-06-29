@@ -71,8 +71,10 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   const {
     update, deleteM, addDependency, removeDependency,
     addChecklist, updateChecklist, removeChecklist,
-    createTag, addComment, addEvidence,
+    createTag, addComment, editComment, deleteComment, addEvidence,
   } = useTaskMutations({ taskId, task, onBack, setEditingTitle, setEditingDescription })
+
+  const currentUser = session.data?.user ? { id: session.data.user.id, role: session.data.user.role } : null
 
   useHotkeys([['Escape', onBack]])
 
@@ -185,7 +187,12 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
             onChecklistAdd={(title) => addChecklist.mutate(title)}
             onChecklistRemove={(id) => removeChecklist.mutate(id)}
             checklistAdding={addChecklist.isPending}
+            currentUser={currentUser}
             onCommentSubmit={(body) => addComment.mutate(body)}
+            onCommentEdit={(commentId, body) => editComment.mutate({ commentId, body })}
+            onCommentDelete={(commentId) => deleteComment.mutate(commentId)}
+            commentEditingId={editComment.isPending ? editComment.variables?.commentId ?? null : null}
+            commentDeletingId={deleteComment.isPending ? deleteComment.variables ?? null : null}
             commentLoading={addComment.isPending}
             commentError={addComment.error ? (addComment.error as Error).message : undefined}
             onEvidenceSubmit={(body) => addEvidence.mutate(body)}

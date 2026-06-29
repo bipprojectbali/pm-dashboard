@@ -232,6 +232,52 @@ export function registerTaskWriteTools(server: McpServer) {
   )
 
   server.registerTool(
+    'task_comment_update',
+    {
+      title: 'Edit task comment',
+      description: 'Edit a task comment body and stamp editedAt. MCP admin scope — no author check. 404 if the comment is not on the given task.',
+      inputSchema: {
+        taskId: z.string(),
+        commentId: z.string(),
+        body: z.string().min(1),
+      },
+    },
+    async ({ taskId, commentId, body }) => {
+      const comment = await prisma.taskComment.findFirst({
+        where: { id: commentId, task: { id: taskId, deletedAt: null } },
+        select: { id: true },
+      })
+      if (!comment) return jsonText({ error: 'Comment not found' })
+      const updated = await prisma.taskComment.update({
+        where: { id: comment.id },
+        data: { body: body.trim(), editedAt: new Date() },
+      })
+      return jsonText({ ok: true, comment: updated })
+    },
+  )
+
+  server.registerTool(
+    'task_comment_delete',
+    {
+      title: 'Delete task comment',
+      description: 'Permanently delete a task comment. MCP admin scope — no author check. 404 if the comment is not on the given task.',
+      inputSchema: {
+        taskId: z.string(),
+        commentId: z.string(),
+      },
+    },
+    async ({ taskId, commentId }) => {
+      const comment = await prisma.taskComment.findFirst({
+        where: { id: commentId, task: { id: taskId, deletedAt: null } },
+        select: { id: true },
+      })
+      if (!comment) return jsonText({ error: 'Comment not found' })
+      await prisma.taskComment.delete({ where: { id: comment.id } })
+      return jsonText({ ok: true, deleted: { id: comment.id } })
+    },
+  )
+
+  server.registerTool(
     'task_add_evidence',
     {
       title: 'Attach evidence',

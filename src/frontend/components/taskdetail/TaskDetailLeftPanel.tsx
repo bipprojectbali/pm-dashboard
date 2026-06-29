@@ -30,7 +30,12 @@ export function TaskDetailLeftPanel({
   onChecklistAdd,
   onChecklistRemove,
   checklistAdding,
+  currentUser,
   onCommentSubmit,
+  onCommentEdit,
+  onCommentDelete,
+  commentEditingId,
+  commentDeletingId,
   commentLoading,
   commentError,
   onEvidenceSubmit,
@@ -137,7 +142,12 @@ export function TaskDetailLeftPanel({
             <CommentsSection
               comments={task.comments as TaskComment[]}
               canWrite={canWrite}
+              currentUser={currentUser}
               onSubmit={onCommentSubmit}
+              onEdit={onCommentEdit}
+              onDelete={onCommentDelete}
+              editingId={commentEditingId}
+              deletingId={commentDeletingId}
               loading={commentLoading}
               error={commentError}
             />

@@ -19,6 +19,7 @@ export interface TicketDetail extends Ticket {
     id: string
     body: string
     createdAt: string
+    editedAt: string | null
     author: { id: string; name: string; email: string; role: string } | null
   }[]
   checklist: { id: string; title: string; done: boolean; order: number }[]

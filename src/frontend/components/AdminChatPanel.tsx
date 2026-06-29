@@ -1,9 +1,8 @@
-import { ActionIcon, Box, Button, Card, Group, Loader, ScrollArea, Stack, Text, Textarea, ThemeIcon, Tooltip } from '@mantine/core'
+import { ActionIcon, Box, Button, Card, Group, ScrollArea, Stack, Text, Textarea, ThemeIcon, Tooltip } from '@mantine/core'
 import { useEffect, useRef } from 'react'
 import { TbRobot, TbSend } from 'react-icons/tb'
 import { ChatHeader } from './AdminChatPanel/ChatHeader'
 import { AssistantBubble, UserBubble } from './AdminChatPanel/MessageBubbles'
-import { ToolCallsSection } from './AdminChatPanel/ToolCallCard'
 import { QUICK_PROMPTS } from './AdminChatPanel/types'
 import { useChatStream } from './AdminChatPanel/useChatStream'
 
@@ -84,31 +83,13 @@ export function AdminChatPanel() {
                   <AssistantBubble key={msg.id} msg={msg} toolCalls={msg.toolCalls} />
                 ),
               )}
-              {chat.isStreaming && chat.currentStream && (
+              {chat.isStreaming && (
                 <AssistantBubble
                   msg={{ content: chat.currentStream, sources: chat.currentSources }}
                   toolCalls={chat.currentToolCalls}
+                  phase={chat.phase}
                   streaming
                 />
-              )}
-              {chat.isStreaming && !chat.currentStream && (
-                <Group justify="flex-start" align="flex-start" gap="xs">
-                  <ThemeIcon size="md" radius="xl" variant="light" color="violet" style={{ flexShrink: 0, marginTop: 2 }}>
-                    <TbRobot size={14} />
-                  </ThemeIcon>
-                  <Card
-                    withBorder
-                    radius="md"
-                    p="sm"
-                    style={{ background: 'var(--mantine-color-violet-light)', minWidth: 80, flex: 1 }}
-                  >
-                    <Stack gap={4} align="stretch">
-                      {chat.currentToolCalls.length > 0 && <ToolCallsSection calls={chat.currentToolCalls} />}
-                      <Loader type="dots" size="sm" color="violet" />
-                      {chat.phase && <Text size="xs" c="dimmed">{chat.phase}</Text>}
-                    </Stack>
-                  </Card>
-                </Group>
               )}
               {chat.error && (
                 <Card withBorder radius="md" p="sm" bg="red.0">

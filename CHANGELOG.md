@@ -7,6 +7,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.22] - 2026-06-29
+
+### Diperbaiki
+- **Indikator loading Chat AI setelah tool call** — saat AI selesai memverifikasi data lewat tool ("DIVERIFIKASI DARI N TOOL CALL") lalu menyusun jawaban final, kini muncul animasi loading + teks status ("Memproses data & menyusun jawaban..."). Sebelumnya hanya tampil kursor statis sehingga terlihat seperti berhenti.
+
 ## [0.7.21] - 2026-06-29
 
 ### Ditambahkan

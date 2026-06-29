@@ -4,20 +4,22 @@ import { parseLinks } from '../../src/frontend/lib/linkify'
 describe('parseLinks', () => {
   test('plain text with no URL returns a single text segment', () => {
     const segs = parseLinks('just a note about the project')
-    expect(segs).toEqual([{ type: 'text', value: 'just a note about the project' }])
+    expect(segs).toEqual([{ type: 'text', value: 'just a note about the project', start: 0 }])
   })
 
   test('detects a bare https URL', () => {
     const segs = parseLinks('https://localhost:3111')
-    expect(segs).toEqual([{ type: 'link', value: 'https://localhost:3111', href: 'https://localhost:3111' }])
+    expect(segs).toEqual([
+      { type: 'link', value: 'https://localhost:3111', href: 'https://localhost:3111', start: 0 },
+    ])
   })
 
   test('splits text around a URL in the middle', () => {
     const segs = parseLinks('link = https://example.com here')
     expect(segs).toEqual([
-      { type: 'text', value: 'link = ' },
-      { type: 'link', value: 'https://example.com', href: 'https://example.com' },
-      { type: 'text', value: ' here' },
+      { type: 'text', value: 'link = ', start: 0 },
+      { type: 'link', value: 'https://example.com', href: 'https://example.com', start: 7 },
+      { type: 'text', value: ' here', start: 26 },
     ])
   })
 
@@ -30,7 +32,7 @@ describe('parseLinks', () => {
     const segs = parseLinks('see https://example.com.')
     const link = segs.find((s) => s.type === 'link')
     expect(link?.value).toBe('https://example.com')
-    expect(segs.at(-1)).toEqual({ type: 'text', value: '.' })
+    expect(segs.at(-1)).toEqual({ type: 'text', value: '.', start: 23 })
   })
 
   test('ignores non-http schemes', () => {

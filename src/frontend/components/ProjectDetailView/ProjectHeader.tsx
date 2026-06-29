@@ -1,7 +1,7 @@
 import { Badge, Group, Stack, ThemeIcon, Title, Tooltip } from '@mantine/core'
 import { TbAlertTriangle, TbTarget } from 'react-icons/tb'
 import type { ProjectDetail } from '../ProjectsPanel'
-import { PRIORITY_COLOR, ROLE_COLOR, STATUS_COLOR, computeOverdue, formatDate, isSystemAdmin } from './types'
+import { computeOverdue, formatDate, isSystemAdmin, PRIORITY_COLOR, ROLE_COLOR, STATUS_COLOR } from './types'
 
 export function ProjectHeader({
   project,

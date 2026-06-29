@@ -1,12 +1,12 @@
 import { Anchor, Badge, Button, Card, Group, Progress, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core'
-import { parseLinks } from '../../lib/linkify'
 import type { IconType } from 'react-icons'
 import { TbCalendarEvent, TbChecks, TbClock, TbFlag, TbListCheck, TbTarget, TbUsers } from 'react-icons/tb'
 import { useIsExtensionEnabled } from '../../hooks/useExtensions'
+import { parseLinks } from '../../lib/linkify'
 import { GithubActivityCard } from '../GithubActivityCard'
 import type { ProjectDetail } from '../ProjectsPanel'
 import { UserAvatar } from '../shared/UserAvatar'
-import { ROLE_COLOR, computeOverdue, computeTimeProgress, formatDate } from './types'
+import { computeOverdue, computeTimeProgress, formatDate, ROLE_COLOR } from './types'
 
 function StatMini({
   label,
@@ -76,13 +76,13 @@ export function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; 
               Description
             </Text>
             <Text size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {parseLinks(project.description).map((seg, i) =>
+              {parseLinks(project.description).map((seg) =>
                 seg.type === 'link' ? (
-                  <Anchor key={`${i}-${seg.href}`} href={seg.href} target="_blank" rel="noreferrer noopener">
+                  <Anchor key={`link-${seg.start}`} href={seg.href} target="_blank" rel="noreferrer noopener">
                     {seg.value}
                   </Anchor>
                 ) : (
-                  <span key={`${i}-text`}>{seg.value}</span>
+                  <span key={`text-${seg.start}`}>{seg.value}</span>
                 ),
               )}
             </Text>
@@ -149,8 +149,8 @@ export function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; 
                   <Group gap={4}>
                     <TbChecks size={14} />
                     <Text size="xs" c="dimmed">
-                      {ts.closed} closed · {ts.inProgress} in progress · {ts.readyForQc} QC ·{' '}
-                      {ts.open + ts.reopened} open
+                      {ts.closed} closed · {ts.inProgress} in progress · {ts.readyForQc} QC · {ts.open + ts.reopened}{' '}
+                      open
                     </Text>
                   </Group>
                   <Text size="xs" c="dimmed">

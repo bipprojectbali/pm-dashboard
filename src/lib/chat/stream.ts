@@ -55,7 +55,11 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
     const isFinalIter = iter === MAX_TOOL_ITERATIONS - 1
-    send('phase', { phase: 'thinking', iter })
+    send('phase', {
+      phase: 'thinking',
+      iter,
+      label: iter === 0 ? 'Menganalisis pertanyaan...' : 'Memproses data & menyusun jawaban...',
+    })
 
     const body = {
       model: model ?? 'claude-opus-4-7',

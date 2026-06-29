@@ -62,6 +62,7 @@ Admin Chat AI di `/admin?tab=chat` menjawab pertanyaan operasional dari DB. Dua 
 - **Citation flow**: system prompt menginstruksikan AI gunakan tag `[#N]`; SSE event `sources` (`[{ ref, type, entityId, title }]`) dikirim sebelum `token` pertama dan diulang di `done`. FE render footer badge per assistant bubble.
 - **API** (ADMIN + SUPER_ADMIN): lihat `@docs/API.md` § Chat AI.
 - **Frontend**: `AdminChatPanel.tsx` — header dengan badge "Konteks {age}" + "{n} dok" + "+synced/−pruned" pasca sync. Tombol "Refresh Konteks" (kosongkan systemContext tanpa hapus history), "Perbarui Pengetahuan" (full sync), "Sesi Baru" (reset). Quick prompts: top-risk, top-committer, overbudget, overloaded, overdue, events.
+- **Session persistence**: percakapan (`messages` + `systemContext` + `contextLoadedAt`) di-persist ke `sessionStorage` (key `admin:chat:session`) via `AdminChatPanel/chat-session-storage.ts`, jadi pindah tab di `/admin` lalu balik ke Chat AI tidak menghilangkan history (tab Chat conditional-render → unmount `useChatStream`). Bertahan selama tab browser terbuka; reset saat tab ditutup atau klik "Sesi Baru" (`resetSession` memanggil `clearChatSession`). `contextLoadedAt` disimpan sebagai ISO string, di-rehydrate ke `Date`.
 
 ## Extensions (opt-in features)
 

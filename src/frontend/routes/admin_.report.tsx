@@ -23,7 +23,7 @@ import { CoverSection, ExecutiveSummary } from './admin_report/CoverExecutive'
 import { PRESETS, resolveRange } from './admin_report/constants'
 import { HealthGridSection, RiskRadarSection } from './admin_report/ProjectSections'
 import { PdfOverlay } from './admin_report/shared'
-import { TeamLoadSection, EffortVarianceSection } from './admin_report/TeamEffortSections'
+import { TeamLoadSection } from './admin_report/TeamEffortSections'
 import type { ReportPayload, ReportSearch } from './admin_report/types'
 
 export const Route = createFileRoute('/admin_/report')({
@@ -60,7 +60,6 @@ function ReportContent({ data }: { data: ReportPayload }) {
       <DistributionSection data={data} />
       <VelocityTrendSection data={data} />
       <TeamLoadSection data={data} />
-      <EffortVarianceSection data={data} />
       <GithubActivitySection data={data} />
       <AuditHighlightsSection data={data} />
       <FooterSection data={data} />

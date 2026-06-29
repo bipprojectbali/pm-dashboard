@@ -17,8 +17,6 @@ export interface ReportPayload {
       staleInProgress: number
       closed7d: number
     }
-    agents: { total: number; pending: number; live: number }
-    webhooks24h: { total: number; success: number; successRate: number | null; eventsIn: number }
     velocity: { closed7d: number; extensions7d: number }
   }
   health: {
@@ -95,25 +93,6 @@ export interface ReportPayload {
       prsClosed: number
       reviews: number
     }>
-  }
-  effort: {
-    overEstimate: Array<{
-      taskId: string
-      title: string
-      projectName: string
-      estimateHours: number | null
-      actualHours: number
-      variancePercent: number | null
-    }>
-    underEstimate: Array<{
-      taskId: string
-      title: string
-      projectName: string
-      estimateHours: number | null
-      actualHours: number
-      variancePercent: number | null
-    }>
-    totalAnalyzed: number
   }
   audit: Array<{
     id: string

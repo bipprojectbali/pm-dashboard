@@ -3,7 +3,6 @@ import type { IconType } from 'react-icons'
 import {
   TbChartBar,
   TbClockHour3,
-  TbHeartbeat,
   TbListCheck,
   TbTarget,
   TbUsersGroup,
@@ -68,7 +67,6 @@ export function ExecutiveSummary({ data }: { data: ReportPayload }) {
       icon: TbTarget,
     },
     { label: 'Task Terbuka', value: openTasks, sub: `${k.tasks.overdueOpen} overdue`, color: 'red', icon: TbListCheck },
-    { label: 'Agent Live', value: k.agents.live, sub: `${k.agents.pending} pending`, color: 'teal', icon: TbHeartbeat },
     {
       label: 'Task Selesai (periode)',
       value: data.taskSnapshot.closedInPeriod,
@@ -81,7 +79,7 @@ export function ExecutiveSummary({ data }: { data: ReportPayload }) {
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
       <SectionHeader icon={TbChartBar} color="blue" title="Ringkasan Eksekutif" subtitle="Indikator kinerja utama" />
-      <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="md" mt="sm">
+      <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="md" mt="sm">
         {items.map((it) => {
           const Icon = it.icon
           return (

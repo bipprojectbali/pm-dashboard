@@ -55,6 +55,40 @@ describe('streamChatSSE phase events', () => {
     }
   })
 
+  test('emits a "Mencari data..." phase when a tool is executed', async () => {
+    let call = 0
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      // First Anthropic call: ask for a tool. Second: final answer.
+      if (call === 0) {
+        call += 1
+        return new Response(
+          JSON.stringify({
+            stop_reason: 'tool_use',
+            content: [{ type: 'tool_use', id: 'tu_1', name: 'query_users', input: {} }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      // Ignore the tool-execution fetch (executeChatTool hits DB); only intercept Anthropic endpoint.
+      if (typeof url === 'string' && url.includes('/v1/messages')) {
+        call += 1
+        return new Response(
+          JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'beres' }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return realFetch(url, init)
+    }) as unknown as typeof fetch
+
+    const { ctrl, frames } = collectSSE()
+    await streamChatSSE(baseParams(), ctrl)
+
+    const labels = frames.filter((f) => f.event === 'phase').map((f) => f.data.label)
+    expect(labels).toContain('Mencari data...')
+    // The tool phase must come after the first "Menganalisis pertanyaan..." analyze phase.
+    expect(labels.indexOf('Mencari data...')).toBeGreaterThan(labels.indexOf('Menganalisis pertanyaan...'))
+  })
+
   test('still streams the answer token after the phase event', async () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'jawaban' }] }), {

@@ -84,8 +84,8 @@ Sumber: `src/lib/chat-tools.ts`. 5 tool read-only, semua validasi input via Zod,
 
 Loop kerja di `streamChatSSE`:
 1. Build conversation history (last user message di-augment dengan `relevantDocs`).
-2. Tiap iterasi: non-streaming POST ke Anthropic `messages` API dengan `tools: CHAT_TOOLS`. Text block → emit SSE `token`.
-3. `stop_reason === 'tool_use'`: execute setiap `tool_use` block via `executeChatTool`, emit `tool_use` + `tool_result` SSE, append `tool_result` ke conversation, loop.
+2. Tiap iterasi: emit SSE `phase` di awal (iter 0 `"Menganalisis pertanyaan..."`, iter 1+ `"Memproses data & menyusun jawaban..."`), lalu non-streaming POST ke Anthropic `messages` API dengan `tools: CHAT_TOOLS`. Text block → emit SSE `token`.
+3. `stop_reason === 'tool_use'`: emit SSE `phase` `"Mencari data..."` (supaya label loading tidak macet di "Menganalisis pertanyaan..." selama eksekusi tool), lalu execute setiap `tool_use` block via `executeChatTool`, emit `tool_use` + `tool_result` SSE, append `tool_result` ke conversation, loop.
 4. Iterasi terakhir (ke-5) di-call tanpa `tools` agar AI dipaksa jawab tanpa tool baru.
 5. Final `done` event bawa `full` text + `sources` + `toolCalls` trace.
 

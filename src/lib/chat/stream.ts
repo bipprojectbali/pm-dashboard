@@ -97,6 +97,8 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
 
     if (payload.stop_reason !== 'tool_use') break
 
+    send('phase', { phase: 'tool', iter, label: 'Mencari data...' })
+
     const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }> = []
     for (const block of payload.content) {
       if (block.type !== 'tool_use') continue

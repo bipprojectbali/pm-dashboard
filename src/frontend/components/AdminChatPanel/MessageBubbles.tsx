@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Box, Card, CopyButton, Group, Text, ThemeIcon, Tooltip, TypographyStylesProvider } from '@mantine/core'
+import { ActionIcon, Badge, Box, Card, CopyButton, Group, Loader, Text, ThemeIcon, Tooltip, TypographyStylesProvider } from '@mantine/core'
 import { TbCheck, TbCopy, TbRobot, TbUser } from 'react-icons/tb'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -53,10 +53,12 @@ export function AssistantBubble({
   msg,
   streaming,
   toolCalls,
+  phase,
 }: {
   msg: { content: string; sources?: ChatSource[] }
   streaming?: boolean
   toolCalls?: ToolCall[]
+  phase?: string
 }) {
   return (
     <Group justify="flex-start" align="flex-start" gap="xs">
@@ -79,9 +81,21 @@ export function AssistantBubble({
             )}
           </Group>
           {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
-          <TypographyStylesProvider style={{ fontSize: 13 }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content + (streaming ? '▋' : '')}</ReactMarkdown>
-          </TypographyStylesProvider>
+          {msg.content && (
+            <TypographyStylesProvider style={{ fontSize: 13 }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+            </TypographyStylesProvider>
+          )}
+          {streaming && (
+            <Group gap="xs" align="center" mt={msg.content ? 6 : 0}>
+              <Loader type="dots" size="sm" color="violet" />
+              {phase && (
+                <Text size="xs" c="dimmed">
+                  {phase}
+                </Text>
+              )}
+            </Group>
+          )}
           {!streaming && msg.sources && msg.sources.length > 0 && <SourcesFooter sources={msg.sources} />}
         </Card>
       </Box>

@@ -1,4 +1,4 @@
-import { Badge, Group, Stack, Text, ThemeIcon, Title, Tooltip } from '@mantine/core'
+import { Badge, Group, Stack, ThemeIcon, Title, Tooltip } from '@mantine/core'
 import { TbAlertTriangle, TbTarget } from 'react-icons/tb'
 import type { ProjectDetail } from '../ProjectsPanel'
 import { PRIORITY_COLOR, ROLE_COLOR, STATUS_COLOR, computeOverdue, formatDate, isSystemAdmin } from './types'
@@ -78,11 +78,6 @@ export function ProjectHeader({
               </Tooltip>
             )}
           </Group>
-          {project.description && (
-            <Text size="sm" c="dimmed">
-              {project.description}
-            </Text>
-          )}
         </Stack>
       </Group>
     </Stack>

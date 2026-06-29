@@ -462,6 +462,8 @@ model TaskComment {
   authorTag String
   body      String
   createdAt DateTime @default(now())
+  // set when a comment is edited so the UI can show a "telah diedit" marker
+  editedAt  DateTime?
 
   task   Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author User? @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)

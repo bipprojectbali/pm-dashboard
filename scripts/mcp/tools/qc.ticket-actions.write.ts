@@ -39,6 +39,58 @@ export function registerQcTicketActionTools(server: McpServer) {
   )
 
   server.registerTool(
+    'qc_ticket_comment_update',
+    {
+      title: 'Edit QC ticket comment',
+      description:
+        'Update the body of an existing comment on a QC ticket (must belong to the self-project). Stamps editedAt so the UI shows a "telah diedit" marker.',
+      inputSchema: {
+        ticketId: z.string(),
+        commentId: z.string(),
+        body: z.string().min(1),
+      },
+    },
+    async ({ ticketId, commentId, body }) => {
+      const self = await getSelfProject()
+      if (!self) return jsonText({ error: 'No self-project configured' })
+      const existing = await prisma.taskComment.findFirst({
+        where: { id: commentId, task: { id: ticketId, projectId: self.id } },
+        select: { id: true },
+      })
+      if (!existing) return jsonText({ error: 'Comment not found on ticket in self-project' })
+      const comment = await prisma.taskComment.update({
+        where: { id: commentId },
+        data: { body: body.trim(), editedAt: new Date() },
+      })
+      return jsonText({ ok: true, comment })
+    },
+  )
+
+  server.registerTool(
+    'qc_ticket_comment_delete',
+    {
+      title: 'Delete QC ticket comment',
+      description:
+        'Permanently delete a comment from a QC ticket (must belong to the self-project). Irreversible.',
+      inputSchema: {
+        ticketId: z.string(),
+        commentId: z.string(),
+      },
+    },
+    async ({ ticketId, commentId }) => {
+      const self = await getSelfProject()
+      if (!self) return jsonText({ error: 'No self-project configured' })
+      const existing = await prisma.taskComment.findFirst({
+        where: { id: commentId, task: { id: ticketId, projectId: self.id } },
+        select: { id: true },
+      })
+      if (!existing) return jsonText({ error: 'Comment not found on ticket in self-project' })
+      await prisma.taskComment.delete({ where: { id: commentId } })
+      return jsonText({ ok: true, deleted: { id: commentId } })
+    },
+  )
+
+  server.registerTool(
     'qc_ticket_delete',
     {
       title: 'Delete QC ticket',

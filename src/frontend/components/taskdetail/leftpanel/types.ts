@@ -19,7 +19,12 @@ export interface TaskDetailLeftPanelProps {
   onChecklistAdd: (title: string) => void
   onChecklistRemove: (id: string) => void
   checklistAdding: boolean
+  currentUser: { id: string; role: string } | null
   onCommentSubmit: (body: string) => void
+  onCommentEdit: (commentId: string, body: string) => void
+  onCommentDelete: (commentId: string) => void
+  commentEditingId: string | null
+  commentDeletingId: string | null
   commentLoading: boolean
   commentError?: string
   onEvidenceSubmit: (body: { kind: string; url: string; note?: string }) => void

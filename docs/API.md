@@ -86,6 +86,8 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`). Accepts `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
 - `DELETE /api/tasks/:id` — OWNER/PM/SUPER_ADMIN
 - `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` — add-only
+- `PATCH /api/tasks/:id/comments/:commentId` — edit a comment body (**author-or-admin**: only the comment's own author OR an ADMIN/SUPER_ADMIN; else 403). Requires project membership. Body required (400 if blank); sets `editedAt` so the UI shows a "(telah diedit)" marker. 404 if the comment isn't on the task.
+- `DELETE /api/tasks/:id/comments/:commentId` — permanently delete a comment. Same **author-or-admin** gate as the PATCH. 404 if not found on the task.
 - `POST /api/tasks/:id/dependencies` (body: `blockedById`) / `DELETE /api/tasks/:id/dependencies/:blockedById`
 - `POST /api/tasks/:id/checklist`, `PATCH/DELETE /api/checklist/:id`
 

@@ -16,6 +16,7 @@ export interface TaskComment {
   body: string
   authorTag: string
   createdAt: string
+  editedAt: string | null
   author: TaskUser
 }
 

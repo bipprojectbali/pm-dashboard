@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 import { qcActionRoutes } from './qc/actions.route'
 import { qcBulkRoutes } from './qc/bulk.route'
+import { qcCommentRoutes } from './qc/comments.route'
 import { qcDetailRoutes } from './qc/detail.route'
 import { qcEvidenceRoutes } from './qc/evidence.route'
 import { qcQueryRoutes } from './qc/query.route'
@@ -15,5 +16,6 @@ export function qcRoutes() {
     .use(qcWriteRoutes())
     .use(qcUpdateRoutes())
     .use(qcActionRoutes())
+    .use(qcCommentRoutes())
     .use(qcEvidenceRoutes())
 }

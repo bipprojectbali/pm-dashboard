@@ -107,6 +107,22 @@ export function useTaskMutations({ taskId, task, onBack, setEditingTitle, setEdi
     onError: (err) => notifyError(err),
   })
 
+  const editComment = useMutation({
+    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+      api(`/api/tasks/${taskId}/comments/${commentId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['task', taskId] }); notifySuccess({ message: 'Komentar diperbarui.' }) },
+    onError: (err) => notifyError(err),
+  })
+
+  const deleteComment = useMutation({
+    mutationFn: (commentId: string) =>
+      api(`/api/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['task', taskId] }); notifySuccess({ message: 'Komentar dihapus.' }) },
+    onError: (err) => notifyError(err),
+  })
+
   const addEvidence = useMutation({
     mutationFn: (body: { kind: string; url: string; note?: string }) =>
       api(`/api/tasks/${taskId}/evidence`, {
@@ -116,5 +132,5 @@ export function useTaskMutations({ taskId, task, onBack, setEditingTitle, setEdi
     onError: (err) => notifyError(err),
   })
 
-  return { update, deleteM, addDependency, removeDependency, addChecklist, updateChecklist, removeChecklist, createTag, addComment, addEvidence }
+  return { update, deleteM, addDependency, removeDependency, addChecklist, updateChecklist, removeChecklist, createTag, addComment, editComment, deleteComment, addEvidence }
 }

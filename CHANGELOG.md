@@ -7,12 +7,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
-## [0.7.20] - 2026-06-29
+## [0.7.21] - 2026-06-29
 
 ### Ditambahkan
 - **Deskripsi project di Overview** — deskripsi project kini tampil sebagai kartu di tab Overview, dan URL `http(s)` di dalamnya otomatis jadi link yang membuka tab baru. Deskripsi duplikat di bawah header project dihapus agar tampil sekali saja.
 - **Edit & hapus komentar** — komentar pada task dan tiket QC bisa diubah atau dihapus oleh penulisnya atau ADMIN/SUPER_ADMIN. Komentar yang diedit menampilkan penanda "(telah diedit)".
 - **Sesi Chat AI tersimpan** — percakapan Chat AI bertahan saat berpindah tab di `/admin` (disimpan ke sessionStorage), tidak lagi hilang saat tab Chat di-unmount.
+
+## [0.7.20] - 2026-06-29
 
 ### Diperbaiki
 - **Teks status loading Chat AI** — saat AI sedang berpikir kini muncul teks status ("Menganalisis pertanyaan..." / "Memproses data & menyusun jawaban...") di bawah animasi loading, bukan hanya ikon titik. Event SSE `phase` dari loop Claude sebelumnya tidak menyertakan `label` yang dibaca frontend.

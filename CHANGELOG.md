@@ -7,6 +7,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.20] - 2026-06-29
+
+### Diperbaiki
+- **Teks status loading Chat AI** — saat AI sedang berpikir kini muncul teks status ("Menganalisis pertanyaan..." / "Memproses data & menyusun jawaban...") di bawah animasi loading, bukan hanya ikon titik. Event SSE `phase` dari loop Claude sebelumnya tidak menyertakan `label` yang dibaca frontend.
+- **Halaman Laporan Portfolio crash** — halaman `/admin/report` error 500 karena masih mereferensikan KPI agent/webhook dan section variance effort milik fitur PM-WATCH yang sudah dihapus; backend tidak lagi mengembalikan field tersebut. Referensi mati dibersihkan.
+
 ## [0.7.19] - 2026-06-26
 
 ### Ditambahkan

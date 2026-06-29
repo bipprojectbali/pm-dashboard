@@ -48,7 +48,7 @@ Saat extension OFF:
 
 Admin Chat AI dengan live-context + RAG knowledge base. Lihat `@docs/CHAT-AI.md` untuk arsitektur, doc types, dan sync schedule.
 
-- `POST /api/admin/chat/stream` — SSE stream. Body: `{ messages: ChatMessage[], systemContext?: string|null }`. Events: `phase` (`{ phase, iter }`), `system` (kalau cachedContext null), `docs` (count relevan), `sources` (`[{ ref, type, entityId, title }]`), `tool_use` (`{ id, name, input }`), `tool_result` (`{ id, name, ok, result }`), `token`, `done` (full text + sources + toolCalls trace), `error`. AI dapat memanggil 5 tool read-only via Anthropic tool_use loop (max 5 iterasi); lihat `@docs/CHAT-AI.md` § Tool-calling layer.
+- `POST /api/admin/chat/stream` — SSE stream. Body: `{ messages: ChatMessage[], systemContext?: string|null }`. Events: `phase` (`{ label }` — teks status human-readable yang dirender FE selama loading; loop ke Claude juga mengikutkan `phase`+`iter`), `system` (kalau cachedContext null), `docs` (count relevan), `sources` (`[{ ref, type, entityId, title }]`), `tool_use` (`{ id, name, input }`), `tool_result` (`{ id, name, ok, result }`), `token`, `done` (full text + sources + toolCalls trace), `error`. AI dapat memanggil 5 tool read-only via Anthropic tool_use loop (max 5 iterasi); lihat `@docs/CHAT-AI.md` § Tool-calling layer.
 - `GET /api/admin/chat/sync/status` — `{ totalDocuments, lastSync, breakdown }`.
 - `POST /api/admin/chat/sync` — trigger full sync + orphan prune. Return `{ ok, synced, pruned, failedEmbeddings, duration }`.
 

@@ -1,4 +1,5 @@
-import { Badge, Button, Card, Group, Progress, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core'
+import { Anchor, Badge, Button, Card, Group, Progress, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core'
+import { parseLinks } from '../../lib/linkify'
 import type { IconType } from 'react-icons'
 import { TbCalendarEvent, TbChecks, TbClock, TbFlag, TbListCheck, TbTarget, TbUsers } from 'react-icons/tb'
 import { useIsExtensionEnabled } from '../../hooks/useExtensions'
@@ -67,6 +68,27 @@ export function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; 
           color={overdue ? 'red' : 'teal'}
         />
       </SimpleGrid>
+
+      {project.description?.trim() && (
+        <Card withBorder padding="md" radius="md">
+          <Stack gap="xs">
+            <Text fw={600} size="sm">
+              Description
+            </Text>
+            <Text size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {parseLinks(project.description).map((seg, i) =>
+                seg.type === 'link' ? (
+                  <Anchor key={`${i}-${seg.href}`} href={seg.href} target="_blank" rel="noreferrer noopener">
+                    {seg.value}
+                  </Anchor>
+                ) : (
+                  <span key={`${i}-text`}>{seg.value}</span>
+                ),
+              )}
+            </Text>
+          </Stack>
+        </Card>
+      )}
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Card withBorder padding="md" radius="md">

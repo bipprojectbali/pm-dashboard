@@ -7,6 +7,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.23] - 2026-06-29
+
 ### Diperbaiki
 - **Fase loading "Mencari data" di Chat AI** — saat AI menjalankan tool untuk mengambil data, status loading kini berganti dari "Menganalisis pertanyaan..." menjadi "Mencari data...", lalu "Memproses data & menyusun jawaban..." saat menyusun jawaban. Sebelumnya label "Menganalisis pertanyaan..." bertahan sepanjang round-trip pertama ke Claude + eksekusi tool sehingga terlihat macet terlalu lama.
 

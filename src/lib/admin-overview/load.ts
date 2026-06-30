@@ -1,11 +1,12 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { DAY_MS } from './shared'
 
 export async function computeTeamLoad(opts: { projectId?: string; includeUnassigned?: boolean; limit?: number } = {}) {
   const { projectId, includeUnassigned = true, limit = 50 } = opts
   const now = new Date()
   const since7d = new Date(now.getTime() - 7 * DAY_MS)
-  const baseWhere: Record<string, unknown> = {}
+  const baseWhere: Record<string, unknown> = { ...WORKLOAD_KIND_FILTER }
   if (projectId) baseWhere.projectId = projectId
 
   const [openRows, overdueGroups, closedGroups] = await Promise.all([

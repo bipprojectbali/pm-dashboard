@@ -1,4 +1,5 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { DAY_MS, daysBetween } from './shared'
 
 export async function computeAnalytics(opts: { timelineLimit?: number; trendDays?: number } = {}) {
@@ -13,7 +14,7 @@ export async function computeAnalytics(opts: { timelineLimit?: number; trendDays
   const [projectsByStatus, tasksByStatus, timelineProjects, deadlineProjects, createdTasks, closedTasks] =
     await Promise.all([
       prisma.project.groupBy({ by: ['status'], _count: true, where: { archivedAt: null } }),
-      prisma.task.groupBy({ by: ['status'], _count: true }),
+      prisma.task.groupBy({ by: ['status'], _count: true, where: { ...WORKLOAD_KIND_FILTER } }),
       prisma.project.findMany({
         where: { archivedAt: null, status: { in: ['ACTIVE', 'ON_HOLD', 'DRAFT'] } },
         select: {
@@ -28,9 +29,9 @@ export async function computeAnalytics(opts: { timelineLimit?: number; trendDays
         select: { id: true, name: true, status: true, priority: true, endsAt: true, owner: { select: { email: true } } },
         orderBy: { endsAt: 'asc' },
       }),
-      prisma.task.findMany({ where: { createdAt: { gte: trendStart } }, select: { createdAt: true } }),
+      prisma.task.findMany({ where: { ...WORKLOAD_KIND_FILTER, createdAt: { gte: trendStart } }, select: { createdAt: true } }),
       prisma.task.findMany({
-        where: { status: 'CLOSED', closedAt: { gte: trendStart, not: null } },
+        where: { ...WORKLOAD_KIND_FILTER, status: 'CLOSED', closedAt: { gte: trendStart, not: null } },
         select: { closedAt: true },
       }),
     ])

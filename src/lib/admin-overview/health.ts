@@ -1,4 +1,5 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { DAY_MS, daysBetween } from './shared'
 
 export interface ProjectHealthRow {
@@ -44,19 +45,19 @@ export async function computeProjectHealth(
 
   const ids = projects.map((p) => p.id)
   const [statusGroups, overdueGroups, closedGroups, blockedRaw] = await Promise.all([
-    prisma.task.groupBy({ by: ['projectId', 'status'], where: { projectId: { in: ids } }, _count: true }),
+    prisma.task.groupBy({ by: ['projectId', 'status'], where: { ...WORKLOAD_KIND_FILTER, projectId: { in: ids } }, _count: true }),
     prisma.task.groupBy({
       by: ['projectId'],
-      where: { projectId: { in: ids }, status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } },
+      where: { ...WORKLOAD_KIND_FILTER, projectId: { in: ids }, status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } },
       _count: true,
     }),
     prisma.task.groupBy({
       by: ['projectId'],
-      where: { projectId: { in: ids }, status: 'CLOSED', closedAt: { gte: since7d } },
+      where: { ...WORKLOAD_KIND_FILTER, projectId: { in: ids }, status: 'CLOSED', closedAt: { gte: since7d } },
       _count: true,
     }),
     prisma.taskDependency.findMany({
-      where: { task: { projectId: { in: ids }, status: { notIn: ['CLOSED'] } } },
+      where: { task: { ...WORKLOAD_KIND_FILTER, projectId: { in: ids }, status: { notIn: ['CLOSED'] } } },
       select: { task: { select: { projectId: true } } },
     }),
   ])

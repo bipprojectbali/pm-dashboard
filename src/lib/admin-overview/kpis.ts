@@ -1,4 +1,5 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { DAY_MS, STALE_IN_PROGRESS_MS } from './shared'
 
 export async function computeAdminOverview(opts: { recentAuditLimit?: number } = {}) {
@@ -25,13 +26,13 @@ export async function computeAdminOverview(opts: { recentAuditLimit?: number } =
     prisma.user.groupBy({ by: ['role'], _count: true }),
     prisma.project.count({ where: { archivedAt: null } }),
     prisma.project.groupBy({ by: ['status'], _count: true, where: { archivedAt: null } }),
-    prisma.task.count(),
-    prisma.task.groupBy({ by: ['status'], _count: true }),
-    prisma.task.count({ where: { status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } } }),
+    prisma.task.count({ where: { ...WORKLOAD_KIND_FILTER } }),
+    prisma.task.groupBy({ by: ['status'], _count: true, where: { ...WORKLOAD_KIND_FILTER } }),
+    prisma.task.count({ where: { ...WORKLOAD_KIND_FILTER, status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } } }),
     prisma.task.count({
-      where: { status: 'IN_PROGRESS', updatedAt: { lt: new Date(now.getTime() - STALE_IN_PROGRESS_MS) } },
+      where: { ...WORKLOAD_KIND_FILTER, status: 'IN_PROGRESS', updatedAt: { lt: new Date(now.getTime() - STALE_IN_PROGRESS_MS) } },
     }),
-    prisma.task.count({ where: { status: 'CLOSED', closedAt: { gte: since7d } } }),
+    prisma.task.count({ where: { ...WORKLOAD_KIND_FILTER, status: 'CLOSED', closedAt: { gte: since7d } } }),
     prisma.projectExtension.count({ where: { createdAt: { gte: since7d } } }),
     recentAuditLimit > 0
       ? prisma.auditLog.findMany({

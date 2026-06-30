@@ -1,4 +1,5 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { DAY_MS, RiskSeverity, daysBetween } from './shared'
 
 export async function computeRiskReport(opts: { staleDays?: number } = {}) {
@@ -8,7 +9,7 @@ export async function computeRiskReport(opts: { staleDays?: number } = {}) {
 
   const [overdueTasks, staleTasks, pastDueProjects] = await Promise.all([
     prisma.task.findMany({
-      where: { status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } },
+      where: { ...WORKLOAD_KIND_FILTER, status: { notIn: ['CLOSED'] }, dueAt: { lt: now, not: null } },
       take: 50,
       orderBy: { dueAt: 'asc' },
       include: {
@@ -17,7 +18,7 @@ export async function computeRiskReport(opts: { staleDays?: number } = {}) {
       },
     }),
     prisma.task.findMany({
-      where: { status: 'IN_PROGRESS', updatedAt: { lt: staleBefore } },
+      where: { ...WORKLOAD_KIND_FILTER, status: 'IN_PROGRESS', updatedAt: { lt: staleBefore } },
       take: 50,
       orderBy: { updatedAt: 'asc' },
       include: {

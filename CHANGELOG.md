@@ -7,6 +7,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.24] - 2026-06-30
+
+### Ditambahkan
+- **Jenis task baru: Tiket & Pengembangan (Ide)** — `kind` task bertambah `TICKET` dan `IDEA`. **Tiket** adalah permintaan/laporan masuk yang ditriage (siklus penuh seperti Bug). **Ide** adalah catatan pengembangan "biar tidak lupa" — hanya berstatus Open (aktif) atau Closed (ditolak/diarsipkan).
+- **Papan gabungan lintas-project di `/pm`** — dua tab baru: **Tiket** (papan triage tiket dari semua project, untuk dipantau saat meeting harian) dan **Pengembangan** (daftar ide lintas project). Masing-masing punya stat cards, filter (project/status/prioritas/assignee), dan tombol quick-create dengan jenis sudah terisi.
+- **Naik kelas Ide → Task** — ide yang diputuskan dikerjakan bisa diubah jadi Task lewat tombol "Jadikan Task" di panel detail. Perubahan tercatat di log aktivitas (siapa & kapan).
+- **Indikator jumlah di kartu Kanban** — tiap kartu kini menampilkan jumlah checklist (selesai/total), komentar, evidence, dan dependency tanpa harus membuka detail.
+
+### Diperbaiki
+- **View Kanban & grafik tidak refresh setelah tambah/hapus task** — sebelumnya task baru tidak muncul di papan Kanban sampai halaman di-reload; kini semua view (tabel, Kanban, grafik) ikut diperbarui otomatis.
+- **Metrik dashboard tidak tercemar ide** — Ide dikecualikan dari semua perhitungan beban kerja (health/load/risk/analytics/effort/retro) sehingga tumpukan ide yang belum dikerjakan tidak menurunkan skor kesehatan project atau membuat seseorang terlihat overload.
+- **Seed dev kembali bisa dijalankan** — `prisma db seed` sebelumnya selalu gagal karena masih mereferensikan tabel pm-watch (Agent/ActivityEvent/WebhookToken) yang sudah dihapus; kode mati dibersihkan dan ditambahkan data contoh Tiket/Ide.
+
 ## [0.7.23] - 2026-06-29
 
 ### Diperbaiki

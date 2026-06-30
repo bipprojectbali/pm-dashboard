@@ -33,6 +33,24 @@ export const TRANSITIONS: Record<TaskKind, Record<TaskStatus, TaskStatus[]>> = {
     REOPENED: ['IN_PROGRESS', 'CLOSED'],
     CLOSED: ['REOPENED'],
   },
+  // TICKET = intake request, follows the same full lifecycle as BUG.
+  TICKET: {
+    OPEN: ['IN_PROGRESS', 'CLOSED'],
+    IN_PROGRESS: ['READY_FOR_QC', 'CLOSED'],
+    READY_FOR_QC: ['CLOSED', 'REOPENED'],
+    REOPENED: ['IN_PROGRESS', 'CLOSED'],
+    CLOSED: ['REOPENED'],
+  },
+  // IDEA = backlog capture. Only OPEN (aktif) ↔ CLOSED (ditolak/diarsipkan).
+  // "Naik kelas jadi pekerjaan" is done by changing kind IDEA→TASK, not by a
+  // status transition — so the middle workflow states are intentionally empty.
+  IDEA: {
+    OPEN: ['CLOSED'],
+    IN_PROGRESS: [],
+    READY_FOR_QC: [],
+    REOPENED: [],
+    CLOSED: ['OPEN'],
+  },
 }
 
 export function shortestPath(kind: TaskKind, from: TaskStatus, to: TaskStatus): TaskStatus[] | null {

@@ -40,6 +40,8 @@ export const KIND_COLOR: Record<TaskKind, string> = {
   TASK: 'blue',
   BUG: 'red',
   QC: 'teal',
+  TICKET: 'grape',
+  IDEA: 'yellow',
 }
 
 export const STALE_DAYS = 7

@@ -163,6 +163,14 @@ export function CommandPalette() {
           <Badge size="xs" color="teal" variant="light">
             QC
           </Badge>
+        ) : t.kind === 'TICKET' ? (
+          <Badge size="xs" color="grape" variant="light">
+            TICKET
+          </Badge>
+        ) : t.kind === 'IDEA' ? (
+          <Badge size="xs" color="yellow" variant="light">
+            IDE
+          </Badge>
         ) : (
           <TbListCheck size={16} />
         ),

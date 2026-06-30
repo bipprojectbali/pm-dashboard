@@ -35,6 +35,11 @@ export function taskCreateRoute() {
       set.status = 400
       return { error: 'Title must be 500 characters or fewer' }
     }
+    const TASK_KIND_VALUES = ['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'] as const
+    if (body.kind !== undefined && !(TASK_KIND_VALUES as readonly string[]).includes(body.kind)) {
+      set.status = 400
+      return { error: `kind must be one of: ${TASK_KIND_VALUES.join(', ')}` }
+    }
     const membership = await requireProjectMember(body.projectId, auth.userId)
     if (!isSystemAdmin(auth.role)) {
       const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
@@ -63,7 +68,7 @@ export function taskCreateRoute() {
     const task = await prisma.task.create({
       data: {
         projectId: body.projectId,
-        kind: (body.kind as 'TASK' | 'BUG' | 'QC') ?? 'TASK',
+        kind: (body.kind as 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA') ?? 'TASK',
         title: body.title,
         description: body.description,
         priority: (body.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') ?? 'MEDIUM',

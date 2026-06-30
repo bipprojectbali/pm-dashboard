@@ -23,9 +23,7 @@ const MINUTE = 60 * 1000
 
 const now = new Date()
 const daysAgo = (d: number) => new Date(now.getTime() - d * DAY)
-const daysAhead = (d: number) => new Date(now.getTime() + d * DAY)
 const hoursAgo = (h: number) => new Date(now.getTime() - h * HOUR)
-const minutesAgo = (m: number) => new Date(now.getTime() - m * MINUTE)
 
 function pick<T>(arr: readonly T[], i: number): T {
   return arr[i % arr.length]!
@@ -60,10 +58,6 @@ async function wipe() {
   await prisma.projectGithubEvent.deleteMany()
   await prisma.githubWebhookLog.deleteMany()
   await prisma.project.deleteMany()
-  await prisma.activityEvent.deleteMany()
-  await prisma.webhookRequestLog.deleteMany()
-  await prisma.agent.deleteMany()
-  await prisma.webhookToken.deleteMany()
   await prisma.auditLog.deleteMany()
   await prisma.session.deleteMany()
   await prisma.user.deleteMany()
@@ -1205,6 +1199,112 @@ const TASK_SEEDS: TaskSeed[] = [
     estimateHours: 10,
     tagNames: [],
   },
+
+  // ───── TICKET: intake requests across projects (untuk papan Tiket /pm) ─────
+  {
+    projectKey: 'pipeline',
+    kind: 'TICKET',
+    title: 'Request: tambah dashboard lag per-consumer-group',
+    description: 'Tim ops minta panel Grafana lag dipecah per consumer group.',
+    status: 'OPEN',
+    priority: 'MEDIUM',
+    reporterEmail: 'dewi@example.com',
+    assigneeEmail: null, // unassigned — muncul di filter "Unassigned"
+    dueAtDays: 5,
+    tagNames: ['backend'],
+  },
+  {
+    projectKey: 'billing',
+    kind: 'TICKET',
+    title: 'Invoice PDF salah render font di Safari',
+    description: 'Customer melaporkan invoice PDF tampil kotak-kotak di Safari iOS.',
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    reporterEmail: 'sari@example.com',
+    assigneeEmail: 'citra@example.com',
+    startsAtDays: -2,
+    dueAtDays: -1, // overdue
+    estimateHours: 4,
+    progressPercent: 30,
+    updatedAtDays: -1,
+    tagNames: [],
+    comments: [{ by: 'sari@example.com', body: 'Repro di iPhone 13, Safari 17.', daysAgo: 1 }],
+  },
+  {
+    projectKey: 'mobile',
+    kind: 'TICKET',
+    title: 'Permintaan: dukungan biometrik login',
+    description: 'Stakeholder minta opsi Face ID / fingerprint saat login.',
+    status: 'OPEN',
+    priority: 'LOW',
+    reporterEmail: 'hendra@example.com',
+    assigneeEmail: 'budi@example.com',
+    dueAtDays: 14,
+    tagNames: ['mobile'],
+  },
+  {
+    projectKey: 'auth',
+    kind: 'TICKET',
+    title: 'Bug: reset password email kadang masuk spam',
+    description: 'Beberapa user lapor email reset masuk folder spam Gmail.',
+    status: 'READY_FOR_QC',
+    priority: 'MEDIUM',
+    reporterEmail: 'mira@example.com',
+    assigneeEmail: 'andi@example.com',
+    startsAtDays: -5,
+    dueAtDays: 2,
+    estimateHours: 6,
+    progressPercent: 100,
+    tagNames: [],
+  },
+
+  // ───── IDEA: catatan pengembangan (untuk papan Pengembangan /pm) ─────
+  // IDEA hanya OPEN (aktif) atau CLOSED (ditolak/diarsipkan) — tanpa due date.
+  {
+    projectKey: 'pipeline',
+    kind: 'IDEA',
+    title: 'Auto-scaling consumer berbasis lag',
+    description: 'Ide: scale consumer pod otomatis saat lag naik, turun saat idle.',
+    status: 'OPEN',
+    priority: 'MEDIUM',
+    reporterEmail: 'andi@example.com',
+    assigneeEmail: null,
+    tagNames: ['infra'],
+  },
+  {
+    projectKey: 'mobile',
+    kind: 'IDEA',
+    title: 'Mode offline-first untuk daftar tugas',
+    description: 'Cache lokal + sync saat online, biar app tetap jalan tanpa sinyal.',
+    status: 'OPEN',
+    priority: 'LOW',
+    reporterEmail: 'budi@example.com',
+    assigneeEmail: null,
+    tagNames: ['mobile'],
+  },
+  {
+    projectKey: 'reporting',
+    kind: 'IDEA',
+    title: 'Export laporan ke Google Sheets langsung',
+    description: 'Tombol "Kirim ke Sheets" supaya tim non-teknis gampang olah data.',
+    status: 'OPEN',
+    priority: 'MEDIUM',
+    reporterEmail: 'citra@example.com',
+    assigneeEmail: null,
+    tagNames: [],
+  },
+  {
+    projectKey: 'billing',
+    kind: 'IDEA',
+    title: 'Pembayaran via QRIS',
+    description: 'Usulan dukung QRIS selain kartu. Ditolak: di luar scope kuartal ini.',
+    status: 'CLOSED', // ide yang ditolak/diarsipkan
+    priority: 'LOW',
+    reporterEmail: 'dewi@example.com',
+    assigneeEmail: null,
+    closedAtDays: -10,
+    tagNames: [],
+  },
 ]
 
 type CreatedTask = {
@@ -1374,185 +1474,6 @@ async function seedDependencies(tasks: CreatedTask[]) {
     count++
   }
   console.log(`   ${count} dependency links\n`)
-}
-
-// ──────────────────────────────────────────────────────────────
-// 10. AGENTS + ACTIVITY EVENTS (pm-watch data for effort tracking)
-// ──────────────────────────────────────────────────────────────
-async function seedAgents(users: { id: string; email: string }[]) {
-  console.log('▶  Agents + activity events...')
-  const byEmail = new Map(users.map((u) => [u.email, u.id] as const))
-  type AgentSeed = {
-    agentId: string
-    hostname: string
-    osUser: string
-    status: 'PENDING' | 'APPROVED' | 'REVOKED'
-    claimedByEmail: string | null
-    lastSeenHoursAgo: number | null
-    events: { title: string; app: string; daysAgo: number; durationSec: number }[]
-  }
-  const seeds: AgentSeed[] = [
-    {
-      agentId: 'aw-dev-andi-01',
-      hostname: 'andi-macbook.local',
-      osUser: 'andi',
-      status: 'APPROVED',
-      claimedByEmail: 'andi@example.com',
-      lastSeenHoursAgo: 1,
-      events: buildEvents('Consumer crash saat backpressure', 'Code', [1, 2, 3, 4, 5, 6, 7]),
-    },
-    {
-      agentId: 'aw-dev-budi-01',
-      hostname: 'budi-thinkpad.local',
-      osUser: 'budi',
-      status: 'APPROVED',
-      claimedByEmail: 'budi@example.com',
-      lastSeenHoursAgo: 12,
-      events: buildEvents('schema-registry', 'Terminal', [2, 3, 5, 7, 9]),
-    },
-    {
-      agentId: 'aw-dev-gita-01',
-      hostname: 'gita-mbp.local',
-      osUser: 'gita',
-      status: 'APPROVED',
-      claimedByEmail: 'gita@example.com',
-      lastSeenHoursAgo: 3,
-      events: buildEvents('billing-core', 'Code', [0, 1, 2, 3, 4, 5]),
-    },
-    {
-      agentId: 'aw-dev-dimas-01',
-      hostname: 'dimas-mbp.local',
-      osUser: 'dimas',
-      status: 'APPROVED',
-      claimedByEmail: 'dimas@example.com',
-      lastSeenHoursAgo: 2,
-      events: buildEvents('mobile-app onboarding', 'Figma', [1, 2, 3, 4]),
-    },
-    {
-      agentId: 'aw-dev-pending-01',
-      hostname: 'unknown-device.local',
-      osUser: 'devops',
-      status: 'PENDING',
-      claimedByEmail: null,
-      lastSeenHoursAgo: 0,
-      events: [],
-    },
-    {
-      agentId: 'aw-dev-offline-01',
-      hostname: 'ex-contractor.local',
-      osUser: 'contractor',
-      status: 'REVOKED',
-      claimedByEmail: null,
-      lastSeenHoursAgo: 24 * 15,
-      events: [],
-    },
-  ]
-
-  let evCount = 0
-  for (const s of seeds) {
-    const claimedById = s.claimedByEmail ? (byEmail.get(s.claimedByEmail) ?? null) : null
-    const agent = await prisma.agent.create({
-      data: {
-        agentId: s.agentId,
-        hostname: s.hostname,
-        osUser: s.osUser,
-        status: s.status,
-        claimedById,
-        lastSeenAt: s.lastSeenHoursAgo != null ? hoursAgo(s.lastSeenHoursAgo) : null,
-      },
-    })
-    let eventId = 1
-    const bucketId = `aw-watcher-window_${s.hostname}`
-    for (const ev of s.events) {
-      await prisma.activityEvent.create({
-        data: {
-          agentId: agent.id,
-          bucketId,
-          eventId: eventId++,
-          timestamp: daysAgo(ev.daysAgo),
-          duration: ev.durationSec,
-          data: { app: ev.app, title: ev.title },
-        },
-      })
-      evCount++
-    }
-  }
-  console.log(`   ${seeds.length} agents, ${evCount} activity events\n`)
-}
-
-function buildEvents(
-  titleSeed: string,
-  app: string,
-  days: number[],
-): { title: string; app: string; daysAgo: number; durationSec: number }[] {
-  const out: { title: string; app: string; daysAgo: number; durationSec: number }[] = []
-  for (const d of days) {
-    // 3-6 events per day, 15-90 min each
-    const n = rand(3, 6)
-    for (let i = 0; i < n; i++) {
-      out.push({
-        title: `${titleSeed} — session ${i + 1}`,
-        app,
-        daysAgo: d + i * 0.05, // slight spread so timestamps differ
-        durationSec: rand(15 * 60, 90 * 60),
-      })
-    }
-  }
-  return out
-}
-
-// ──────────────────────────────────────────────────────────────
-// 11. WEBHOOK TOKENS + REQUEST LOGS
-// ──────────────────────────────────────────────────────────────
-async function seedWebhooks(users: { id: string; email: string }[]) {
-  console.log('▶  Webhook tokens + logs...')
-  const superAdmin = users.find((u) => u.email === 'superadmin@example.com')
-  if (!superAdmin) return
-  const tokens = [
-    { name: 'pm-watch prod', prefix: 'whk_a1b2', status: 'ACTIVE' as const, expiresDaysAhead: null as number | null },
-    { name: 'pm-watch staging', prefix: 'whk_c3d4', status: 'ACTIVE' as const, expiresDaysAhead: 90 },
-    { name: 'deprecated laptop fleet', prefix: 'whk_e5f6', status: 'DISABLED' as const, expiresDaysAhead: null },
-    { name: 'revoked (leaked)', prefix: 'whk_x9y9', status: 'REVOKED' as const, expiresDaysAhead: null },
-  ]
-  const tokenRecs: { id: string; name: string }[] = []
-  for (const t of tokens) {
-    const rec = await prisma.webhookToken.create({
-      data: {
-        name: t.name,
-        tokenHash: `fakehash_${t.prefix}_${Math.random().toString(36).slice(2)}`,
-        tokenPrefix: t.prefix,
-        status: t.status,
-        expiresAt: t.expiresDaysAhead != null ? daysAhead(t.expiresDaysAhead) : null,
-        lastUsedAt: t.status === 'ACTIVE' ? minutesAgo(rand(5, 120)) : null,
-        createdById: superAdmin.id,
-      },
-    })
-    tokenRecs.push({ id: rec.id, name: rec.name })
-  }
-
-  // Request logs (last 7 days)
-  const agents = await prisma.agent.findMany({ where: { status: 'APPROVED' } })
-  let count = 0
-  for (let i = 0; i < 60; i++) {
-    const tok = pick(tokenRecs, i)
-    const ag = agents.length > 0 ? pick(agents, i) : null
-    const succ = Math.random() < 0.8
-    const auth = !succ && Math.random() < 0.3
-    const statusCode = succ ? 200 : auth ? 403 : 500
-    await prisma.webhookRequestLog.create({
-      data: {
-        tokenId: tok.id,
-        agentId: ag?.id,
-        statusCode,
-        reason: succ ? 'ok' : auth ? 'invalid-token' : 'upstream-error',
-        ip: `10.0.${rand(0, 3)}.${rand(1, 254)}`,
-        eventsIn: succ ? rand(10, 300) : 0,
-        createdAt: hoursAgo(rand(0, 24 * 7)),
-      },
-    })
-    count++
-  }
-  console.log(`   ${tokenRecs.length} tokens, ${count} request logs\n`)
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1792,8 +1713,6 @@ async function main() {
   const tagByProject = await seedTags(projects)
   const tasks = await seedTasks(projects, users, tagByProject)
   await seedDependencies(tasks)
-  await seedAgents(users)
-  await seedWebhooks(users)
   await seedGithub(projects, users)
   await seedNotifications(users, tasks)
   await seedAuditLogs(users)

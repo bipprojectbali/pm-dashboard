@@ -67,7 +67,7 @@ export async function seedTestTask(
     title?: string
     status?: 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-    kind?: 'TASK' | 'BUG' | 'QC'
+    kind?: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
     assigneeId?: string | null
     dueAt?: Date | null
   } = {},

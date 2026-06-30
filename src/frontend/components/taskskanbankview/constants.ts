@@ -19,6 +19,8 @@ export const KIND_COLOR: Record<TaskKind, string> = {
   TASK: 'blue',
   BUG: 'red',
   QC: 'teal',
+  TICKET: 'grape',
+  IDEA: 'yellow',
 }
 
 export const KANBAN_COLUMNS: Array<{ status: TaskStatus; label: string }> = [
@@ -42,6 +44,18 @@ export function kanbanAllowed(current: TaskStatus, kind: TaskKind): TaskStatus[]
     }
     return m[current] ?? []
   }
+  // IDEA only toggles OPEN ↔ CLOSED; promotion to work happens via kind change.
+  if (kind === 'IDEA') {
+    const m: Record<TaskStatus, TaskStatus[]> = {
+      OPEN: ['CLOSED'],
+      CLOSED: ['OPEN'],
+      IN_PROGRESS: [],
+      READY_FOR_QC: [],
+      REOPENED: [],
+    }
+    return m[current] ?? []
+  }
+  // BUG, QC, and TICKET share the full lifecycle (kanban allows IN_PROGRESS→OPEN).
   const m: Record<TaskStatus, TaskStatus[]> = {
     OPEN: ['IN_PROGRESS', 'CLOSED'],
     IN_PROGRESS: ['OPEN', 'READY_FOR_QC', 'CLOSED'],

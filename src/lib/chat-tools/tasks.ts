@@ -10,7 +10,7 @@ export const QueryTasksInput = z.object({
   assigneeName: z.string().optional(),
   status: z.array(z.enum(['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'])).optional(),
   priority: z.array(z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])).optional(),
-  kind: z.array(z.enum(['TASK', 'BUG', 'QC'])).optional(),
+  kind: z.array(z.enum(['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'])).optional(),
   overdueOnly: z.boolean().optional(),
   createdSinceDays: z.number().int().min(1).max(MAX_WINDOW_DAYS).optional(),
   closedSinceDays: z.number().int().min(1).max(MAX_WINDOW_DAYS).optional(),

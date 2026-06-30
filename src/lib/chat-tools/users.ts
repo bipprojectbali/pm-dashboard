@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { MAX_ROWS, type ToolResult } from './types'
 
 export const QueryUsersInput = z.object({
@@ -29,7 +30,7 @@ export async function runQueryUsers(input: z.infer<typeof QueryUsersInput>): Pro
     orderBy: { name: 'asc' },
     include: {
       assignedTasks: {
-        where: { status: { notIn: ['CLOSED'] }, deletedAt: null },
+        where: { ...WORKLOAD_KIND_FILTER, status: { notIn: ['CLOSED'] }, deletedAt: null },
         select: { id: true, dueAt: true, estimateHours: true, priority: true },
       },
       _count: { select: { projectMemberships: true } },

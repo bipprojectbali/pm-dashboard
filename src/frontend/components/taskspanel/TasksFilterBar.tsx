@@ -133,7 +133,7 @@ export function TasksFilterBar({
         {/* Tipe Task */}
         <Divider label={<Text size="xs" c="dimmed" fw={600}>Tipe Task</Text>} labelPosition="left" />
         <Group gap="sm" wrap="wrap" align="center">
-          <Select placeholder="All kinds" data={['TASK', 'BUG', 'QC']} value={kind} onChange={onKindChange} clearable size="xs" w={130} />
+          <Select placeholder="All kinds" data={['TASK', 'BUG', 'QC', 'TICKET', 'IDEA']} value={kind} onChange={onKindChange} clearable size="xs" w={130} />
           <Select
             placeholder="All statuses"
             data={['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED']}

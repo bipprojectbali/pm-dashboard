@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import { MAX_ROWS, MAX_WINDOW_DAYS, type ToolResult } from './types'
 
 export const QueryEffortInput = z.object({
@@ -50,6 +51,7 @@ export async function runQueryEffort(input: z.infer<typeof QueryEffortInput>): P
     const assignments = await prisma.task.groupBy({
       by: ['assigneeId'],
       where: {
+        ...WORKLOAD_KIND_FILTER,
         assigneeId: { not: null },
         status: { not: 'CLOSED' },
         ...(since ? { updatedAt: { gte: since } } : {}),
@@ -79,7 +81,7 @@ export async function runQueryEffort(input: z.infer<typeof QueryEffortInput>): P
   // mode=overbudget — tasks where closedAt-based actual > estimate * 1.25
   const targetVerdict = input.verdict ?? 'over'
   const tasks = await prisma.task.findMany({
-    where: { status: 'CLOSED' },
+    where: { ...WORKLOAD_KIND_FILTER, status: 'CLOSED' },
     orderBy: { closedAt: 'desc' },
     take: limit * 3,
     select: {

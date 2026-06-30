@@ -124,7 +124,10 @@ export async function canReadProject(
   return { ok: true, status: null, membership }
 }
 
-export function getAllowedTaskTransitions(current: string, kind: 'TASK' | 'BUG' | 'QC'): string[] {
+export function getAllowedTaskTransitions(
+  current: string,
+  kind: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA',
+): string[] {
   if (kind === 'TASK') {
     const m: Record<string, string[]> = {
       OPEN: ['IN_PROGRESS', 'CLOSED'],
@@ -135,6 +138,12 @@ export function getAllowedTaskTransitions(current: string, kind: 'TASK' | 'BUG' 
     }
     return m[current] ?? []
   }
+  // IDEA only toggles OPEN ↔ CLOSED; promotion to work happens via kind change.
+  if (kind === 'IDEA') {
+    const m: Record<string, string[]> = { OPEN: ['CLOSED'], CLOSED: ['OPEN'] }
+    return m[current] ?? []
+  }
+  // BUG, QC, and TICKET share the full QC-style lifecycle.
   const m: Record<string, string[]> = {
     OPEN: ['IN_PROGRESS', 'CLOSED'],
     IN_PROGRESS: ['READY_FOR_QC', 'CLOSED'],

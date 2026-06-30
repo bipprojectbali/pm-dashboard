@@ -21,7 +21,7 @@ function fmtDate(iso: string | null): string {
 export type GanttTaskMeta = {
   id: string
   title: string
-  kind: 'TASK' | 'BUG' | 'QC'
+  kind: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
   status: 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   assigneeName: string | null
@@ -79,6 +79,8 @@ const KIND_COLOR: Record<GanttTaskMeta['kind'], string> = {
   TASK: 'blue',
   BUG: 'red',
   QC: 'teal',
+  TICKET: 'grape',
+  IDEA: 'yellow',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

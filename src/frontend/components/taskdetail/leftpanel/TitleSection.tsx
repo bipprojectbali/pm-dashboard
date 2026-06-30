@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Group, Stack, Text, TextInput, ThemeIcon, Tooltip } from '@mantine/core'
 import {
   TbAlertTriangle,
+  TbBulb,
   TbBug,
   TbCheck,
   TbEdit,
@@ -8,6 +9,7 @@ import {
   TbListCheck,
   TbLock,
   TbShieldCheck,
+  TbTicket,
   TbX,
 } from 'react-icons/tb'
 import { KIND_COLOR, PRIORITY_COLOR, STATUS_COLOR } from '../constants'
@@ -47,6 +49,10 @@ export function TitleSection({
           <TbBug size={20} />
         ) : task.kind === 'QC' ? (
           <TbShieldCheck size={20} />
+        ) : task.kind === 'TICKET' ? (
+          <TbTicket size={20} />
+        ) : task.kind === 'IDEA' ? (
+          <TbBulb size={20} />
         ) : (
           <TbListCheck size={20} />
         )}

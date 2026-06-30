@@ -20,7 +20,7 @@ export function registerBulkTools(server: McpServer) {
             z.object({
               title: z.string().min(1).max(500),
               description: z.string().min(1),
-              kind: z.enum(['TASK', 'BUG', 'QC']).default('TASK'),
+              kind: z.enum(['TASK', 'BUG', 'QC', 'TICKET', 'IDEA']).default('TASK'),
               priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
               assigneeEmail: z.string().email().optional(),
               startsAt: z.string().optional(),

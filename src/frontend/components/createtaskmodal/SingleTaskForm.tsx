@@ -65,7 +65,7 @@ export function SingleTaskForm({
       <Group grow>
         <Select
           label="Kind"
-          data={['TASK', 'BUG', 'QC']}
+          data={['TASK', 'BUG', 'QC', 'TICKET', 'IDEA']}
           value={kind}
           onChange={(v) => setKind((v as TaskKind) || 'TASK')}
         />

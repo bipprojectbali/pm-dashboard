@@ -109,12 +109,7 @@ function DevPage() {
       }}
       padding="md"
       styles={{
-        navbar: {
-          backgroundColor: 'var(--app-navbar-bg)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        },
+        navbar: { backgroundColor: 'var(--app-navbar-bg)' },
         header: { backgroundColor: 'var(--app-navbar-bg)' },
       }}
     >
@@ -142,8 +137,6 @@ function DevPage() {
       <AppShell.Navbar
         p={collapsed && !isMobile ? 'xs' : 'md'}
         style={{
-          display: 'flex',
-          flexDirection: 'column',
           backgroundImage: 'linear-gradient(light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)), light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)))',
         }}
       >

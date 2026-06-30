@@ -15,7 +15,7 @@ React 19 + Vite 8 (middleware mode in dev). File-based routing with TanStack Rou
 - `dev.tsx` — Dev console with AppShell sidebar (SUPER_ADMIN only): Overview, Users, Agents, Webhook Tokens, Webhook Monitor, App Logs, User Logs, Database (React Flow ER diagram), Project (10 sub-views — all React Flow with auto-save)
 - `admin.tsx` — Admin console (ADMIN + SUPER_ADMIN) — 9 tabs: overview, users, audit-logs, projects, tasks (triage), effort, analytics, sessions, health
 - `qc.tsx` — QC ticket shell (QC + ADMIN + SUPER_ADMIN) — filters tickets in the self-project tagged `ai-queue`, with create modal and detail drawer
-- `pm.tsx` — Project management shell (all authenticated users) — overview, projects, tasks, activity, team, events tabs
+- `pm.tsx` — Project management shell (all authenticated users) — overview, projects, tasks, tickets, ideas, team, events tabs. **Tickets** (`KindBoardPanel kind=TICKET`) and **Pengembangan/ideas** (`KindBoardPanel kind=IDEA`) are cross-project boards reusing the admin triage components, scoped to one `kind` via `GET /api/tasks?kind=...`. Tickets is the daily-standup triage board; ideas is the "biar tidak lupa" backlog, promoted to a Task via the detail sidebar's "Naik Kelas → Jadikan Task" button.
 - `settings.tsx` — Profile/device/notification settings (all authenticated users)
 - `dashboard.tsx` — Legacy redirect stub → `/admin`
 - `profile.tsx` — Legacy redirect stub → `/settings`

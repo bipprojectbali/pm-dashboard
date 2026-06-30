@@ -55,7 +55,13 @@ export function taskUpdateRoute() {
     if (body.title !== undefined) data.title = body.title
     if (body.description !== undefined) data.description = body.description
     if (body.priority !== undefined) data.priority = body.priority
-    if (body.kind !== undefined) data.kind = body.kind
+    // Track kind changes (e.g. promoting an IDEA into a TASK) so the audit
+    // trail records where a piece of work originated.
+    let kindChange: { from: string; to: string } | null = null
+    if (body.kind !== undefined) {
+      data.kind = body.kind
+      if (body.kind !== current.kind) kindChange = { from: current.kind, to: body.kind }
+    }
     if (body.route !== undefined) data.route = body.route
     if (body.assigneeId !== undefined) data.assigneeId = body.assigneeId
     if (body.startsAt !== undefined) data.startsAt = body.startsAt ? new Date(body.startsAt) : null
@@ -98,7 +104,10 @@ export function taskUpdateRoute() {
           skipDuplicates: true,
         })
     }
-    writeAuditLog(auth.userId, 'TASK_UPDATED', `#${task.id} ${Object.keys(data).join(',')}`, getIp(request))
+    const auditDetail = kindChange
+      ? `#${task.id} ${Object.keys(data).join(',')} kind:${kindChange.from}→${kindChange.to}`
+      : `#${task.id} ${Object.keys(data).join(',')}`
+    writeAuditLog(auth.userId, 'TASK_UPDATED', auditDetail, getIp(request))
     const actor = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
     const actorName = actor?.name ?? 'Someone'
     if (

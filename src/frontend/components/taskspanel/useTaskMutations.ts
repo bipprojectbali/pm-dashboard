@@ -31,6 +31,15 @@ export function useTaskMutations({
 }) {
   const qc = useQueryClient()
 
+  // Task data is split across several caches by view: ['tasks'] (table/gantt),
+  // ['tasks-kanban'] (per-column fetch), ['tasks-chart'] (overlay). Invalidate
+  // all of them after a write so every view refreshes without a manual reload.
+  const invalidateAllTaskViews = () => {
+    qc.invalidateQueries({ queryKey: ['tasks'] })
+    qc.invalidateQueries({ queryKey: ['tasks-kanban'] })
+    qc.invalidateQueries({ queryKey: ['tasks-chart'] })
+  }
+
   const create = useMutation({
     mutationFn: (body: CreateTaskBody) =>
       api<{ task: TaskListItem }>('/api/tasks', {
@@ -39,7 +48,7 @@ export function useTaskMutations({
         body: JSON.stringify(body),
       }),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      invalidateAllTaskViews()
       onCreateSuccess()
       notifySuccess({ message: `Task "${res.task.title}" dibuat.` })
     },
@@ -54,7 +63,7 @@ export function useTaskMutations({
         body: JSON.stringify(body),
       }),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      invalidateAllTaskViews()
       onCreateSuccess()
       notifySuccess({ message: `${res.count} task berhasil dibuat dari CSV.` })
     },
@@ -69,7 +78,7 @@ export function useTaskMutations({
         body: JSON.stringify({ reason }),
       }),
     onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      invalidateAllTaskViews()
       qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       onDeleteOneSuccess(id)
       notifySuccess({ message: 'Task dipindahkan ke Trash.' })
@@ -85,7 +94,7 @@ export function useTaskMutations({
         body: JSON.stringify({ ids, reason }),
       }),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tasks'] })
+      invalidateAllTaskViews()
       qc.invalidateQueries({ queryKey: ['tasks-trash'] })
       onClearSelection()
       const tail = res.denied > 0 ? ` (${res.denied} ditolak)` : ''

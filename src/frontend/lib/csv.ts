@@ -41,7 +41,7 @@ export interface ParseResult {
   rawRows: string[][]
 }
 
-const KINDS = new Set(['TASK', 'BUG', 'QC'])
+const KINDS = new Set(['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'])
 const PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
 function parseCsvText(text: string): string[][] {

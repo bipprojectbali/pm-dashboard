@@ -1,7 +1,7 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { ActionIcon, Badge, Card, Group, Stack, Text, Tooltip } from '@mantine/core'
 import type { MouseEvent } from 'react'
-import { TbCheck, TbTrash } from 'react-icons/tb'
+import { TbCheck, TbListCheck, TbLock, TbMessage, TbPaperclip, TbTrash } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { KIND_COLOR, KANBAN_COLUMNS, PRIORITY_COLOR } from './constants'
 import type { TaskListItem } from './types'
@@ -121,6 +121,34 @@ export function KanbanCard({
                     />
                   </div>
                 )}
+                <Group gap={10} wrap="nowrap" c="dimmed">
+                  <Tooltip label="Checklist selesai" withArrow position="bottom">
+                    <Group gap={2} wrap="nowrap">
+                      <TbListCheck size={13} />
+                      <Text size="xs">
+                        {t.checklist.filter((c) => c.done).length}/{t.checklist.length}
+                      </Text>
+                    </Group>
+                  </Tooltip>
+                  <Tooltip label="Komentar" withArrow position="bottom">
+                    <Group gap={2} wrap="nowrap">
+                      <TbMessage size={13} />
+                      <Text size="xs">{t._count.comments}</Text>
+                    </Group>
+                  </Tooltip>
+                  <Tooltip label="Evidence / file" withArrow position="bottom">
+                    <Group gap={2} wrap="nowrap">
+                      <TbPaperclip size={13} />
+                      <Text size="xs">{t._count.evidence}</Text>
+                    </Group>
+                  </Tooltip>
+                  <Tooltip label="Diblok oleh (dependencies)" withArrow position="bottom">
+                    <Group gap={2} wrap="nowrap" c={t._count.blockedBy > 0 ? 'orange' : undefined}>
+                      <TbLock size={13} />
+                      <Text size="xs">{t._count.blockedBy}</Text>
+                    </Group>
+                  </Tooltip>
+                </Group>
                 <Group justify="space-between" wrap="nowrap">
                   <Tooltip label={t.assignee ? t.assignee.name : 'Unassigned'} withArrow position="bottom">
                     <Group gap={4} wrap="nowrap">

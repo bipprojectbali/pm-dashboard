@@ -13,6 +13,7 @@ export function CreateTaskModal({
   onClose,
   projects,
   defaultProjectId,
+  defaultKind = 'TASK',
   onSubmit,
   onBulkSubmit,
   loading,
@@ -23,6 +24,7 @@ export function CreateTaskModal({
   onClose: () => void
   projects: ProjectOption[]
   defaultProjectId: string | null
+  defaultKind?: TaskKind
   onSubmit: (body: {
     projectId: string
     title: string
@@ -58,7 +60,7 @@ export function CreateTaskModal({
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [kind, setKind] = useState<TaskKind>('TASK')
+  const [kind, setKind] = useState<TaskKind>(defaultKind)
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [dueAt, setDueAt] = useState<Date | null>(null)
@@ -69,7 +71,8 @@ export function CreateTaskModal({
 
   const phasesQ = useQuery({
     queryKey: ['phases', projectId, 'modal'],
-    queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${projectId}/phases`),
+    queryFn: () =>
+      api<{ phases: Array<{ id: string; title: string; status: string }> }>(`/api/projects/${projectId}/phases`),
     enabled: !!projectId,
   })
   const projectTagsQ = useQuery({
@@ -111,6 +114,7 @@ export function CreateTaskModal({
   const reset = () => {
     setTitle('')
     setDescription('')
+    setKind(defaultKind)
     setStartsAt(null)
     setDueAt(null)
     setEstimateHours('')
@@ -150,7 +154,10 @@ export function CreateTaskModal({
   return (
     <Modal
       opened={opened}
-      onClose={() => { reset(); onClose() }}
+      onClose={() => {
+        reset()
+        onClose()
+      }}
       title="Create Task"
       size={mode === 'bulk' ? 'xl' : 'md'}
     >
@@ -172,22 +179,32 @@ export function CreateTaskModal({
         />
         {mode === 'single' ? (
           <SingleTaskForm
-            title={title} setTitle={setTitle}
-            description={description} setDescription={setDescription}
-            kind={kind} setKind={setKind}
-            priority={priority} setPriority={setPriority}
-            startsAt={startsAt} setStartsAt={setStartsAt}
-            dueAt={dueAt} setDueAt={setDueAt}
+            title={title}
+            setTitle={setTitle}
+            description={description}
+            setDescription={setDescription}
+            kind={kind}
+            setKind={setKind}
+            priority={priority}
+            setPriority={setPriority}
+            startsAt={startsAt}
+            setStartsAt={setStartsAt}
+            dueAt={dueAt}
+            setDueAt={setDueAt}
             invalidRange={invalidRange}
-            estimateHours={estimateHours} setEstimateHours={setEstimateHours}
-            tagIds={tagIds} setTagIds={setTagIds}
-            phaseId={phaseId} setPhaseId={setPhaseId}
+            estimateHours={estimateHours}
+            setEstimateHours={setEstimateHours}
+            tagIds={tagIds}
+            setTagIds={setTagIds}
+            phaseId={phaseId}
+            setPhaseId={setPhaseId}
             availableTags={availableTags}
             phases={phasesQ.data?.phases ?? []}
           />
         ) : (
           <BulkCsvForm
-            csvText={csvText} onCsvTextChange={setCsvText}
+            csvText={csvText}
+            onCsvTextChange={setCsvText}
             onPickFile={handlePickFile}
             parsed={parsed}
             errorsByRow={errorsByRow}
@@ -196,9 +213,15 @@ export function CreateTaskModal({
             totalErrors={totalErrors}
           />
         )}
-        {error && <Text size="sm" c="red">{error}</Text>}
+        {error && (
+          <Text size="sm" c="red">
+            {error}
+          </Text>
+        )}
         <Group justify="flex-end">
-          <Button variant="subtle" onClick={onClose}>Cancel</Button>
+          <Button variant="subtle" onClick={onClose}>
+            Cancel
+          </Button>
           {mode === 'single' ? (
             <Button
               onClick={() =>

@@ -31,7 +31,7 @@ export const CHAT_TOOLS: AnthropicTool[] = [
         assigneeName: { type: 'string' },
         status: { type: 'array', items: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'] } },
         priority: { type: 'array', items: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] } },
-        kind: { type: 'array', items: { type: 'string', enum: ['TASK', 'BUG', 'QC'] } },
+        kind: { type: 'array', items: { type: 'string', enum: ['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'] } },
         overdueOnly: { type: 'boolean', description: 'Hanya task lewat dueAt & belum CLOSED.' },
         createdSinceDays: { type: 'number', description: 'Hanya task createdAt dalam N hari terakhir.' },
         closedSinceDays: { type: 'number', description: 'Hanya task closedAt dalam N hari terakhir.' },

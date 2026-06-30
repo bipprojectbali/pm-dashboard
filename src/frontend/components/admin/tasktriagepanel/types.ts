@@ -1,6 +1,6 @@
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export type TaskKind = 'TASK' | 'BUG' | 'QC'
+export type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 
 export interface TriageTask {
   id: string
@@ -40,6 +40,8 @@ export const KIND_COLOR: Record<TaskKind, string> = {
   TASK: 'blue',
   BUG: 'red',
   QC: 'teal',
+  TICKET: 'grape',
+  IDEA: 'yellow',
 }
 
 export const STALE_DAYS = 7

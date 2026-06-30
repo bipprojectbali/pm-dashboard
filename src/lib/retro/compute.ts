@@ -1,4 +1,5 @@
 import { prisma } from '../db'
+import { WORKLOAD_KIND_FILTER } from '../task-metrics'
 import type { RetroContributor, RetroGithubSummary, RetroOptions, RetroResult, RetroTaskRow } from './types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -21,17 +22,18 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
   const [closedTasks, slippedTasks, blockedTasks, createdTasks, extensions, githubGroups, statusChanges] =
     await Promise.all([
       prisma.task.findMany({
-        where: { projectId, closedAt: { gte: since, lte: until } },
+        where: { ...WORKLOAD_KIND_FILTER, projectId, closedAt: { gte: since, lte: until } },
         orderBy: { closedAt: 'desc' },
         include: { assignee: { select: { id: true, email: true, name: true } } },
       }),
       prisma.task.findMany({
-        where: { projectId, dueAt: { gte: since, lte: until, not: null } },
+        where: { ...WORKLOAD_KIND_FILTER, projectId, dueAt: { gte: since, lte: until, not: null } },
         orderBy: { dueAt: 'asc' },
         include: { assignee: { select: { id: true, email: true, name: true } } },
       }),
       prisma.task.findMany({
         where: {
+          ...WORKLOAD_KIND_FILTER,
           projectId,
           status: { notIn: ['CLOSED'] },
           blockedBy: { some: { blockedBy: { status: { notIn: ['CLOSED'] } } } },
@@ -41,7 +43,7 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
           blockedBy: { include: { blockedBy: { select: { id: true, title: true, status: true } } } },
         },
       }),
-      prisma.task.count({ where: { projectId, createdAt: { gte: since, lte: until } } }),
+      prisma.task.count({ where: { ...WORKLOAD_KIND_FILTER, projectId, createdAt: { gte: since, lte: until } } }),
       prisma.projectExtension.findMany({
         where: { projectId, createdAt: { gte: since, lte: until } },
         orderBy: { createdAt: 'desc' },

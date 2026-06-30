@@ -5,20 +5,21 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { TbTarget } from 'react-icons/tb'
-import { NotificationBell } from '@/frontend/components/NotificationBell'
-import { PROJECT_DETAIL_TABS, type ProjectDetailTab, ProjectDetailView } from '@/frontend/components/ProjectDetailView'
-import { ProjectsPanel } from '@/frontend/components/ProjectsPanel'
-import { TaskDetailView } from '@/frontend/components/TaskDetailView'
-import { TasksPanel } from '@/frontend/components/TasksPanel'
-import { TeamPanel } from '@/frontend/components/TeamPanel'
 import { EventDetailView } from '@/frontend/components/EventDetailView'
 import { EventFormView } from '@/frontend/components/EventFormView'
 import { EventsPanel } from '@/frontend/components/EventsPanel'
+import { NotificationBell } from '@/frontend/components/NotificationBell'
+import { PROJECT_DETAIL_TABS, type ProjectDetailTab, ProjectDetailView } from '@/frontend/components/ProjectDetailView'
+import { ProjectsPanel } from '@/frontend/components/ProjectsPanel'
+import { KindBoardPanel } from '@/frontend/components/pm/KindBoardPanel'
+import { TaskDetailView } from '@/frontend/components/TaskDetailView'
+import { TasksPanel } from '@/frontend/components/TasksPanel'
+import { TeamPanel } from '@/frontend/components/TeamPanel'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 import { OverviewPanel } from './pm/OverviewPanel'
 import { PmNavbar } from './pm/PmNavbar'
 import { PmPageHeader } from './pm/PmPageHeader'
-import { validTabs, type PmSearch, type TabKey } from './pm/types'
+import { type PmSearch, type TabKey, validTabs } from './pm/types'
 
 export const Route = createFileRoute('/pm')({
   validateSearch: (search: Record<string, unknown>): PmSearch => {
@@ -58,8 +59,14 @@ function PmPage() {
   const { data } = useSession()
   const logout = useLogout()
   const user = data?.user
-  const { tab: active, projectId: activeProjectId, detailTab, taskId: activeTaskId, eventId: activeEventId, eventMode } =
-    Route.useSearch()
+  const {
+    tab: active,
+    projectId: activeProjectId,
+    detailTab,
+    taskId: activeTaskId,
+    eventId: activeEventId,
+    eventMode,
+  } = Route.useSearch()
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
@@ -164,8 +171,12 @@ function PmPage() {
           </Group>
           <Group gap="xs">
             <NotificationBell size="md" />
-            <Badge color="blue" variant="light" size="sm">{user?.role}</Badge>
-            <Text size="sm" visibleFrom="sm" c="dimmed">{user?.email}</Text>
+            <Badge color="blue" variant="light" size="sm">
+              {user?.role}
+            </Badge>
+            <Text size="sm" visibleFrom="sm" c="dimmed">
+              {user?.email}
+            </Text>
           </Group>
         </Group>
       </AppShell.Header>
@@ -197,7 +208,11 @@ function PmPage() {
                 (activeProjectId ? (
                   <ProjectDetailView
                     projectId={activeProjectId}
-                    tab={detailTab ?? (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ?? 'overview'}
+                    tab={
+                      detailTab ??
+                      (localStorage.getItem('pm:project:last-tab') as ProjectDetailTab | null) ??
+                      'overview'
+                    }
                     onTabChange={setProjectDetailTab}
                     onBack={closeProjectDetail}
                     onDeleted={closeProjectDetail}
@@ -215,14 +230,38 @@ function PmPage() {
                     onBackToProjects={() => setActive('projects')}
                   />
                 ))}
+              {active === 'tickets' && (
+                <KindBoardPanel
+                  kind="TICKET"
+                  title="Tiket"
+                  description="Papan tiket masuk dari semua proyek. Triage saat meeting: tentukan prioritas, assign, dan pantau yang overdue."
+                  createLabel="Buat Tiket"
+                />
+              )}
+              {active === 'ideas' && (
+                <KindBoardPanel
+                  kind="IDEA"
+                  title="Pengembangan"
+                  description="Catatan ide & usulan pengembangan lintas proyek. Tinjau berkala, lalu naik-kelaskan jadi Task bila diputuskan dikerjakan."
+                  createLabel="Catat Ide"
+                />
+              )}
               {active === 'team' && <TeamPanel />}
               {active === 'events' &&
                 (eventMode === 'create' ? (
                   <EventFormView onBack={closeEventDetail} onSaved={(id) => openEvent(id)} />
                 ) : eventMode === 'edit' && activeEventId ? (
-                  <EventFormView editId={activeEventId} onBack={() => openEvent(activeEventId)} onSaved={(id) => openEvent(id)} />
+                  <EventFormView
+                    editId={activeEventId}
+                    onBack={() => openEvent(activeEventId)}
+                    onSaved={(id) => openEvent(id)}
+                  />
                 ) : activeEventId ? (
-                  <EventDetailView eventId={activeEventId} onBack={closeEventDetail} onEdit={() => openEventEdit(activeEventId)} />
+                  <EventDetailView
+                    eventId={activeEventId}
+                    onBack={closeEventDetail}
+                    onEdit={() => openEventEdit(activeEventId)}
+                  />
                 ) : (
                   <EventsPanel onOpen={openEvent} onEdit={openEventEdit} onCreate={openEventCreate} />
                 ))}

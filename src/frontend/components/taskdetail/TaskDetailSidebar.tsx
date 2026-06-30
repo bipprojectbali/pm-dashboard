@@ -1,13 +1,6 @@
-import {
-  Button,
-  Divider,
-  Group,
-  Select,
-  Stack,
-  Text,
-} from '@mantine/core'
+import { Button, Divider, Group, Select, Stack, Text } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
-import { TbCalendarEvent } from 'react-icons/tb'
+import { TbArrowUpCircle, TbCalendarEvent } from 'react-icons/tb'
 import { UserAvatar } from '../shared/UserAvatar'
 import { STATUS_COLOR } from './constants'
 import { EstimateField } from './EstimateField'
@@ -37,17 +30,20 @@ export function TaskDetailSidebar({
   isOverdue: boolean
   updatePending: boolean
   updateError: Error | null
-  onUpdate: (body: Partial<{
-    status: TaskDetail['status']
-    priority: TaskPriority
-    assigneeId: string | null
-    phaseId: string | null
-    startsAt: string | null
-    dueAt: string | null
-    estimateHours: number | null
-    progressPercent: number | null
-    tagIds: string[]
-  }>) => void
+  onUpdate: (
+    body: Partial<{
+      status: TaskDetail['status']
+      kind: TaskDetail['kind']
+      priority: TaskPriority
+      assigneeId: string | null
+      phaseId: string | null
+      startsAt: string | null
+      dueAt: string | null
+      estimateHours: number | null
+      progressPercent: number | null
+      tagIds: string[]
+    }>,
+  ) => void
   onCreateTag: (name: string) => void
   creatingTag: boolean
 }) {
@@ -90,6 +86,28 @@ export function TaskDetailSidebar({
               {updateError.message}
             </Text>
           )}
+        </Stack>
+      )}
+
+      {/* Promote IDEA into actionable work by changing its kind to TASK. */}
+      {canWrite && task.kind === 'IDEA' && (
+        <Stack gap={6}>
+          <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+            Naik Kelas
+          </Text>
+          <Button
+            size="xs"
+            variant="light"
+            color="blue"
+            leftSection={<TbArrowUpCircle size={14} />}
+            onClick={() => onUpdate({ kind: 'TASK' })}
+            loading={updatePending}
+          >
+            Jadikan Task
+          </Button>
+          <Text size="xs" c="dimmed">
+            Ubah ide ini menjadi pekerjaan nyata. Perubahan dicatat di log aktivitas.
+          </Text>
         </Stack>
       )}
 
@@ -185,9 +203,7 @@ export function TaskDetailSidebar({
               clearable
               leftSection={<TbCalendarEvent size={13} />}
               value={task.startsAt ? new Date(task.startsAt) : null}
-              onChange={(v) =>
-                onUpdate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })
-              }
+              onChange={(v) => onUpdate({ startsAt: v ? new Date(v as unknown as string).toISOString() : null })}
             />
             <DateInput
               highlightToday
@@ -197,14 +213,9 @@ export function TaskDetailSidebar({
               clearable
               leftSection={<TbCalendarEvent size={13} />}
               value={task.dueAt ? new Date(task.dueAt) : null}
-              onChange={(v) =>
-                onUpdate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })
-              }
+              onChange={(v) => onUpdate({ dueAt: v ? new Date(v as unknown as string).toISOString() : null })}
             />
-            <EstimateField
-              value={task.estimateHours}
-              onCommit={(v) => onUpdate({ estimateHours: v })}
-            />
+            <EstimateField value={task.estimateHours} onCommit={(v) => onUpdate({ estimateHours: v })} />
           </Stack>
         ) : (
           <Stack gap={4}>

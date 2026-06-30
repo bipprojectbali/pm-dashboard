@@ -1,7 +1,7 @@
 import type { IconType } from 'react-icons'
 import type { ProjectDetailTab } from '@/frontend/components/ProjectDetailView'
 
-export const validTabs = ['overview', 'projects', 'tasks', 'team', 'events'] as const
+export const validTabs = ['overview', 'projects', 'tasks', 'tickets', 'ideas', 'team', 'events'] as const
 export type TabKey = (typeof validTabs)[number]
 
 export type PmSearch = {
@@ -38,13 +38,7 @@ export type OverviewTask = {
 
 export type OverviewNotification = {
   id: string
-  kind:
-    | 'TASK_ASSIGNED'
-    | 'TASK_COMMENTED'
-    | 'TASK_STATUS_CHANGED'
-    | 'TASK_DUE_SOON'
-    | 'TASK_OVERDUE'
-    | 'TASK_MENTIONED'
+  kind: 'TASK_ASSIGNED' | 'TASK_COMMENTED' | 'TASK_STATUS_CHANGED' | 'TASK_DUE_SOON' | 'TASK_OVERDUE' | 'TASK_MENTIONED'
   taskId: string | null
   projectId: string | null
   title: string

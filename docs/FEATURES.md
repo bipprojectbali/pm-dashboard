@@ -6,6 +6,8 @@ Admin-facing aggregates. Each lib is the single source of truth — MCP tools an
 
 System-wide "what needs attention right now" dashboard at `/admin?tab=overview`. Answers: is anything on fire? which projects are failing? who's overloaded?
 
+> **Kind exclusion:** all task aggregations below (health/load/risk/analytics + effort/retro/chat) filter out `kind = IDEA` via `WORKLOAD_KIND_FILTER` (`src/lib/task-metrics.ts`). Ideas are backlog captures, not committed work, so they never count toward overdue/stale/load/health. `TICKET` **is** counted (real work).
+
 - **Helpers**: `src/lib/admin-overview.ts`
   - `computeAdminOverview({ recentAuditLimit? })` — aggregated KPIs (users/projects/tasks/agents/webhooks24h/velocity/recentAudit). Mirrors `/admin` top cards.
   - `computeProjectHealth({ projectId?, includeArchived?, limit? })` — per-project score 0-100 + grade A-F derived from pastDue (-35), overdueTasks (-5 each capped 25), blockedTasks (-3 each capped 15), extensions>2 (-10), extensions>4 (-5), no velocity on ACTIVE project (-10). Sorted worst-first.

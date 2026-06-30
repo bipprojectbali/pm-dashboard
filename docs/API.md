@@ -80,10 +80,10 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - Project members, milestones, extensions — usual CRUD under `/api/projects/:id/*`
 - `GET/POST /api/projects/:id/tags` — list/create per-project tags; unique by (projectId, name)
 - `PATCH/DELETE /api/tags/:id` — rename/recolor or delete (cascades to TaskTag)
-- `GET /api/tasks` — list with filters (`projectId`, `status`, `kind`, `assigneeId`, `tagId`). Response enriches each task with `actualHours`, `progressPercent`, `tags`, counts for blockedBy/blocks/checklist.
-- `POST /api/tasks` — create, accepts `startsAt`, `dueAt`, `estimateHours`, `tagIds[]`
+- `GET /api/tasks` — list with filters (`projectId`, `status`, `kind`, `assigneeId`, `tagId`). `kind` ∈ `TASK | BUG | QC | TICKET | IDEA` (400 on invalid). Response enriches each task with `actualHours`, `progressPercent`, `tags`, counts for blockedBy/blocks/checklist.
+- `POST /api/tasks` — create, accepts `startsAt`, `dueAt`, `estimateHours`, `tagIds[]`, `kind` (validated; defaults `TASK`)
 - `GET /api/tasks/:id` — full detail incl. tags, blockedBy, blocks, checklist, statusChanges, comments, evidence + computed `actualHours`/`progressPercent`
-- `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`). Accepts `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
+- `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`; status transitions are kind-aware — `IDEA` only allows `OPEN ↔ CLOSED`). Accepts `kind` (a change such as IDEA→TASK "promote" is recorded in the audit log as `kind:FROM→TO`), `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
 - `DELETE /api/tasks/:id` — OWNER/PM/SUPER_ADMIN
 - `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` — add-only
 - `PATCH /api/tasks/:id/comments/:commentId` — edit a comment body (**author-or-admin**: only the comment's own author OR an ADMIN/SUPER_ADMIN; else 403). Requires project membership. Body required (400 if blank); sets `editedAt` so the UI shows a "(telah diedit)" marker. 404 if the comment isn't on the task.

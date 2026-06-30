@@ -37,6 +37,7 @@ export interface TaskListItem {
   project: { id: string; name: string }
   phase: { id: string; title: string } | null
   tags: TaskTag[]
+  checklist: { done: boolean }[]
   blockedBy: { blockedById: string }[]
   _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
 }

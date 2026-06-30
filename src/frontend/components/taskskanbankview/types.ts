@@ -1,6 +1,6 @@
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export type TaskKind = 'TASK' | 'BUG' | 'QC'
+export type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 
 export interface TaskUser {
   id: string

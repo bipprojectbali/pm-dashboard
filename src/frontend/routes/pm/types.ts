@@ -26,7 +26,7 @@ export type OverviewTask = {
   id: string
   title: string
   status: 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
-  kind: 'TASK' | 'BUG' | 'QC'
+  kind: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   dueAt: string | null
   createdAt: string

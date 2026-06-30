@@ -19,7 +19,7 @@ interface TaskTag {
 }
 
 type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-type TaskKind = 'TASK' | 'BUG' | 'QC'
+type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 
 interface TaskListItem {
   id: string

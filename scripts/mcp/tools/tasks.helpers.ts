@@ -1,6 +1,6 @@
 import { prisma } from '../../../src/lib/db'
 
-export type TaskKind = 'TASK' | 'BUG' | 'QC'
+export type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 
 export async function audit(userId: string | null, action: string, detail: string | null) {

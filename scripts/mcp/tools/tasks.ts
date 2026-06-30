@@ -18,7 +18,7 @@ export const tasksReadonly: ToolModule = {
         inputSchema: {
           projectId: z.string().optional(),
           status: z.enum(['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED', 'ALL']).default('ALL'),
-          kind: z.enum(['TASK', 'BUG', 'QC', 'ALL']).default('ALL'),
+          kind: z.enum(['TASK', 'BUG', 'QC', 'TICKET', 'IDEA', 'ALL']).default('ALL'),
           assigneeEmail: z.string().email().optional(),
           limit: z.number().int().min(1).max(500).default(100),
         },

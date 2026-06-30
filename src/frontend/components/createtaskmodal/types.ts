@@ -1,4 +1,4 @@
-export type TaskKind = 'TASK' | 'BUG' | 'QC'
+export type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 
 export interface TagListItem {

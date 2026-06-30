@@ -43,7 +43,7 @@ export function taskListRoutes() {
       delete where.project
     }
     const TASK_STATUS_VALUES = ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'] as const
-    const TASK_KIND_VALUES = ['TASK', 'BUG', 'QC'] as const
+    const TASK_KIND_VALUES = ['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'] as const
     if (query.status) {
       const s = String(query.status)
       if (!(TASK_STATUS_VALUES as readonly string[]).includes(s)) {

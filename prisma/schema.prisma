@@ -48,6 +48,8 @@ enum TaskKind {
   TASK
   BUG
   QC
+  TICKET
+  IDEA
 }
 
 enum TaskStatus {

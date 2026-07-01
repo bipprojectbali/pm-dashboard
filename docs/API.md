@@ -78,6 +78,11 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - `PATCH /api/projects/:id` — update fields (OWNER/PM). Accepts `githubRepo` (normalized server-side, `null` to unlink; 409 on duplicate link)
 - `DELETE /api/projects/:id` — permanent delete with cascade (OWNER or SUPER_ADMIN). Audited.
 - Project members, milestones, extensions — usual CRUD under `/api/projects/:id/*`
+- **Access Tokens** (OWNER/PM/admin only — `canManageProject` gate; `tokenHash` never returned):
+  - `GET /api/projects/:id/access-tokens` — list tokens (id, name, tokenPrefix, scope, status, expiresAt, lastUsedAt, createdBy)
+  - `POST /api/projects/:id/access-tokens` — create. Body `{ name, scope: READ|WRITE, expiresInDays? (7|30|90|365) }`. Returns `{ token, raw }` — **plaintext `raw` shown once**
+  - `POST /api/projects/:id/access-tokens/:tokenId/revoke` — set status REVOKED
+  - `DELETE /api/projects/:id/access-tokens/:tokenId` — permanent delete
 - `GET/POST /api/projects/:id/tags` — list/create per-project tags; unique by (projectId, name)
 - `PATCH/DELETE /api/tags/:id` — rename/recolor or delete (cascades to TaskTag)
 - `GET /api/tasks` — list with filters (`projectId`, `status`, `kind`, `assigneeId`, `tagId`). `kind` ∈ `TASK | BUG | QC | TICKET | IDEA` (400 on invalid). Response enriches each task with `actualHours`, `progressPercent`, `tags`, counts for blockedBy/blocks/checklist.

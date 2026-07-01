@@ -39,3 +39,17 @@ Projects can be linked 1:1 to a GitHub repo via `Project.githubRepo` (stored can
 - **Frontend**:
   - Settings tab (`ProjectDetailView.tsx` → `GithubIntegrationCard`) — repo URL input with normalize preview, link/update/unlink buttons, webhook setup hint (endpoint URL + `Copy URL` + direct link to `Settings/hooks/new`).
   - Overview tab (`GithubActivityCard`) — 4 mini-stats (commits/7d, contributors/30d, open PRs, last push) + latest 10 events with per-kind badge colors. Empty state when repo not linked.
+
+## Project Access Tokens
+
+Per-user, project-scoped bearer tokens so coding agents (mis. Claude Code) bisa membaca/memperbarui data satu project — otomatis ter-scope tanpa perlu tahu `projectId`. Idenya: tiap project punya token; token menentukan project + identitas pembuat + izin (READ/WRITE).
+
+- **Schema**: `ProjectAccessToken` (lihat `@docs/ARCHITECTURE.md`). Enum `ProjectTokenScope = READ | WRITE`, `ProjectTokenStatus = ACTIVE | REVOKED`.
+- **Format token**: `pmt_<base64url(32 byte)>`. Hanya SHA-256 hash yang disimpan (`tokenHash @unique`) — plaintext tak bisa di-recover. `tokenPrefix` (12 char pertama) disimpan plaintext hanya untuk identifikasi di UI.
+- **Helper**: `src/lib/project-access-tokens.ts` — `generateProjectToken()` (`{ raw, hash, prefix }`), `hashToken()` (SHA-256 hex), `verifyProjectToken(raw)` (resolve → `{ projectId, userId, scope }`, tolak revoked/expired, update `lastUsedAt`).
+- **Lifecycle**: create → plaintext `raw` ditampilkan **sekali** → simpan di config agent. Hilang → buat token baru + revoke yang lama (tidak ada regenerate). Revoke permanen.
+- **Gate**: buat/list/revoke/delete hanya OWNER/PM/admin (`canManageProject`). Token = kredensial, jadi list pun tidak dibuka ke MEMBER/VIEWER.
+- **API**: lihat `@docs/API.md` § Access Tokens. **MCP**: `access_token_list` (readonly), `access_token_create`/`access_token_revoke` (admin) — lihat `@docs/MCP.md`.
+- **Frontend**: `AccessTokensCard` di tab Settings project — create form (nama + scope + expiry preset), show-once modal dengan copy, tabel token + revoke/delete.
+
+> **Status Tahap 1 (saat ini):** hanya lifecycle token (buat/list/revoke/hapus). **Auth belum aktif** — endpoint `/api/tasks` dll belum mengenali `Bearer pmt_…`. Resolusi token ke request (via `verifyProjectToken` di pola `hasMcpSecretAuth`, `src/routes/settings/helpers.ts`) + scope-gating write adalah **Tahap 2**. Sebelum deploy, pola `pmt_` perlu masuk scanner env-leak preflight agar token tak ke-commit.

@@ -5,7 +5,7 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - pm-watch + GitHub webhooks → `@docs/INTEGRATIONS.md`
 - QC tickets → `@docs/QC-TICKETS.md`
 - `POST /mcp` (+ `GET`/`DELETE`) — token-scoped HTTP MCP for agents; auth `Bearer pmt_` project token (not session). See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint.
-- `/api/agent/*` — token-only REST surface for CLI agents (lighter than MCP); auth `Bearer pmt_`. See § Agent REST API below + `GET /llms-agent.txt` (auth-gated machine-readable guide).
+- `/api/agent/*` — token-only REST surface for CLI agents (lighter than MCP); auth `Bearer pmt_`. See § Agent REST API below + `GET /api/agent/guide` (auth-gated machine-readable guide).
 
 ## Agent REST API (`/api/agent/*`)
 
@@ -17,7 +17,7 @@ Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Be
 - `PATCH /api/agent/tasks/:id` (WRITE) — update + status transition (validated against state machine; writes `TaskStatusChange`).
 - `POST /api/agent/tasks/:id/comments` (WRITE) — body `{ body }`; comment tagged `AGENT`.
 - `POST /api/agent/tasks/:id/checklist` (WRITE) — body `{ title }`. `PATCH/DELETE /api/agent/checklist/:itemId` (WRITE).
-- `GET /llms-agent.txt` — machine-readable guide (llmstxt.org format) to this surface with `curl` examples; base URL from request origin. **Auth-gated**: needs a `pmt_` token OR a logged-in session → else 401 (internal tool, not publicly discoverable).
+- `GET /api/agent/guide` — machine-readable guide (markdown/llmstxt.org format) to this surface with `curl` examples; base URL from request origin. **Auth-gated**: needs a `pmt_` token OR a logged-in session → else 401 (internal tool, not publicly discoverable). Lives under `/api/agent/*` rather than a public `llms.txt` on purpose.
 
 Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted.
 

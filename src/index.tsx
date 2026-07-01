@@ -10,9 +10,7 @@ const isProduction = env.NODE_ENV === 'production'
 const API_PREFIXES = ['/api/', '/webhook/', '/webhooks/', '/ws/', '/health', '/mcp']
 
 function isApiRoute(pathname: string): boolean {
-  // `/llms-agent.txt` is an auth-gated Elysia route (agent docs), not the SPA —
-  // keep it out of the frontend fallback despite containing a dot.
-  return API_PREFIXES.some((p) => pathname.startsWith(p)) || pathname === '/health' || pathname === '/llms-agent.txt'
+  return API_PREFIXES.some((p) => pathname.startsWith(p)) || pathname === '/health'
 }
 
 // ─── Vite Dev Server (dev only) ────────────────────────

@@ -92,8 +92,7 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
   })
 
   const revokeToken = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/projects/${projectId}/access-tokens/${id}/revoke`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/api/projects/${projectId}/access-tokens/${id}/revoke`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project-tokens', projectId] })
       notifySuccess({ message: 'Token di-revoke.' })
@@ -114,7 +113,7 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
 
   const openShowOnceModal = (raw: string, name: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const docsUrl = `${origin}/llms-agent.txt`
+    const docsUrl = `${origin}/api/agent/guide`
     const curlSnippet = `curl -H "Authorization: Bearer ${raw}" ${origin}/api/agent/tasks`
     modals.open({
       title: `Token dibuat: ${name}`,
@@ -145,7 +144,12 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
                 <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{docsUrl}</Code>
                 <CopyButton value={docsUrl}>
                   {({ copied, copy }) => (
-                    <Button size="xs" variant="light" leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />} onClick={copy}>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />}
+                      onClick={copy}
+                    >
                       {copied ? 'Tersalin' : 'Salin'}
                     </Button>
                   )}
@@ -155,7 +159,12 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
                 <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{curlSnippet}</Code>
                 <CopyButton value={curlSnippet}>
                   {({ copied, copy }) => (
-                    <Button size="xs" variant="light" leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />} onClick={copy}>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />}
+                      onClick={copy}
+                    >
                       {copied ? 'Tersalin' : 'Salin'}
                     </Button>
                   )}
@@ -179,7 +188,11 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
       title: 'Buat access token',
       children: (
         <Stack gap="sm">
-          <TextInput label="Nama" placeholder="mis. claude-code agent" onChange={(e) => (name = e.currentTarget.value)} />
+          <TextInput
+            label="Nama"
+            placeholder="mis. claude-code agent"
+            onChange={(e) => (name = e.currentTarget.value)}
+          />
           <Select
             label="Scope"
             defaultValue="READ"

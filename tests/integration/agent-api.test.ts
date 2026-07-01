@@ -164,21 +164,21 @@ describe('cross-project + IDEA guards', () => {
   })
 })
 
-describe('llms-agent.txt (auth-gated)', () => {
+describe('GET /api/agent/guide (auth-gated)', () => {
   test('anonymous → 401', async () => {
-    const res = await app.handle(new Request('http://localhost/llms-agent.txt'))
+    const res = await app.handle(new Request('http://localhost/api/agent/guide'))
     expect(res.status).toBe(401)
   })
   test('with token → 200 text/plain with agent endpoints', async () => {
-    const res = await req(readToken, 'GET', '/llms-agent.txt')
+    const res = await req(readToken, 'GET', '/api/agent/guide')
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('text/plain')
     const text = await res.text()
     expect(text).toContain('/api/agent/tasks')
     expect(text).toContain('Bearer pmt_')
   })
-  test('old /llms.txt is gone → not 200', async () => {
-    const res = await app.handle(new Request('http://localhost/llms.txt'))
-    expect(res.status).not.toBe(200)
+  test('old /llms.txt and /llms-agent.txt are gone → not 200', async () => {
+    expect((await app.handle(new Request('http://localhost/llms.txt'))).status).not.toBe(200)
+    expect((await app.handle(new Request('http://localhost/llms-agent.txt'))).status).not.toBe(200)
   })
 })

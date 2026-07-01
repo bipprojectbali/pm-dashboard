@@ -2,11 +2,8 @@ import { cors } from '@elysiajs/cors'
 import { html } from '@elysiajs/html'
 import { Elysia } from 'elysia'
 import pkg from '../package.json' with { type: 'json' }
-import { resolveAgentAuth } from './lib/agent-auth'
 import { appLog } from './lib/applog'
-import { renderLlmsTxt } from './lib/llms-content'
 import { broadcastToAdmins } from './lib/presence'
-import { getPublicOrigin, requireAuth } from './lib/route-helpers'
 import { adminRoutes } from './routes/admin.route'
 import { agentRoutes } from './routes/agent.route'
 import { authRoutes } from './routes/auth.route'
@@ -24,89 +21,71 @@ import { webhooksRoutes } from './routes/webhooks.route'
 export function createApp() {
   appLog('info', 'Server starting')
 
-  return (
-    new Elysia()
-      .use(cors())
-      .use(html())
+  return new Elysia()
+    .use(cors())
+    .use(html())
 
-      .onError(({ code, error, request }) => {
-        if (code === 'NOT_FOUND') {
-          return new Response(JSON.stringify({ error: 'Not Found', status: 404 }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
-        const url = new URL(request.url)
-        const message = error instanceof Error ? error.message : String(error)
-        appLog('error', `${request.method} ${url.pathname} — ${message}`)
-        console.error('[Server Error]', error)
-        return new Response(JSON.stringify({ error: 'Internal Server Error', status: 500 }), {
-          status: 500,
+    .onError(({ code, error, request }) => {
+      if (code === 'NOT_FOUND') {
+        return new Response(JSON.stringify({ error: 'Not Found', status: 404 }), {
+          status: 404,
           headers: { 'Content-Type': 'application/json' },
         })
+      }
+      const url = new URL(request.url)
+      const message = error instanceof Error ? error.message : String(error)
+      appLog('error', `${request.method} ${url.pathname} — ${message}`)
+      console.error('[Server Error]', error)
+      return new Response(JSON.stringify({ error: 'Internal Server Error', status: 500 }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
       })
+    })
 
-      .onRequest(({ request }) => {
-        ;(request as any).__startTime = performance.now()
-      })
-      .onAfterResponse(({ request, set }) => {
-        const url = new URL(request.url)
-        if (url.pathname.startsWith('/api/')) {
-          const status = typeof set.status === 'number' ? set.status : 200
-          const level = status >= 500 ? ('error' as const) : status >= 400 ? ('warn' as const) : ('info' as const)
-          appLog(level, `${request.method} ${url.pathname} ${status}`)
-          const duration = Math.round(performance.now() - ((request as any).__startTime || 0))
-          broadcastToAdmins({
-            type: 'request',
-            method: request.method,
-            path: url.pathname,
-            status,
-            duration,
-            timestamp: new Date().toISOString(),
-          })
-        }
-      })
-
-      .get('/health', () => ({ status: 'ok' }))
-      // Agent guide is not public (internal tool) — require a pmt_ token OR a
-      // logged-in session. Anonymous callers get 401 (defense in depth; the real
-      // boundary is token validation on /api/agent/*).
-      .get('/llms-agent.txt', async ({ request }) => {
-        const tokenAuth = await resolveAgentAuth(request)
-        const authed = tokenAuth.ok || (await requireAuth(request)) !== null
-        if (!authed) {
-          return new Response('Unauthorized — needs a pmt_ access token or a logged-in session.', {
-            status: 401,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8', 'WWW-Authenticate': 'Bearer' },
-          })
-        }
-        return new Response(renderLlmsTxt(getPublicOrigin(request)), {
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    .onRequest(({ request }) => {
+      ;(request as any).__startTime = performance.now()
+    })
+    .onAfterResponse(({ request, set }) => {
+      const url = new URL(request.url)
+      if (url.pathname.startsWith('/api/')) {
+        const status = typeof set.status === 'number' ? set.status : 200
+        const level = status >= 500 ? ('error' as const) : status >= 400 ? ('warn' as const) : ('info' as const)
+        appLog(level, `${request.method} ${url.pathname} ${status}`)
+        const duration = Math.round(performance.now() - ((request as any).__startTime || 0))
+        broadcastToAdmins({
+          type: 'request',
+          method: request.method,
+          path: url.pathname,
+          status,
+          duration,
+          timestamp: new Date().toISOString(),
         })
-      })
-      .get('/api/version', () => ({
-        name: pkg.name,
-        version: pkg.version,
-        commit: process.env.GIT_COMMIT ?? null,
-        builtAt: process.env.BUILT_AT ?? null,
-        env: process.env.NODE_ENV ?? 'development',
-      }))
-      .get('/api/hello', () => ({ message: 'Hello, world!', method: 'GET' }))
-      .put('/api/hello', () => ({ message: 'Hello, world!', method: 'PUT' }))
-      .get('/api/hello/:name', ({ params }) => ({ message: `Hello, ${params.name}!` }))
+      }
+    })
 
-      .use(authRoutes())
-      .use(adminRoutes())
-      .use(qcRoutes())
-      .use(projectsRoutes())
-      .use(phasesRoutes())
-      .use(tasksRoutes())
-      .use(meRoutes())
-      .use(webhooksRoutes())
-      .use(settingsRoutes())
-      .use(eventsRoutes())
-      .use(extensionsRoutes())
-      .use(mcpRoutes())
-      .use(agentRoutes())
-  )
+    .get('/health', () => ({ status: 'ok' }))
+    .get('/api/version', () => ({
+      name: pkg.name,
+      version: pkg.version,
+      commit: process.env.GIT_COMMIT ?? null,
+      builtAt: process.env.BUILT_AT ?? null,
+      env: process.env.NODE_ENV ?? 'development',
+    }))
+    .get('/api/hello', () => ({ message: 'Hello, world!', method: 'GET' }))
+    .put('/api/hello', () => ({ message: 'Hello, world!', method: 'PUT' }))
+    .get('/api/hello/:name', ({ params }) => ({ message: `Hello, ${params.name}!` }))
+
+    .use(authRoutes())
+    .use(adminRoutes())
+    .use(qcRoutes())
+    .use(projectsRoutes())
+    .use(phasesRoutes())
+    .use(tasksRoutes())
+    .use(meRoutes())
+    .use(webhooksRoutes())
+    .use(settingsRoutes())
+    .use(eventsRoutes())
+    .use(extensionsRoutes())
+    .use(mcpRoutes())
+    .use(agentRoutes())
 }

@@ -28,6 +28,14 @@ services:
       - MCP_SECRET=${MCP_SECRET}
 
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+
+      # MinIO / S3 object storage for evidence uploads (required — app won't
+      # boot without these). Endpoint is public (storage.wibudev.com) → reached
+      # via public-net; no extra network needed.
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET}
     networks:
       - public-net
       - postgres-net-stg

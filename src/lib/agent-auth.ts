@@ -17,7 +17,7 @@ function readBearer(request: Request): string | null {
 
 export async function resolveAgentAuth(request: Request): Promise<AgentAuth> {
   const raw = readBearer(request)
-  if (!raw || !raw.startsWith('pmt_')) return { ok: false, status: 401, error: 'Unauthorized' }
+  if (!raw?.startsWith('pmt_')) return { ok: false, status: 401, error: 'Unauthorized' }
 
   const result = await verifyProjectToken(raw)
   if (!result.ok) return { ok: false, status: 401, error: 'Unauthorized' }

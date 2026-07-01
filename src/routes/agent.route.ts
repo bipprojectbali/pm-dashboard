@@ -1,8 +1,14 @@
 import { Elysia } from 'elysia'
-import { type AgentAuth, canWrite, resolveAgentAuth, resolveReporterId } from '../lib/agent-auth'
+import { canWrite, resolveAgentAuth, resolveReporterId } from '../lib/agent-auth'
 import { prisma } from '../lib/db'
 import { emitInvalidate } from '../lib/presence'
-import { computeActualHours, computeProgressPercent, getAllowedTaskTransitions, getIp, writeAuditLog } from '../lib/route-helpers'
+import {
+  computeActualHours,
+  computeProgressPercent,
+  getAllowedTaskTransitions,
+  getIp,
+  writeAuditLog,
+} from '../lib/route-helpers'
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 
@@ -21,7 +27,9 @@ const TASK_INCLUDE = {
   _count: { select: { comments: true, evidence: true, blockedBy: true, blocks: true } },
 } as const
 
-function enrich<T extends Parameters<typeof computeActualHours>[0] & Parameters<typeof computeProgressPercent>[0]>(t: T) {
+function enrich<T extends Parameters<typeof computeActualHours>[0] & Parameters<typeof computeProgressPercent>[0]>(
+  t: T,
+) {
   return { ...t, actualHours: computeActualHours(t), progressPercent: computeProgressPercent(t) }
 }
 
@@ -70,8 +78,13 @@ export function agentRoutes() {
       if (!auth.ok) return deny(set, auth.status, auth.error)
       if (!canWrite(auth)) return deny(set, 403, 'Token is read-only')
       const body = (await request.json()) as {
-        title?: string; description?: string; kind?: string; priority?: string
-        assigneeEmail?: string; dueAt?: string; estimateHours?: number
+        title?: string
+        description?: string
+        kind?: string
+        priority?: string
+        assigneeEmail?: string
+        dueAt?: string
+        estimateHours?: number
       }
       if (!body.title?.trim() || !body.description?.trim()) return deny(set, 400, 'title, description wajib diisi')
       if (body.kind === 'IDEA') return deny(set, 403, 'IDEA is read-only via access token')
@@ -109,8 +122,14 @@ export function agentRoutes() {
       if (!current) return deny(set, 404, 'Task not found')
       if (current.kind === 'IDEA') return deny(set, 403, 'IDEA is read-only via access token')
       const body = (await request.json()) as {
-        title?: string; description?: string; priority?: string; status?: string
-        assigneeEmail?: string | null; dueAt?: string | null; estimateHours?: number | null; progressPercent?: number | null
+        title?: string
+        description?: string
+        priority?: string
+        status?: string
+        assigneeEmail?: string | null
+        dueAt?: string | null
+        estimateHours?: number | null
+        progressPercent?: number | null
       }
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title
@@ -119,7 +138,8 @@ export function agentRoutes() {
       if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null
       if (body.estimateHours !== undefined) data.estimateHours = body.estimateHours
       if (body.progressPercent !== undefined)
-        data.progressPercent = body.progressPercent === null ? null : Math.max(0, Math.min(100, Math.round(body.progressPercent)))
+        data.progressPercent =
+          body.progressPercent === null ? null : Math.max(0, Math.min(100, Math.round(body.progressPercent)))
       if (body.assigneeEmail !== undefined) {
         if (body.assigneeEmail === null) data.assigneeId = null
         else {
@@ -131,7 +151,8 @@ export function agentRoutes() {
       let transition: { from: Status; to: Status } | null = null
       if (body.status !== undefined && body.status !== current.status) {
         const allowed = getAllowedTaskTransitions(current.status, current.kind)
-        if (!allowed.includes(body.status)) return deny(set, 400, `Invalid transition: ${current.status} → ${body.status}`)
+        if (!allowed.includes(body.status))
+          return deny(set, 400, `Invalid transition: ${current.status} → ${body.status}`)
         transition = { from: current.status as Status, to: body.status as Status }
         data.status = body.status
         if (body.status === 'CLOSED') data.closedAt = new Date()
@@ -212,7 +233,7 @@ export function agentRoutes() {
 async function resolveChecklistWrite(
   request: Request,
   itemId: string,
-): Promise<{ projectId: string; auth: AgentAuth } | { status: 401 | 403 | 404; error: string }> {
+): Promise<{ projectId: string } | { status: 401 | 403 | 404; error: string }> {
   const auth = await resolveAgentAuth(request)
   if (!auth.ok) return { status: auth.status, error: auth.error }
   if (!canWrite(auth)) return { status: 403, error: 'Token is read-only' }
@@ -221,5 +242,5 @@ async function resolveChecklistWrite(
     select: { task: { select: { projectId: true } } },
   })
   if (!item || item.task.projectId !== auth.projectId) return { status: 404, error: 'Checklist item not found' }
-  return { projectId: auth.projectId, auth }
+  return { projectId: auth.projectId }
 }

@@ -28,6 +28,7 @@ React 19 + Vite 8 (middleware mode in dev). File-based routing with TanStack Rou
 - `ThemeToggle.tsx` — Shared dark/light mode toggle button (used across all pages)
 - `NotFound.tsx` — 404 page
 - `ErrorPage.tsx` — Error boundary page
+- `PhasesSection.tsx` + `components/phases/` — fase/sprint per project (di tab Phases pada project detail). Orchestrator memuat semua fase (`GET /api/projects/:id/phases`) lalu filter/search/paginate **client-side**. Tiga tampilan via toggle: **Stepper** (alur vertikal berurutan, default), **Grid** (kartu `PhaseCard`), **List** (baris `PhaseListRow`). Toolbar (`PhasesToolbar`): search judul, filter status (badge Planning/Active/Completed dengan warna+ikon `PHASE_STATUS_COLOR`/`PHASE_STATUS_ICON` + jumlah per status), filter tag. **Persist** view + filter status ke `localStorage` (`pm:phases:view`, `pm:phases:statusFilter`); search tidak dipersist. Saat difilter/dicari, stepper auto-highlight dimatikan (`active=-1`) karena urutan tak lengkap. Pagination 10/halaman untuk semua view.
 
 Hooks:
 

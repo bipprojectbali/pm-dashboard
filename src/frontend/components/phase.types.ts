@@ -1,4 +1,9 @@
+import type { IconType } from 'react-icons'
+import { TbCircleCheck, TbClock, TbPlayerPlay } from 'react-icons/tb'
+
 export type PhaseStatus = 'PLANNING' | 'ACTIVE' | 'COMPLETED'
+
+export type PhaseView = 'stepper' | 'grid' | 'list'
 
 export interface ProjectPhase {
   id: string
@@ -26,6 +31,18 @@ export const PHASE_STATUS_COLOR: Record<PhaseStatus, string> = {
   PLANNING: 'gray',
   ACTIVE: 'blue',
   COMPLETED: 'green',
+}
+
+export const PHASE_STATUS_ICON: Record<PhaseStatus, IconType> = {
+  PLANNING: TbClock,
+  ACTIVE: TbPlayerPlay,
+  COMPLETED: TbCircleCheck,
+}
+
+export const PHASE_STATUS_LABEL: Record<PhaseStatus, string> = {
+  PLANNING: 'Planning',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
 }
 
 export const STATUS_OPTIONS = [

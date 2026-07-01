@@ -1,16 +1,17 @@
-import { Button, Group, Pagination, Select, Stack, Stepper, Text } from '@mantine/core'
+import { Button, Group, Pagination, Stack, Text } from '@mantine/core'
+import { useLocalStorage } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { TbStack2, TbTag } from 'react-icons/tb'
+import { TbStack2 } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { PhaseAddForm } from './PhaseAddForm'
 import { PhaseDetailModal } from './PhaseDetailModal'
 import { EditPhaseModal } from './PhaseEditModal'
-import { PhaseStepDescription } from './PhaseStepDescription'
-import { PhaseStepLabel } from './PhaseStepLabel'
 import { CompletePhaseModal, EditSummaryModal } from './PhaseSummaryModals'
-import { type ProjectPhase, type TagOption } from './phase.types'
+import type { PhaseStatus, PhaseView, ProjectPhase, TagOption } from './phase.types'
+import { PhasesGrid } from './phases/PhasesGrid'
+import { PhasesToolbar } from './phases/PhasesToolbar'
 
 const TEMPLATE_PHASES = [
   { title: 'Planning', description: 'Perencanaan scope, requirements, dan timeline' },
@@ -33,6 +34,12 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   const [isTemplating, setIsTemplating] = useState(false)
   const [expandedSummaryIds, setExpandedSummaryIds] = useState<Set<string>>(new Set())
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [view, setView] = useLocalStorage<PhaseView>({ key: 'pm:phases:view', defaultValue: 'stepper' })
+  const [statusFilter, setStatusFilter] = useLocalStorage<PhaseStatus | 'ALL'>({
+    key: 'pm:phases:statusFilter',
+    defaultValue: 'ALL',
+  })
   const toggleSummary = (id: string) =>
     setExpandedSummaryIds((prev) => {
       const next = new Set(prev)
@@ -85,25 +92,49 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
   const [page, setPage] = useState(1)
 
   const allPhases = phasesQ.data?.phases ?? []
-  const phases = useMemo(
+
+  // Hitung jumlah per status dari set yang sudah difilter-tag (bukan status),
+  // supaya angka di badge status mencerminkan populasi yang relevan.
+  const tagFilteredPhases = useMemo(
     () => (tagFilter ? allPhases.filter((p) => p.tags.some((t) => t.tagId === tagFilter)) : allPhases),
     [allPhases, tagFilter],
   )
+  const statusCounts = useMemo(
+    () => ({
+      PLANNING: tagFilteredPhases.filter((p) => p.status === 'PLANNING').length,
+      ACTIVE: tagFilteredPhases.filter((p) => p.status === 'ACTIVE').length,
+      COMPLETED: tagFilteredPhases.filter((p) => p.status === 'COMPLETED').length,
+    }),
+    [tagFilteredPhases],
+  )
 
-  useEffect(() => setPage(1), [tagFilter])
+  const phases = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return tagFilteredPhases.filter((p) => {
+      if (statusFilter !== 'ALL' && p.status !== statusFilter) return false
+      if (q && !p.title.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [tagFilteredPhases, statusFilter, search])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [tagFilter, statusFilter, search])
 
   const totalPages = Math.ceil(phases.length / PAGE_SIZE)
   const pageOffset = (page - 1) * PAGE_SIZE
-  const paginatedPhases = useMemo(
-    () => phases.slice(pageOffset, pageOffset + PAGE_SIZE),
-    [phases, pageOffset],
-  )
+  const paginatedPhases = useMemo(() => phases.slice(pageOffset, pageOffset + PAGE_SIZE), [phases, pageOffset])
 
+  // "Active step" hanya bermakna saat urutan penuh (tak difilter/dicari).
+  // Saat difilter, urutan tak lengkap → jangan auto-highlight (active = -1).
+  const isFiltered = statusFilter !== 'ALL' || search.trim() !== ''
   const stepperActive = useMemo(() => {
+    if (isFiltered) return -1
     const idx = phases.findIndex((p) => p.status === 'ACTIVE')
     if (idx >= 0) return idx
     return phases.filter((p) => p.status === 'COMPLETED').length
-  }, [phases])
+  }, [phases, isFiltered])
 
   const openDetailModal = (phase: ProjectPhase) => {
     modals.open({ title: phase.title, size: 'lg', children: <PhaseDetailModal phase={phase} /> })
@@ -140,10 +171,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
       title: `Kesimpulan — ${phase.title}`,
       size: 'lg',
       children: (
-        <EditSummaryModal
-          phase={phase}
-          onConfirm={(summary) => update.mutate({ id: phase.id, body: { summary } })}
-        />
+        <EditSummaryModal phase={phase} onConfirm={(summary) => update.mutate({ id: phase.id, body: { summary } })} />
       ),
     })
   }
@@ -173,7 +201,13 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: t.title, description: t.description, status: 'PLANNING', startsAt: null, endsAt: null }),
+          body: JSON.stringify({
+            title: t.title,
+            description: t.description,
+            status: 'PLANNING',
+            startsAt: null,
+            endsAt: null,
+          }),
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
       }
@@ -188,22 +222,11 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
 
   return (
     <Stack gap="md">
-      <Select
-        size="xs"
-        placeholder="Filter by tag"
-        leftSection={<TbTag size={13} />}
-        data={availableTags.map((t) => ({ value: t.id, label: t.name }))}
-        value={tagFilter}
-        onChange={setTagFilter}
-        clearable
-        w={200}
-        disabled={availableTags.length === 0}
-      />
       {phasesQ.isLoading ? (
         <Text size="xs" c="dimmed">
           Loading…
         </Text>
-      ) : phases.length === 0 ? (
+      ) : allPhases.length === 0 ? (
         <Stack align="center" py="xl" gap="sm">
           <Text c="dimmed" size="sm">
             Belum ada fase.
@@ -221,40 +244,36 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
           )}
         </Stack>
       ) : (
-        <Stepper active={stepperActive - pageOffset} orientation="vertical" size="sm">
-          {paginatedPhases.map((phase) => (
-            <Stepper.Step
-              key={phase.id}
-              label={
-                <PhaseStepLabel
-                  phase={phase}
-                  canManage={canManage}
-                  onView={() => openDetailModal(phase)}
-                  onStart={() => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } })}
-                  onComplete={() => openCompleteModal(phase)}
-                  onEdit={() => openEditModal(phase)}
-                  onDelete={() => openDeleteModal(phase)}
-                />
-              }
-              description={
-                <PhaseStepDescription
-                  phase={phase}
-                  canManage={canManage}
-                  expanded={expandedSummaryIds.has(phase.id)}
-                  onToggleSummary={() => toggleSummary(phase.id)}
-                  onEditSummary={() => openEditSummaryModal(phase)}
-                />
-              }
-              color={phase.status === 'COMPLETED' ? 'green' : phase.status === 'ACTIVE' ? 'blue' : 'gray'}
-            >
-              {phase.description && (
-                <Text size="xs" c="dimmed" fs="italic" pb="sm">
-                  {phase.description}
-                </Text>
-              )}
-            </Stepper.Step>
-          ))}
-        </Stepper>
+        <>
+          <PhasesToolbar
+            search={search}
+            onSearchChange={setSearch}
+            view={view}
+            onViewChange={setView}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            statusCounts={statusCounts}
+            tagFilter={tagFilter}
+            onTagFilterChange={setTagFilter}
+            availableTags={availableTags}
+          />
+          <PhasesGrid
+            view={view}
+            phases={paginatedPhases}
+            canManage={canManage}
+            stepperActive={stepperActive - pageOffset}
+            expandedSummaryIds={expandedSummaryIds}
+            onToggleSummary={toggleSummary}
+            onEditSummary={openEditSummaryModal}
+            callbacks={{
+              onView: openDetailModal,
+              onStart: (phase) => update.mutate({ id: phase.id, body: { status: 'ACTIVE' } }),
+              onComplete: openCompleteModal,
+              onEdit: openEditModal,
+              onDelete: openDeleteModal,
+            }}
+          />
+        </>
       )}
 
       {totalPages > 1 && (

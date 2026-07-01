@@ -152,12 +152,35 @@ function EvidenceUploader({
   error?: string
 }) {
   const [dragOver, setDragOver] = useState(false)
+  const [pastedHint, setPastedHint] = useState(false)
   const inputId = useMemo(() => `evidence-upload-${Math.random().toString(36).slice(2, 8)}`, [])
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return
     onPick(files[0])
   }
+
+  // Paste an image straight from the clipboard (e.g. a screenshot). The uploader
+  // only mounts while the Evidence tab is open, so a document listener is scoped
+  // enough; we still skip pastes aimed at a text field so note-typing isn't hijacked.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (loading) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
+      const file = Array.from(e.clipboardData?.items ?? [])
+        .find((it) => it.kind === 'file' && it.type.startsWith('image/'))
+        ?.getAsFile()
+      if (!file) return
+      e.preventDefault()
+      setPastedHint(true)
+      setTimeout(() => setPastedHint(false), 1500)
+      onPick(file)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [loading, onPick])
 
   return (
     <Stack gap={6}>
@@ -189,10 +212,16 @@ function EvidenceUploader({
           <Stack gap={4} align="center">
             <TbCloudUpload size={28} />
             <Text size="sm" fw={500}>
-              {loading ? 'Uploading…' : dragOver ? 'Drop file to upload' : 'Drag & drop or click to select'}
+              {loading
+                ? 'Uploading…'
+                : dragOver
+                  ? 'Drop file to upload'
+                  : pastedHint
+                    ? 'Gambar dari clipboard ditambahkan'
+                    : 'Drag & drop, klik, atau tempel (paste) gambar'}
             </Text>
             <Text size="xs" c="dimmed">
-              Screenshots, logs, PDFs — anything under the size limit
+              Screenshot, log, PDF — atau Ctrl/Cmd+V untuk menempel gambar dari clipboard
             </Text>
           </Stack>
         </Card>

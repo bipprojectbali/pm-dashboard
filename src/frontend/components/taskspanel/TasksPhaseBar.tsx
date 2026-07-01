@@ -1,43 +1,21 @@
-import { Badge, Card, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { ActionIcon, Card, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { useMemo, useState } from 'react'
-import { TbInfoCircle, TbSearch } from 'react-icons/tb'
+import { TbInfoCircle, TbLayoutGrid, TbLayoutList, TbSearch } from 'react-icons/tb'
 import { PHASE_STATUS_COLOR, PHASE_STATUS_ICON, PHASE_STATUS_LABEL, type PhaseStatus } from '../phase.types'
+import { PhasePill, PhaseRow } from './PhaseBarPills'
+
+type PhaseBarView = 'grid' | 'list'
 
 const STATUSES: PhaseStatus[] = ['PLANNING', 'ACTIVE', 'COMPLETED']
 
+const VIEW_OPTIONS: Array<{ value: PhaseBarView; label: string; Icon: typeof TbLayoutGrid }> = [
+  { value: 'grid', label: 'Grid', Icon: TbLayoutGrid },
+  { value: 'list', label: 'List', Icon: TbLayoutList },
+]
+
 function isPhaseStatus(s: string): s is PhaseStatus {
   return s === 'PLANNING' || s === 'ACTIVE' || s === 'COMPLETED'
-}
-
-function PhasePill({
-  label,
-  count,
-  active,
-  color,
-  leftSection,
-  onClick,
-}: {
-  label: string
-  count?: number
-  active: boolean
-  color: string
-  leftSection?: React.ReactNode
-  onClick: () => void
-}) {
-  return (
-    <Badge
-      color={color}
-      variant={active ? 'filled' : 'light'}
-      size="sm"
-      leftSection={leftSection}
-      style={{ cursor: 'pointer', userSelect: 'none', ...(active ? { color: 'white' } : {}) }}
-      onClick={onClick}
-    >
-      {label}
-      {count !== undefined ? ` · ${count}` : ''}
-    </Badge>
-  )
 }
 
 interface Phase {
@@ -60,6 +38,10 @@ export function TasksPhaseBar({
   const [statusFilter, setStatusFilter] = useLocalStorage<PhaseStatus | 'ALL'>({
     key: 'pm:tasks:phaseStatusFilter',
     defaultValue: 'ALL',
+  })
+  const [view, setView] = useLocalStorage<PhaseBarView>({
+    key: 'pm:tasks:phaseBarView',
+    defaultValue: 'grid',
   })
 
   const statusCounts = useMemo(
@@ -153,37 +135,85 @@ export function TasksPhaseBar({
               )
             })}
           </Group>
+
+          <Group gap={4} ml="auto">
+            {VIEW_OPTIONS.map(({ value, label, Icon }) => (
+              <Tooltip key={value} label={label}>
+                <ActionIcon
+                  variant={view === value ? 'filled' : 'subtle'}
+                  color="blue"
+                  size="sm"
+                  onClick={() => setView(value)}
+                  aria-label={`Tampilan ${label}`}
+                >
+                  <Icon size={14} />
+                </ActionIcon>
+              </Tooltip>
+            ))}
+          </Group>
         </Group>
 
-        <Group gap={6} wrap="wrap" align="center">
-          <PhasePill label="Semua" active={phaseFilter === null} color="blue" onClick={() => onPhaseChange(null)} />
-          {visiblePhases.map((p) => {
-            const Icon = isPhaseStatus(p.status) ? PHASE_STATUS_ICON[p.status] : null
-            const color = isPhaseStatus(p.status) ? PHASE_STATUS_COLOR[p.status] : 'gray'
-            return (
-              <PhasePill
-                key={p.id}
-                label={p.title}
-                count={p._count.tasks}
-                active={phaseFilter === p.id}
-                color={color}
-                leftSection={Icon ? <Icon size={11} /> : undefined}
-                onClick={() => onPhaseChange(phaseFilter === p.id ? null : p.id)}
-              />
-            )
-          })}
-          {visiblePhases.length === 0 && (search.trim() || statusFilter !== 'ALL') && (
-            <Text size="xs" c="dimmed">
-              Tidak ada fase yang cocok.
-            </Text>
-          )}
-          <PhasePill
-            label="Tanpa Fase"
-            active={phaseFilter === 'none'}
-            color="gray"
-            onClick={() => onPhaseChange(phaseFilter === 'none' ? null : 'none')}
-          />
-        </Group>
+        {view === 'grid' ? (
+          <Group gap={6} wrap="wrap" align="center">
+            <PhasePill label="Semua" active={phaseFilter === null} color="blue" onClick={() => onPhaseChange(null)} />
+            {visiblePhases.map((p) => {
+              const Icon = isPhaseStatus(p.status) ? PHASE_STATUS_ICON[p.status] : null
+              const color = isPhaseStatus(p.status) ? PHASE_STATUS_COLOR[p.status] : 'gray'
+              return (
+                <PhasePill
+                  key={p.id}
+                  label={p.title}
+                  count={p._count.tasks}
+                  active={phaseFilter === p.id}
+                  color={color}
+                  leftSection={Icon ? <Icon size={11} /> : undefined}
+                  onClick={() => onPhaseChange(phaseFilter === p.id ? null : p.id)}
+                />
+              )
+            })}
+            {visiblePhases.length === 0 && (search.trim() || statusFilter !== 'ALL') && (
+              <Text size="xs" c="dimmed">
+                Tidak ada fase yang cocok.
+              </Text>
+            )}
+            <PhasePill
+              label="Tanpa Fase"
+              active={phaseFilter === 'none'}
+              color="gray"
+              onClick={() => onPhaseChange(phaseFilter === 'none' ? null : 'none')}
+            />
+          </Group>
+        ) : (
+          <Stack gap={4}>
+            <PhaseRow title="Semua" active={phaseFilter === null} color="blue" onClick={() => onPhaseChange(null)} />
+            {visiblePhases.map((p) => {
+              const Icon = isPhaseStatus(p.status) ? PHASE_STATUS_ICON[p.status] : null
+              const color = isPhaseStatus(p.status) ? PHASE_STATUS_COLOR[p.status] : 'gray'
+              return (
+                <PhaseRow
+                  key={p.id}
+                  title={p.title}
+                  count={p._count.tasks}
+                  active={phaseFilter === p.id}
+                  color={color}
+                  leftSection={Icon ? <Icon size={13} /> : undefined}
+                  onClick={() => onPhaseChange(phaseFilter === p.id ? null : p.id)}
+                />
+              )
+            })}
+            {visiblePhases.length === 0 && (search.trim() || statusFilter !== 'ALL') && (
+              <Text size="xs" c="dimmed">
+                Tidak ada fase yang cocok.
+              </Text>
+            )}
+            <PhaseRow
+              title="Tanpa Fase"
+              active={phaseFilter === 'none'}
+              color="gray"
+              onClick={() => onPhaseChange(phaseFilter === 'none' ? null : 'none')}
+            />
+          </Stack>
+        )}
       </Stack>
     </Card>
   )

@@ -1,6 +1,6 @@
-import { ActionIcon, Card, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { ActionIcon, Card, Group, Pagination, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { TbInfoCircle, TbLayoutGrid, TbLayoutList, TbSearch } from 'react-icons/tb'
 import { PHASE_STATUS_COLOR, PHASE_STATUS_ICON, PHASE_STATUS_LABEL, type PhaseStatus } from '../phase.types'
 import { PhasePill, PhaseRow } from './PhaseBarPills'
@@ -8,6 +8,7 @@ import { PhasePill, PhaseRow } from './PhaseBarPills'
 type PhaseBarView = 'grid' | 'list'
 
 const STATUSES: PhaseStatus[] = ['PLANNING', 'ACTIVE', 'COMPLETED']
+const PAGE_SIZE = 12
 
 const VIEW_OPTIONS: Array<{ value: PhaseBarView; label: string; Icon: typeof TbLayoutGrid }> = [
   { value: 'grid', label: 'Grid', Icon: TbLayoutGrid },
@@ -62,6 +63,20 @@ export function TasksPhaseBar({
       return true
     })
   }, [phases, search, statusFilter])
+
+  const [page, setPage] = useState(1)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [search, statusFilter, view])
+
+  const totalPages = Math.ceil(visiblePhases.length / PAGE_SIZE)
+  const pageOffset = (page - 1) * PAGE_SIZE
+  const pagedPhases = useMemo(
+    () => visiblePhases.slice(pageOffset, pageOffset + PAGE_SIZE),
+    [visiblePhases, pageOffset],
+  )
+  const noMatch = visiblePhases.length === 0 && (search.trim() !== '' || statusFilter !== 'ALL')
 
   if (phases.length === 0) return null
 
@@ -156,7 +171,7 @@ export function TasksPhaseBar({
         {view === 'grid' ? (
           <Group gap={6} wrap="wrap" align="center">
             <PhasePill label="Semua" active={phaseFilter === null} color="blue" onClick={() => onPhaseChange(null)} />
-            {visiblePhases.map((p) => {
+            {pagedPhases.map((p) => {
               const Icon = isPhaseStatus(p.status) ? PHASE_STATUS_ICON[p.status] : null
               const color = isPhaseStatus(p.status) ? PHASE_STATUS_COLOR[p.status] : 'gray'
               return (
@@ -171,7 +186,7 @@ export function TasksPhaseBar({
                 />
               )
             })}
-            {visiblePhases.length === 0 && (search.trim() || statusFilter !== 'ALL') && (
+            {noMatch && (
               <Text size="xs" c="dimmed">
                 Tidak ada fase yang cocok.
               </Text>
@@ -186,7 +201,7 @@ export function TasksPhaseBar({
         ) : (
           <Stack gap={4}>
             <PhaseRow title="Semua" active={phaseFilter === null} color="blue" onClick={() => onPhaseChange(null)} />
-            {visiblePhases.map((p) => {
+            {pagedPhases.map((p) => {
               const Icon = isPhaseStatus(p.status) ? PHASE_STATUS_ICON[p.status] : null
               const color = isPhaseStatus(p.status) ? PHASE_STATUS_COLOR[p.status] : 'gray'
               return (
@@ -201,7 +216,7 @@ export function TasksPhaseBar({
                 />
               )
             })}
-            {visiblePhases.length === 0 && (search.trim() || statusFilter !== 'ALL') && (
+            {noMatch && (
               <Text size="xs" c="dimmed">
                 Tidak ada fase yang cocok.
               </Text>
@@ -213,6 +228,15 @@ export function TasksPhaseBar({
               onClick={() => onPhaseChange(phaseFilter === 'none' ? null : 'none')}
             />
           </Stack>
+        )}
+
+        {totalPages > 1 && (
+          <Group justify="space-between" align="center" mt={2}>
+            <Text size="xs" c="dimmed">
+              {pageOffset + 1}–{Math.min(pageOffset + PAGE_SIZE, visiblePhases.length)} dari {visiblePhases.length} fase
+            </Text>
+            <Pagination value={page} onChange={setPage} total={totalPages} size="xs" />
+          </Group>
         )}
       </Stack>
     </Card>

@@ -296,4 +296,33 @@ export function registerTaskWriteTools(server: McpServer) {
       return jsonText({ ok: true, evidence })
     },
   )
+
+  server.registerTool(
+    'task_delete_evidence',
+    {
+      title: 'Delete evidence',
+      description: 'Remove an evidence attachment from a task by evidence id. Locally-uploaded files are unlinked too.',
+      inputSchema: { evidenceId: z.string() },
+    },
+    async ({ evidenceId }) => {
+      const evidence = await prisma.taskEvidence.findUnique({
+        where: { id: evidenceId },
+        select: { id: true, taskId: true, url: true },
+      })
+      if (!evidence) return jsonText({ error: `Evidence not found: ${evidenceId}` })
+      const match = evidence.url.match(/^\/api\/evidence\/([^?]+)/)
+      if (match) {
+        const fs = await import('node:fs/promises')
+        const path = await import('node:path')
+        const { env } = await import('../../../src/lib/env')
+        const safeName = match[1].replace(/[^a-zA-Z0-9._-]/g, '')
+        const rootDir = path.resolve(env.UPLOADS_DIR, 'evidence', evidence.taskId)
+        const fullPath = path.resolve(rootDir, safeName)
+        if (fullPath.startsWith(rootDir)) await fs.unlink(fullPath).catch(() => {})
+      }
+      await prisma.taskEvidence.delete({ where: { id: evidence.id } })
+      await audit(null, 'MCP_EVIDENCE_DELETED', `task=${evidence.taskId} evidence=${evidence.id}`)
+      return jsonText({ ok: true })
+    },
+  )
 }

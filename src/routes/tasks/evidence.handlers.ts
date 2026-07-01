@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/db'
 import { env } from '../../lib/env'
+import { getEvidence, putEvidence, removeEvidence } from '../../lib/evidence-storage'
 import { emitInvalidate } from '../../lib/presence'
 import { getIp, isSystemAdmin, requireAuth, requireProjectMember, writeAuditLog } from '../../lib/route-helpers'
 
@@ -72,17 +73,13 @@ export async function uploadEvidenceHandler({ request, params, set }: CtxWithPar
     set.status = 413
     return { error: `File terlalu besar (max ${env.UPLOAD_MAX_BYTES} bytes)` }
   }
-  const fs = await import('node:fs/promises')
   const path = await import('node:path')
-  const safeDir = path.resolve(env.UPLOADS_DIR, 'evidence', params.id)
-  await fs.mkdir(safeDir, { recursive: true })
   const ext = path
     .extname(file.name)
     .slice(0, 12)
     .replace(/[^a-zA-Z0-9.]/g, '')
   const storedName = `${crypto.randomUUID()}${ext}`
-  const fullPath = path.join(safeDir, storedName)
-  await Bun.write(fullPath, file)
+  await putEvidence(params.id, storedName, file, file.type || undefined)
   const mimeKind = file.type.startsWith('image/')
     ? 'SCREENSHOT'
     : file.type.startsWith('text/') || file.type === 'application/json'
@@ -137,12 +134,15 @@ export async function deleteEvidenceHandler({
     set.status = 403
     return { error: 'Not a writable project member' }
   }
-  // Best-effort remove the uploaded file (only for locally-stored evidence).
+  // Best-effort remove the stored file (only for locally-managed evidence, i.e.
+  // /api/evidence/... URLs — external URLs are left alone). Removes from MinIO
+  // and, if present, the legacy on-disk copy.
   const match = evidence.url.match(/^\/api\/evidence\/([^?]+)/)
   if (match) {
+    const safeName = match[1].replace(/[^a-zA-Z0-9._-]/g, '')
+    await removeEvidence(params.id, safeName)
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const safeName = match[1].replace(/[^a-zA-Z0-9._-]/g, '')
     const rootDir = path.resolve(env.UPLOADS_DIR, 'evidence', params.id)
     const fullPath = path.resolve(rootDir, safeName)
     if (fullPath.startsWith(rootDir)) await fs.unlink(fullPath).catch(() => {})
@@ -174,18 +174,31 @@ export async function serveEvidenceHandler({ request, params, query, set }: CtxW
     set.status = 403
     return { error: 'Not a project member' }
   }
-  const path = await import('node:path')
   const safeName = params.file.replace(/[^a-zA-Z0-9._-]/g, '')
-  const fullPath = path.resolve(env.UPLOADS_DIR, 'evidence', taskId, safeName)
+
+  // Prefer MinIO (new uploads). We read the object directly rather than calling
+  // exists() first — MinIO's HEAD response makes Bun's exists() throw, while a
+  // direct GET works. A missing key throws NoSuchKey, which we treat as "try disk".
+  try {
+    const bytes = await getEvidence(taskId, safeName).bytes()
+    return new Response(bytes)
+  } catch (e) {
+    const code = (e as { code?: string }).code
+    if (code && code !== 'NoSuchKey' && code !== 'ERR_S3_INVALID_PATH') {
+      set.status = 502
+      return { error: 'Storage unavailable' }
+    }
+    // fall through to legacy on-disk lookup
+  }
+
+  // Fallback: evidence uploaded before the MinIO migration still lives on disk.
+  const path = await import('node:path')
   const rootDir = path.resolve(env.UPLOADS_DIR, 'evidence', taskId)
-  if (!fullPath.startsWith(rootDir)) {
-    set.status = 400
-    return { error: 'Invalid path' }
+  const fullPath = path.resolve(rootDir, safeName)
+  if (fullPath.startsWith(rootDir)) {
+    const diskFile = Bun.file(fullPath)
+    if (await diskFile.exists()) return new Response(diskFile)
   }
-  const file = Bun.file(fullPath)
-  if (!(await file.exists())) {
-    set.status = 404
-    return { error: 'File not found' }
-  }
-  return new Response(file)
+  set.status = 404
+  return { error: 'File not found' }
 }

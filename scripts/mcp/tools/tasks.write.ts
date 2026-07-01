@@ -312,10 +312,12 @@ export function registerTaskWriteTools(server: McpServer) {
       if (!evidence) return jsonText({ error: `Evidence not found: ${evidenceId}` })
       const match = evidence.url.match(/^\/api\/evidence\/([^?]+)/)
       if (match) {
+        const { removeEvidence } = await import('../../../src/lib/evidence-storage')
         const fs = await import('node:fs/promises')
         const path = await import('node:path')
         const { env } = await import('../../../src/lib/env')
         const safeName = match[1].replace(/[^a-zA-Z0-9._-]/g, '')
+        await removeEvidence(evidence.taskId, safeName)
         const rootDir = path.resolve(env.UPLOADS_DIR, 'evidence', evidence.taskId)
         const fullPath = path.resolve(rootDir, safeName)
         if (fullPath.startsWith(rootDir)) await fs.unlink(fullPath).catch(() => {})

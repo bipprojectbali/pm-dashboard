@@ -5,6 +5,7 @@ import pkg from '../package.json' with { type: 'json' }
 import { appLog } from './lib/applog'
 import { broadcastToAdmins } from './lib/presence'
 import { adminRoutes } from './routes/admin.route'
+import { agentRoutes } from './routes/agent.route'
 import { authRoutes } from './routes/auth.route'
 import { eventsRoutes } from './routes/events.route'
 import { extensionsRoutes } from './routes/extensions.route'
@@ -86,4 +87,5 @@ export function createApp() {
     .use(eventsRoutes())
     .use(extensionsRoutes())
     .use(mcpRoutes())
+    .use(agentRoutes())
 }

@@ -4,6 +4,7 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - Overview / Effort / Retro → `@docs/FEATURES.md`
 - pm-watch + GitHub webhooks → `@docs/INTEGRATIONS.md`
 - QC tickets → `@docs/QC-TICKETS.md`
+- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped HTTP MCP for agents; auth `Bearer pmt_` project token (not session). See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint.
 
 ## Admin API (SUPER_ADMIN only)
 

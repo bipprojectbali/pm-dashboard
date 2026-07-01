@@ -5,13 +5,20 @@ Local MCP server lets Claude drive the app remotely. `.mcp.json` registers 4 ser
 - `playwright` — browser automation (`@playwright/mcp@latest`)
 - `pm-dashboard` — local stdio MCP against the dev DB/Redis (`scripts/mcp/server.ts`)
 - `deploy-stg` — wrapper around `gh workflow run` for the Publish/Re-Pull pipeline (`scripts/mcp-deploy/server.ts`). See `@docs/DEPLOYMENT.md`.
-- `pm-dashboard-stg` — remote HTTP MCP against stg (`https://pm-dashboard.wibudev.com/mcp`, Bearer `MCP_SECRET`). Readonly because stg runs with `NODE_ENV=production` — override that env to `staging` in Portainer if full CRUD is needed.
+- `pm-dashboard-stg` — remote HTTP MCP against stg (`https://pm-dashboard.wibudev.com/mcp`). **Auth = per-project `pmt_` access token** (Tahap 2a); scope + project come from the token, not `MCP_SECRET`/`NODE_ENV`. See § HTTP MCP (token-scoped) below.
 
 Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: `production` → readonly (query tools only), anything else → admin (write + dev tools). No admin-only secret — the cap lives in code, not config.
 
 - Entry: `scripts/mcp/server.ts` + `scripts/mcp/test-client.ts`
 - Tool modules (`scripts/mcp/tools/`): `access-tokens`, `admin`, `chat`, `code`, `db`, `dev`, `events`, `extensions`, `github`, `health`, `logs`, `milestones`, `overview`, `permissions`, `phases`, `presence`, `project`, `projects`, `qc`, `redis`, `report`, `tags`, `tasks`, `tickets` (24 domains, 118 tools). Some domains span multiple files split by scope (e.g. `qc` = `qc.readonly.ts` + `qc.write.ts`, `tasks` = `tasks.ts` + `tasks.write.ts` + `tasks.checklist.ts` + `tasks.bulk.ts`); `*.helpers.ts`, `shared.ts`, and the `qc`/`tasks`/`projects` barrels are not tool modules.
-- HTTP fallback: `POST /mcp` — Bearer `MCP_SECRET`. Response `x-mcp-scope` reflects the effective scope (readonly in prod, admin otherwise).
+## HTTP MCP (token-scoped, Tahap 2a)
+
+`POST /mcp` (+ `GET`/`DELETE`) is a **separate surface** from the stdio server, authenticated by per-project `pmt_` access tokens (NOT `MCP_SECRET`). Lets a coding agent (Claude Code) connect scoped to exactly one project. See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint.
+
+- **Auth**: `Authorization: Bearer pmt_…` → `verifyProjectToken` → `{ projectId, scope, userId }`. Invalid/revoked/expired/missing → 401. Dangling-project (deleted after issue) → 401.
+- **Route**: `src/routes/mcp.route.ts`. **Builder**: `scripts/mcp/token-scoped-server.ts` `buildTokenScopedServer(ctx)` — harvests existing task tools via a capture-proxy, registers only the scope whitelist, strips `projectId` from the schema + injects the token's project, enforces cross-project ownership, blocks IDEA mutation. Stateless `WebStandardStreamableHTTPServerTransport` (fresh server+transport per request; no `initialize` needed).
+- **Tools by scope**: READ → `task_list`, `task_get`. WRITE → + `task_create`, `task_update`, `task_transition`, `task_comment`, `task_checklist_add`/`update`/`delete`. IDEA is read-only. Tickets/task_delete/bulk/dependency deferred to Tahap 2b.
+- **Independent from stdio cap**: `buildTokenScopedServer` never reads `NODE_ENV`; WRITE is gated solely by `ctx.scope`. The stdio server's `MCP_SECRET` + `NODE_ENV` readonly cap is unchanged.
 
 ## Tools by module
 

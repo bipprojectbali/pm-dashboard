@@ -60,6 +60,10 @@ Session-based auth with HttpOnly cookies stored in DB.
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
 - Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
 
+## HTTP MCP endpoint
+
+- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped MCP surface for coding agents. Auth via per-project `pmt_` access token (not session, not `MCP_SECRET`). Uses SDK `WebStandardStreamableHTTPServerTransport` in **stateless** mode (fresh `McpServer` + transport per request). `src/routes/mcp.route.ts` + `scripts/mcp/token-scoped-server.ts`. See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint and `@docs/MCP.md` § HTTP MCP (token-scoped). Distinct from the stdio MCP server.
+
 ## WebSocket
 
 - `WS /ws/presence` — real-time user presence. Authenticates via session cookie. Tracks connections in-memory (`src/lib/presence.ts`). Broadcasts online user list to admin subscribers on connect/disconnect.

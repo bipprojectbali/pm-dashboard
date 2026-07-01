@@ -52,4 +52,22 @@ Per-user, project-scoped bearer tokens so coding agents (mis. Claude Code) bisa 
 - **API**: lihat `@docs/API.md` § Access Tokens. **MCP**: `access_token_list` (readonly), `access_token_create`/`access_token_revoke` (admin) — lihat `@docs/MCP.md`.
 - **Frontend**: `AccessTokensCard` di tab Settings project — create form (nama + scope + expiry preset), show-once modal dengan copy, tabel token + revoke/delete.
 
-> **Status Tahap 1 (saat ini):** hanya lifecycle token (buat/list/revoke/hapus). **Auth belum aktif** — endpoint `/api/tasks` dll belum mengenali `Bearer pmt_…`. Resolusi token ke request (via `verifyProjectToken` di pola `hasMcpSecretAuth`, `src/routes/settings/helpers.ts`) + scope-gating write adalah **Tahap 2**. Sebelum deploy, pola `pmt_` perlu masuk scanner env-leak preflight agar token tak ke-commit.
+### HTTP MCP endpoint (Tahap 2a — aktif)
+
+Agent coding (mis. Claude Code) connect ke `POST /mcp` dengan token `pmt_` → dapat MCP tool yang **otomatis ter-scope ke project token**. Tidak perlu kirim `projectId`.
+
+- **Endpoint**: `POST /mcp` (+ `GET`/`DELETE` per spec MCP). Auth: `Authorization: Bearer pmt_…`. Header wajib client: `Accept: application/json, text/event-stream` + `Content-Type: application/json`. Token invalid/revoked/expired/hilang → **401**.
+- **Transport**: `WebStandardStreamableHTTPServerTransport` (SDK MCP, Web-standard Request→Response), **stateless** (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) — server + transport baru per request. Tidak perlu `initialize` sebelum `tools/call`.
+- **Builder**: `scripts/mcp/token-scoped-server.ts` `buildTokenScopedServer(ctx)` — memanen tool task existing via capture-proxy lalu mendaftar hanya subset sesuai scope, strip `projectId` dari schema + inject dari token, enforce ownership lintas-project, blokir mutasi IDEA. **Tidak baca `NODE_ENV`** (beda dari stdio server) — WRITE digate murni `ctx.scope`.
+- **Whitelist tool 2a**: READ → `task_list`, `task_get`. WRITE → + `task_create`, `task_update`, `task_transition`, `task_comment`, `task_checklist_add`/`update`/`delete`. IDEA read-only (create/update IDEA ditolak). **Tiket & task_delete/bulk/dependency ditunda ke Tahap 2b.**
+- **Route**: `src/routes/mcp.route.ts` (di-`use` di `src/app.ts`). Beda dari stdio MCP server (`scripts/mcp/server.ts`, auth `MCP_SECRET` + scope by `NODE_ENV`) — dua surface independen.
+- **Konfigurasi Claude Code** (`.mcp.json` di repo project):
+  ```json
+  { "mcpServers": { "pm-dashboard": {
+    "type": "http",
+    "url": "https://pm-dashboard.wibudev.com/mcp",
+    "headers": { "Authorization": "Bearer pmt_…" }
+  } } }
+  ```
+
+> **Belum di Tahap 2a:** alur tiket (`ticket_pick`/`ticket_submit`) — tool sudah ada di stdio, tinggal di-whitelist ke HTTP surface (Tahap 2b). **Keamanan:** pola `pmt_` sudah masuk scanner env-leak preflight (`scripts/mcp-deploy`) agar token tak ter-commit.

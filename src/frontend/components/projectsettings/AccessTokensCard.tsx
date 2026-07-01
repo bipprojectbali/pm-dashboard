@@ -16,7 +16,6 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 import { TbCheck, TbCopy, TbDots, TbKey, TbPlus, TbShieldOff, TbTrash } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
 
@@ -114,6 +113,9 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
   const tokens = data?.tokens ?? []
 
   const openShowOnceModal = (raw: string, name: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const docsUrl = `${origin}/llms-agent.txt`
+    const curlSnippet = `curl -H "Authorization: Bearer ${raw}" ${origin}/api/agent/tasks`
     modals.open({
       title: `Token dibuat: ${name}`,
       size: 'lg',
@@ -135,8 +137,34 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
             </Group>
           </Card>
           <Text size="xs" c="dimmed">
-            Token ini akan digunakan agent (mis. Claude Code) untuk mengakses project ini. Integrasi auth agent
-            diaktifkan pada tahap berikutnya.
+            Token untuk agent (Claude Code / CLI) mengakses project ini. Panduan endpoint (butuh token/login):
+          </Text>
+          <Card withBorder padding="sm" radius="sm">
+            <Stack gap={6}>
+              <Group gap="xs" wrap="nowrap">
+                <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{docsUrl}</Code>
+                <CopyButton value={docsUrl}>
+                  {({ copied, copy }) => (
+                    <Button size="xs" variant="light" leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />} onClick={copy}>
+                      {copied ? 'Tersalin' : 'Salin'}
+                    </Button>
+                  )}
+                </CopyButton>
+              </Group>
+              <Group gap="xs" wrap="nowrap">
+                <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{curlSnippet}</Code>
+                <CopyButton value={curlSnippet}>
+                  {({ copied, copy }) => (
+                    <Button size="xs" variant="light" leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />} onClick={copy}>
+                      {copied ? 'Tersalin' : 'Salin'}
+                    </Button>
+                  )}
+                </CopyButton>
+              </Group>
+            </Stack>
+          </Card>
+          <Text size="xs" c="dimmed">
+            Alternatif interaktif: MCP endpoint <Code>{origin}/mcp</Code> untuk Claude Code.
           </Text>
         </Stack>
       ),

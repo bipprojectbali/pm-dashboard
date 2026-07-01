@@ -19,6 +19,7 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 - **Route**: `src/routes/mcp.route.ts`. **Builder**: `scripts/mcp/token-scoped-server.ts` `buildTokenScopedServer(ctx)` — harvests existing task tools via a capture-proxy, registers only the scope whitelist, strips `projectId` from the schema + injects the token's project, enforces cross-project ownership, blocks IDEA mutation. Stateless `WebStandardStreamableHTTPServerTransport` (fresh server+transport per request; no `initialize` needed).
 - **Tools by scope**: READ → `task_list`, `task_get`. WRITE → + `task_create`, `task_update`, `task_transition`, `task_comment`, `task_checklist_add`/`update`/`delete`. IDEA is read-only. Tickets/task_delete/bulk/dependency deferred to Tahap 2b.
 - **Independent from stdio cap**: `buildTokenScopedServer` never reads `NODE_ENV`; WRITE is gated solely by `ctx.scope`. The stdio server's `MCP_SECRET` + `NODE_ENV` readonly cap is unchanged.
+- **MCP vs REST trade-off**: MCP loads all tool schemas into the agent's context each session (heavier) — best for interactive Claude Code. For CLI/scripts/CI, the lighter token-only REST surface `/api/agent/*` (+ `GET /llms.txt` guide) does the same operations via plain `curl` with the **same `pmt_` token**. See `@docs/INTEGRATIONS.md` § REST agent surface + `@docs/API.md` § Agent REST API.
 
 ## Tools by module
 

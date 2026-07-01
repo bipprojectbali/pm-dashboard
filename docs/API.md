@@ -5,6 +5,21 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - pm-watch + GitHub webhooks → `@docs/INTEGRATIONS.md`
 - QC tickets → `@docs/QC-TICKETS.md`
 - `POST /mcp` (+ `GET`/`DELETE`) — token-scoped HTTP MCP for agents; auth `Bearer pmt_` project token (not session). See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint.
+- `/api/agent/*` — token-only REST surface for CLI agents (lighter than MCP); auth `Bearer pmt_`. See § Agent REST API below + `GET /llms.txt` (machine-readable guide).
+
+## Agent REST API (`/api/agent/*`)
+
+Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Bearer pmt_…` (project access token). Auto-scoped to the token's project — never pass `projectId`. READ token → GET; WRITE token → + POST/PATCH. `IDEA`-kind read-only. Cross-project access → 404 (no-leak). Errors: 401 (bad/expired/revoked token), 403 (READ doing write, or IDEA mutation), 404, 400.
+
+- `GET /api/agent/tasks` — list token-project tasks. Query: `status`, `kind`, `assigneeEmail`, `limit` (max 200).
+- `GET /api/agent/tasks/:id` — task detail (404 if not in token project).
+- `POST /api/agent/tasks` (WRITE) — create. Body: `title`, `description` (both required), `kind?` (TASK|BUG|QC|TICKET — not IDEA), `priority?`, `assigneeEmail?`, `dueAt?`, `estimateHours?`.
+- `PATCH /api/agent/tasks/:id` (WRITE) — update + status transition (validated against state machine; writes `TaskStatusChange`).
+- `POST /api/agent/tasks/:id/comments` (WRITE) — body `{ body }`; comment tagged `AGENT`.
+- `POST /api/agent/tasks/:id/checklist` (WRITE) — body `{ title }`. `PATCH/DELETE /api/agent/checklist/:itemId` (WRITE).
+- `GET /llms.txt` — machine-readable guide (llmstxt.org) to this surface with `curl` examples; base URL from request origin.
+
+Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted.
 
 ## Admin API (SUPER_ADMIN only)
 

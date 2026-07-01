@@ -71,3 +71,13 @@ Agent coding (mis. Claude Code) connect ke `POST /mcp` dengan token `pmt_` → d
   ```
 
 > **Belum di Tahap 2a:** alur tiket (`ticket_pick`/`ticket_submit`) — tool sudah ada di stdio, tinggal di-whitelist ke HTTP surface (Tahap 2b). **Keamanan:** pola `pmt_` sudah masuk scanner env-leak preflight (`scripts/mcp-deploy`) agar token tak ter-commit.
+
+### REST agent surface (CLI) — `/api/agent/*` + `llms.txt`
+
+Alternatif **ringan** dari MCP untuk agent CLI/script. MCP memuat skema semua tool ke context window tiap sesi (berat); REST cukup `curl` dengan header token — nol overhead protokol. **Token `pmt_` yang sama** dipakai untuk `/mcp` (interaktif) dan `/api/agent/*` (CLI).
+
+- **Auth**: `Authorization: Bearer pmt_…` (token-only, tidak terima session). Auto-scoped ke project token; agent tak pernah kirim `projectId`. READ → GET; WRITE → + POST/PATCH. IDEA read-only. Cross-project → 404 no-leak.
+- **Endpoint**: list/get/create/update(+transition)/comment/checklist di `/api/agent/*`. Lihat `@docs/API.md` § Agent REST API. Route `src/routes/agent.route.ts`, helper `src/lib/agent-auth.ts`.
+- **`GET /llms.txt`**: dokumentasi mesin-readable (format llmstxt.org) berisi semua endpoint + contoh `curl`, base URL dari request origin. Konten di `src/lib/llms-content.ts`; ditambahkan ke `isApiRoute` (`src/index.tsx`) agar tak kena SPA fallback.
+- **Isolasi**: surface ini terpisah total dari endpoint session `/api/tasks` (yang tetap session-only) — nol risiko regresi. Enforcement mirror `scripts/mcp/token-scoped-server.ts`.
+- **Kapan pakai apa**: MCP untuk Claude Code interaktif (tool discovery, multi-step). REST/`llms.txt` untuk CI, cron, one-shot command, atau agent non-MCP.

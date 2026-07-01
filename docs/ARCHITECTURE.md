@@ -60,9 +60,14 @@ Session-based auth with HttpOnly cookies stored in DB.
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
 - Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
 
-## HTTP MCP endpoint
+## Agent surfaces (token-authed)
 
-- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped MCP surface for coding agents. Auth via per-project `pmt_` access token (not session, not `MCP_SECRET`). Uses SDK `WebStandardStreamableHTTPServerTransport` in **stateless** mode (fresh `McpServer` + transport per request). `src/routes/mcp.route.ts` + `scripts/mcp/token-scoped-server.ts`. See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint and `@docs/MCP.md` § HTTP MCP (token-scoped). Distinct from the stdio MCP server.
+Two ways a per-project `pmt_` access token lets a coding agent reach one project's data:
+
+- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped MCP surface. Auth via `pmt_` token (not session, not `MCP_SECRET`). SDK `WebStandardStreamableHTTPServerTransport`, **stateless** (fresh `McpServer` + transport per request). `src/routes/mcp.route.ts` + `scripts/mcp/token-scoped-server.ts`. For interactive Claude Code.
+- `/api/agent/*` + `GET /llms.txt` — token-only REST surface (lighter than MCP) for CLI/scripts. `src/routes/agent.route.ts` + `src/lib/agent-auth.ts`; guide at `/llms.txt` (`src/lib/llms-content.ts`). Isolated from session routes.
+
+Both use the same token; see `@docs/INTEGRATIONS.md` and `@docs/API.md` § Agent REST API. Distinct from the stdio MCP server.
 
 ## WebSocket
 

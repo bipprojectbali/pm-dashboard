@@ -11,6 +11,7 @@ import { extensionsRoutes } from './routes/extensions.route'
 import { meRoutes } from './routes/me.route'
 import { phasesRoutes } from './routes/phases.route'
 import { projectsRoutes } from './routes/projects.route'
+import { mcpRoutes } from './routes/mcp.route'
 import { qcRoutes } from './routes/qc.route'
 import { settingsRoutes } from './routes/settings.route'
 import { tasksRoutes } from './routes/tasks.route'
@@ -84,4 +85,5 @@ export function createApp() {
     .use(settingsRoutes())
     .use(eventsRoutes())
     .use(extensionsRoutes())
+    .use(mcpRoutes())
 }

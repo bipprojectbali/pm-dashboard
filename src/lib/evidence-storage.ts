@@ -60,10 +60,11 @@ async function createBucket(): Promise<void> {
 }
 
 function ensureBucket(): Promise<void> {
-  if (!bucketEnsured) bucketEnsured = createBucket().catch((e) => {
-    bucketEnsured = null // allow retry on next call if creation failed
-    throw e
-  })
+  if (!bucketEnsured)
+    bucketEnsured = createBucket().catch((e) => {
+      bucketEnsured = null // allow retry on next call if creation failed
+      throw e
+    })
   return bucketEnsured
 }
 

@@ -3,7 +3,9 @@ import { html } from '@elysiajs/html'
 import { Elysia } from 'elysia'
 import pkg from '../package.json' with { type: 'json' }
 import { appLog } from './lib/applog'
+import { renderLlmsTxt } from './lib/llms-content'
 import { broadcastToAdmins } from './lib/presence'
+import { getPublicOrigin } from './lib/route-helpers'
 import { adminRoutes } from './routes/admin.route'
 import { agentRoutes } from './routes/agent.route'
 import { authRoutes } from './routes/auth.route'
@@ -64,6 +66,13 @@ export function createApp() {
     })
 
     .get('/health', () => ({ status: 'ok' }))
+    .get(
+      '/llms.txt',
+      ({ request }) =>
+        new Response(renderLlmsTxt(getPublicOrigin(request)), {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        }),
+    )
     .get('/api/version', () => ({
       name: pkg.name,
       version: pkg.version,

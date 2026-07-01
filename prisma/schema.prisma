@@ -44,6 +44,16 @@ enum ProjectVisibility {
   PUBLIC
 }
 
+enum ProjectTokenScope {
+  READ
+  WRITE
+}
+
+enum ProjectTokenStatus {
+  ACTIVE
+  REVOKED
+}
+
 enum TaskKind {
   TASK
   BUG
@@ -109,6 +119,7 @@ model User {
   ownedProjects      Project[]       @relation("ProjectOwner")
   projectMemberships ProjectMember[]
   projectExtensions  ProjectExtension[] @relation("ProjectExtensionAuthor")
+  projectAccessTokens ProjectAccessToken[] @relation("ProjectAccessTokenAuthor")
   reportedTasks      Task[]          @relation("TaskReporter")
   assignedTasks      Task[]          @relation("TaskAssignee")
   deletedTasks       Task[]          @relation("TaskDeletedBy")
@@ -216,6 +227,7 @@ model Project {
   githubEvents ProjectGithubEvent[]
   githubLogs   GithubWebhookLog[]
   events       Event[]
+  accessTokens ProjectAccessToken[]
 
   @@index([ownerId])
   @@index([archivedAt])
@@ -281,6 +293,33 @@ model ProjectExtension {
   @@index([projectId])
   @@index([createdAt])
   @@map("project_extension")
+}
+
+// Per-user, project-scoped bearer token so coding agents (e.g. Claude Code) can
+// read/update a single project's tasks/tickets. `tokenHash` = SHA-256 of the raw
+// token (never stored plaintext); `tokenPrefix` is the first chars for UI display.
+// Auth resolution is wired in Tahap 2 — Tahap 1 only manages the token lifecycle.
+model ProjectAccessToken {
+  id          String             @id @default(uuid())
+  projectId   String
+  createdById String?
+  name        String
+  tokenHash   String             @unique
+  tokenPrefix String
+  scope       ProjectTokenScope  @default(READ)
+  status      ProjectTokenStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("ProjectAccessTokenAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+  @@index([createdById])
+  @@map("project_access_token")
 }
 
 model ProjectMember {

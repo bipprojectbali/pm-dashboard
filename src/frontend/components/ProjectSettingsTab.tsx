@@ -7,6 +7,7 @@ import { TbCalendarEvent, TbClock, TbTrash } from 'react-icons/tb'
 import { useIsExtensionEnabled } from '../hooks/useExtensions'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { GithubIntegrationCard } from './GithubIntegrationCard'
+import { AccessTokensCard } from './projectsettings/AccessTokensCard'
 import type { ProjectDetail, ProjectPriority, ProjectStatus, ProjectVisibility } from './ProjectsPanel'
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -252,6 +253,8 @@ export function ProjectSettingsTab({
           error={update.error as Error | null}
         />
       )}
+
+      <AccessTokensCard projectId={project.id} canManage={canManage} />
 
       {canDelete && (
         <Card withBorder padding="md" radius="md" style={{ borderColor: 'var(--mantine-color-red-4)' }}>

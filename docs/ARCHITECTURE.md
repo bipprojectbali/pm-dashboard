@@ -25,6 +25,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `GithubWebhookLog` (id, projectId?, deliveryId?, event, statusCode, reason?, ip?, eventsIn, createdAt) — audit trail for `/webhooks/github`
   - `ProjectMember` (projectId, userId, role) — unique per (projectId, userId)
   - `ProjectMilestone`, `ProjectExtension` — planning + audited deadline pushes
+  - `ProjectAccessToken` (id, projectId, createdById?, name, tokenHash @unique, tokenPrefix, scope, status, expiresAt?, lastUsedAt?, timestamps) — per-user, project-scoped bearer token for coding agents. `tokenHash` = SHA-256 of raw `pmt_…` token (plaintext never stored); `tokenPrefix` for UI display. Enums `ProjectTokenScope` = `READ | WRITE`, `ProjectTokenStatus` = `ACTIVE | REVOKED`. See `@docs/INTEGRATIONS.md` § Project Access Tokens. **Auth resolution is Tahap 2 — Tahap 1 only manages the token lifecycle.**
   - `ProjectPhase` (id, projectId, title, description?, summary?, status=PhaseStatus, order, startsAt?, endsAt?, timestamps) — fase/sprint per project; `summary` diisi saat menutup fase (ACTIVE→COMPLETED). Tasks link via nullable FK `phaseId` with `onDelete: SetNull`. Enum `PhaseStatus` = `PLANNING | ACTIVE | COMPLETED`.
   - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, timestamps) — plus 6 nullable QC structured bug-report columns `stepsToReproduce?`, `expected?`, `actual?`, `environment?`, `browser?`, `appVersion?` populated only by QC tickets filed via the structured create form (legacy/free-text tickets leave them null); see `@docs/QC-TICKETS.md`
   - `Tag` (id, projectId, name, color) — unique per (projectId, name)
@@ -59,6 +60,15 @@ Session-based auth with HttpOnly cookies stored in DB.
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
 - Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
 
+## Agent surfaces (token-authed)
+
+Two ways a per-project `pmt_` access token lets a coding agent reach one project's data:
+
+- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped MCP surface. Auth via `pmt_` token (not session, not `MCP_SECRET`). SDK `WebStandardStreamableHTTPServerTransport`, **stateless** (fresh `McpServer` + transport per request). `src/routes/mcp.route.ts` + `scripts/mcp/token-scoped-server.ts`. For interactive Claude Code.
+- `/api/agent/*` (incl. `GET /api/agent/guide`) — token-only REST surface (lighter than MCP) for CLI/scripts. `src/routes/agent.route.ts` + `src/lib/agent-auth.ts`; **auth-gated** guide at `/api/agent/guide` (`src/lib/llms-content.ts`) — requires a `pmt_` token OR a logged-in session (not public; internal tool). Isolated from session routes.
+
+Both use the same token; see `@docs/INTEGRATIONS.md` and `@docs/API.md` § Agent REST API. Distinct from the stdio MCP server.
+
 ## WebSocket
 
 - `WS /ws/presence` — real-time user presence. Authenticates via session cookie. Tracks connections in-memory (`src/lib/presence.ts`). Broadcasts online user list to admin subscribers on connect/disconnect.
@@ -72,10 +82,21 @@ Three log systems:
 - **Webhook Request Logs** (DB `WebhookRequestLog` table) — Audit trail for `/webhooks/aw`. Every request logs `tokenId`, `agentId`, `statusCode`, `reason`, `eventsIn`, `ip`. Auto-cleanup of records older than `WEBHOOK_LOG_RETENTION_DAYS` (default 7) on startup + every 24h.
 - **Pagination** — Dev Console App Logs and User Logs use client-side pagination (25 per page). Avoids rendering hundreds of rows while polling every 5s. Page resets on filter change.
 
+## Evidence storage (MinIO / S3)
+
+Evidence files (screenshots, logs, PDFs on tasks & QC tickets) are stored in **MinIO** (S3-compatible) via `Bun.S3Client` — not on local disk, so files survive container redeploys. Single helper `src/lib/evidence-storage.ts` (`putEvidence`/`getEvidence`/`removeEvidence`) is the only module that talks to MinIO; upload/serve/delete paths all route through it.
+
+- **Config**: `MINIO_ENDPOINT` (scheme optional — `https://` assumed), `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (all `required` — app crash-fasts at boot if unset), `MINIO_BUCKET` (default `pm-dashboard`). See `@docs/DEPLOYMENT.md`.
+- **Object key**: `evidence/<taskId>/<uuid>.<ext>`. DB `TaskEvidence.url` stays `/api/evidence/<name>?task=<id>` (unchanged from the disk era → FE + old rows keep working).
+- **Serving = auth-gated proxy**: `GET /api/evidence/:file` checks project membership, then streams the object from MinIO (reads directly — MinIO's HEAD makes Bun's `exists()` throw). Bucket must be **PRIVATE**; access control is the proxy, not object ACL.
+- **Migration fallback**: if an object isn't in MinIO (`NoSuchKey`), the serve handler falls back to the legacy on-disk file (`UPLOADS_DIR`) so pre-migration evidence still resolves. `UPLOADS_DIR` is kept for this fallback only.
+- **Bucket auto-create**: first upload ensures the bucket exists via a hand-signed SigV4 `PUT` (`Bun.S3Client` has no createBucket API).
+
 ## Bun APIs used
 
 - `Bun.password.hash()` / `Bun.password.verify()` for bcrypt
 - `Bun.RedisClient` for Redis (native, no package)
+- `Bun.S3Client` for MinIO/S3 evidence storage (native, no package)
 - `Bun.file()` for static file serving in production
 - `Bun.which()` / `Bun.spawn()` for editor integration
 - `crypto.randomUUID()` for session tokens

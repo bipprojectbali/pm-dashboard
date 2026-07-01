@@ -13,12 +13,14 @@ beforeAll(async () => {
   const user = await seedTestUser('user-rh@example.com', 'pass123', 'User RH', 'ADMIN')
   userToken = await createTestSession(user.id)
 
-  // Seed beberapa entri
+  // Seed beberapa entri — pakai tanggal relatif (bukan hardcoded) supaya selalu
+  // masuk window range=1m (30 hari terakhir), tak basi seiring waktu.
+  const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000)
   await prisma.reportHistory.createMany({
     data: [
-      { sentAt: new Date('2026-06-01T08:00:00Z'), ok: true, message: 'OK', trigger: 'cron', markdown: '# Laporan 1\nIsi laporan.' },
-      { sentAt: new Date('2026-06-02T08:00:00Z'), ok: true, message: 'OK', trigger: 'manual', markdown: '# Laporan 2\nIsi laporan.' },
-      { sentAt: new Date('2026-06-03T08:00:00Z'), ok: false, message: 'Telegram error', trigger: 'cron' },
+      { sentAt: daysAgo(3), ok: true, message: 'OK', trigger: 'cron', markdown: '# Laporan 1\nIsi laporan.' },
+      { sentAt: daysAgo(2), ok: true, message: 'OK', trigger: 'manual', markdown: '# Laporan 2\nIsi laporan.' },
+      { sentAt: daysAgo(1), ok: false, message: 'Telegram error', trigger: 'cron' },
     ],
   })
 })

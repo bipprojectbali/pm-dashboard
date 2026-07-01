@@ -76,6 +76,15 @@ async function serveFrontend(request: Request): Promise<Response> {
         getHeader(name: string) {
           return this.headers[name.toLowerCase()]
         },
+        // Node http.ServerResponse.appendHeader: append a value to an existing
+        // header instead of replacing it. Newer Vite calls this (e.g. Vary:
+        // Sec-Fetch-Dest); the shim must implement it or dev requests 500.
+        appendHeader(name: string, value: string | string[]) {
+          const key = name.toLowerCase()
+          const add = Array.isArray(value) ? value.join(', ') : value
+          this.headers[key] = this.headers[key] ? `${this.headers[key]}, ${add}` : add
+          return this
+        },
         removeHeader(name: string) {
           delete this.headers[name.toLowerCase()]
         },

@@ -27,4 +27,11 @@ export const env = {
   GITHUB_WEBHOOK_SECRET: optional('GITHUB_WEBHOOK_SECRET', ''),
   UPLOADS_DIR: optional('UPLOADS_DIR', './uploads'),
   UPLOAD_MAX_BYTES: parseInt(optional('UPLOAD_MAX_BYTES', String(10 * 1024 * 1024)), 10),
+  // MinIO / S3-compatible object storage for evidence files. required() → app
+  // crash-fasts at boot if unset (like DATABASE_URL). Set these in Portainer for
+  // stg/prod before deploying this version.
+  MINIO_ENDPOINT: required('MINIO_ENDPOINT'),
+  MINIO_ACCESS_KEY: required('MINIO_ACCESS_KEY'),
+  MINIO_SECRET_KEY: required('MINIO_SECRET_KEY'),
+  MINIO_BUCKET: optional('MINIO_BUCKET', 'pm-dashboard'),
 } as const

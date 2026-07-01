@@ -7,6 +7,10 @@ const ENV_LEAK_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'OpenAI / Anthropic style key', re: /\bsk-(?:ant-)?[A-Za-z0-9\-_]{20,}\b/ },
   { name: 'Slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
   { name: 'Google API key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/ },
+  { name: 'Project access token', re: /\bpmt_[A-Za-z0-9\-_]{30,}\b/ },
+  // MinIO/S3 secret is a generic 40-char string (hard to match by value), so
+  // detect the assignment by variable name with a non-empty value.
+  { name: 'MinIO/S3 secret key', re: /\b(?:MINIO_SECRET_KEY|MINIO_ACCESS_KEY|S3_SECRET_ACCESS_KEY|AWS_SECRET_ACCESS_KEY)\s*[:=]\s*["']?[A-Za-z0-9/+=_-]{16,}/ },
   { name: 'Private key block', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/ },
   { name: 'Hardcoded password=', re: /\bpassword\s*[:=]\s*["'][^"'\s]{6,}["']/i },
   { name: 'Postgres/Redis URL with password', re: /\b(?:postgres(?:ql)?|redis):\/\/[^\s:@]+:[^\s@]+@[^\s]+/ },

@@ -8,7 +8,17 @@ Container image → GHCR → Portainer stack → Traefik TLS. Two-step flow driv
 - **.dockerignore** — excludes `node_modules`, `dist`, `generated`, `.git`, `.env*` (allows `.env.example`), tests, IDE junk, `compose.yml`, `Dockerfile`, docs.
 - **compose.yml** (stg stack) — two services:
   - `pm-dashboard` — app container, `restart: unless-stopped`, networks: `public-net` (Traefik) + `postgres-net-stg` + `redis-net`. Traefik labels: `Host('pm-dashboard.wibudev.com')`, entrypoint `websecure`, TLS via `letsencrypt` certresolver, routes to container port 3000.
-  - `migrate` — one-shot sidecar, `restart: "no"`, `entrypoint: bun prisma migrate deploy`. Uses `DIRECT_URL` (bypass PgBouncer) for migrations. **No seed** — seed belongs to local dev only.
+  - `migrate` — one-shot sidecar, `restart: "no"`, `entrypoint: bun prisma migrate deploy`. Uses `DIRECT_URL` (bypass PgBouncer) for migrations. **No seed** — seed belongs to local dev only. (Does NOT need MINIO_* — runs Prisma CLI, not app code.)
+
+### MinIO / evidence storage env (⚠️ required)
+
+Evidence uploads go to MinIO (see `@docs/ARCHITECTURE.md` § Evidence storage). The **app container** requires these env (passed through `compose.yml`) — the app **crash-fasts at boot** if any of the three secrets is missing, so set them in Portainer **before** deploying this version:
+
+- `MINIO_ENDPOINT` — S3 endpoint (scheme optional, `https://` assumed).
+- `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` — credentials.
+- `MINIO_BUCKET` — bucket name (default `pm-dashboard`). Must be **PRIVATE** (evidence privacy is enforced by the `/api/evidence/:file` proxy, not object ACL). The bucket is auto-created on first upload.
+
+The env-leak preflight (`scripts/mcp-deploy/lib/guards.ts`) flags a committed `MINIO_SECRET_KEY=`/`MINIO_ACCESS_KEY=` with a real value.
 
 ## GitHub Actions (`.github/workflows/`)
 

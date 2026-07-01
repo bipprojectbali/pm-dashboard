@@ -4,6 +4,22 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 - Overview / Effort / Retro → `@docs/FEATURES.md`
 - pm-watch + GitHub webhooks → `@docs/INTEGRATIONS.md`
 - QC tickets → `@docs/QC-TICKETS.md`
+- `POST /mcp` (+ `GET`/`DELETE`) — token-scoped HTTP MCP for agents; auth `Bearer pmt_` project token (not session). See `@docs/INTEGRATIONS.md` § HTTP MCP endpoint.
+- `/api/agent/*` — token-only REST surface for CLI agents (lighter than MCP); auth `Bearer pmt_`. See § Agent REST API below + `GET /api/agent/guide` (auth-gated machine-readable guide).
+
+## Agent REST API (`/api/agent/*`)
+
+Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Bearer pmt_…` (project access token). Auto-scoped to the token's project — never pass `projectId`. READ token → GET; WRITE token → + POST/PATCH. `IDEA`-kind read-only. Cross-project access → 404 (no-leak). Errors: 401 (bad/expired/revoked token), 403 (READ doing write, or IDEA mutation), 404, 400.
+
+- `GET /api/agent/tasks` — list token-project tasks. Query: `status`, `kind`, `assigneeEmail`, `limit` (max 200).
+- `GET /api/agent/tasks/:id` — task detail (404 if not in token project).
+- `POST /api/agent/tasks` (WRITE) — create. Body: `title`, `description` (both required), `kind?` (TASK|BUG|QC|TICKET — not IDEA), `priority?`, `assigneeEmail?`, `dueAt?`, `estimateHours?`.
+- `PATCH /api/agent/tasks/:id` (WRITE) — update + status transition (validated against state machine; writes `TaskStatusChange`).
+- `POST /api/agent/tasks/:id/comments` (WRITE) — body `{ body }`; comment tagged `AGENT`.
+- `POST /api/agent/tasks/:id/checklist` (WRITE) — body `{ title }`. `PATCH/DELETE /api/agent/checklist/:itemId` (WRITE).
+- `GET /api/agent/guide` — machine-readable guide (markdown/llmstxt.org format) to this surface with `curl` examples; base URL from request origin. **Auth-gated**: needs a `pmt_` token OR a logged-in session → else 401 (internal tool, not publicly discoverable). Lives under `/api/agent/*` rather than a public `llms.txt` on purpose.
+
+Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted.
 
 ## Admin API (SUPER_ADMIN only)
 
@@ -78,6 +94,11 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - `PATCH /api/projects/:id` — update fields (OWNER/PM). Accepts `githubRepo` (normalized server-side, `null` to unlink; 409 on duplicate link)
 - `DELETE /api/projects/:id` — permanent delete with cascade (OWNER or SUPER_ADMIN). Audited.
 - Project members, milestones, extensions — usual CRUD under `/api/projects/:id/*`
+- **Access Tokens** (OWNER/PM/admin only — `canManageProject` gate; `tokenHash` never returned):
+  - `GET /api/projects/:id/access-tokens` — list tokens (id, name, tokenPrefix, scope, status, expiresAt, lastUsedAt, createdBy)
+  - `POST /api/projects/:id/access-tokens` — create. Body `{ name, scope: READ|WRITE, expiresInDays? (7|30|90|365) }`. Returns `{ token, raw }` — **plaintext `raw` shown once**
+  - `POST /api/projects/:id/access-tokens/:tokenId/revoke` — set status REVOKED
+  - `DELETE /api/projects/:id/access-tokens/:tokenId` — permanent delete
 - `GET/POST /api/projects/:id/tags` — list/create per-project tags; unique by (projectId, name)
 - `PATCH/DELETE /api/tags/:id` — rename/recolor or delete (cascades to TaskTag)
 - `GET /api/tasks` — list with filters (`projectId`, `status`, `kind`, `assigneeId`, `tagId`). `kind` ∈ `TASK | BUG | QC | TICKET | IDEA` (400 on invalid). Response enriches each task with `actualHours`, `progressPercent`, `tags`, counts for blockedBy/blocks/checklist.
@@ -85,7 +106,9 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - `GET /api/tasks/:id` — full detail incl. tags, blockedBy, blocks, checklist, statusChanges, comments, evidence + computed `actualHours`/`progressPercent`
 - `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`; status transitions are kind-aware — `IDEA` only allows `OPEN ↔ CLOSED`). Accepts `kind` (a change such as IDEA→TASK "promote" is recorded in the audit log as `kind:FROM→TO`), `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
 - `DELETE /api/tasks/:id` — OWNER/PM/SUPER_ADMIN
-- `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` — add-only
+- `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` (+ `POST /api/tasks/:id/evidence/upload` multipart) — add-only
+- `DELETE /api/tasks/:id/evidence/:evidenceId` — remove an evidence attachment (writable member or admin; VIEWER 403). Removes the file from MinIO (+ legacy on-disk copy). Audited `EVIDENCE_DELETED`.
+- `GET /api/evidence/:file?task=<id>` — auth-gated proxy that streams the evidence file from MinIO (project members only). Falls back to legacy on-disk file for pre-migration evidence; 404 if absent, 502 if storage unreachable. See `@docs/ARCHITECTURE.md` § Evidence storage.
 - `PATCH /api/tasks/:id/comments/:commentId` — edit a comment body (**author-or-admin**: only the comment's own author OR an ADMIN/SUPER_ADMIN; else 403). Requires project membership. Body required (400 if blank); sets `editedAt` so the UI shows a "(telah diedit)" marker. 404 if the comment isn't on the task.
 - `DELETE /api/tasks/:id/comments/:commentId` — permanently delete a comment. Same **author-or-admin** gate as the PATCH. 404 if not found on the task.
 - `POST /api/tasks/:id/dependencies` (body: `blockedById`) / `DELETE /api/tasks/:id/dependencies/:blockedById`

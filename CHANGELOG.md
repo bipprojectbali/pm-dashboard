@@ -7,6 +7,21 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.25] - 2026-07-01
+
+### Ditambahkan
+- **Project Access Token** — tiap project bisa membuat token akses sendiri (di Settings → Access Tokens, khusus OWNER/PM/admin) dengan scope READ atau WRITE dan masa berlaku opsional. Token ditampilkan **sekali** saat dibuat. Dipakai agent/CLI untuk mengakses data project tanpa login UI.
+- **Akses agent lewat MCP (`POST /mcp`)** — agent coding (Claude Code) bisa connect sebagai MCP client memakai token project → otomatis dapat tool yang ter-scope ke project itu (task/bug: baca dengan READ, baca+tulis dengan WRITE). Ide read-only.
+- **Akses agent lewat REST (`/api/agent/*`)** — alternatif ringan dari MCP untuk script/CI: list/get/create/update/comment/checklist task via `curl` dengan header token. Panduan lengkap (auth-gated) di `GET /api/agent/guide`.
+- **Hapus evidence** — attachment/gambar bukti pada task & tiket QC bisa dihapus (tombol di tab Evidence, khusus member writable). File ikut terhapus dari penyimpanan.
+- **Tempel gambar dari clipboard** — di tab Evidence, screenshot bisa langsung ditempel (Ctrl/Cmd+V) tanpa menyimpan file dulu.
+
+### Diubah
+- **Penyimpanan file evidence pindah ke MinIO (object storage)** — screenshot/log/PDF tidak lagi disimpan di disk container (yang hilang tiap deploy) melainkan di MinIO yang persisten. Akses tetap lewat proxy ber-otorisasi (`/api/evidence/:file`) sehingga privasi terjaga; file lama di disk tetap bisa dibuka (fallback). **Wajib set env `MINIO_ENDPOINT`/`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`/`MINIO_BUCKET` sebelum deploy** — app tidak akan start tanpanya.
+
+### Diperbaiki
+- **Dev server error `res.appendHeader is not a function`** — bridge Bun↔Vite tidak mengimplementasikan method `appendHeader` yang dipanggil Vite versi baru; setiap request dev jadi 500. (Hanya memengaruhi mode development.)
+
 ## [0.7.24] - 2026-06-30
 
 ### Ditambahkan

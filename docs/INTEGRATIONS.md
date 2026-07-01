@@ -39,3 +39,45 @@ Projects can be linked 1:1 to a GitHub repo via `Project.githubRepo` (stored can
 - **Frontend**:
   - Settings tab (`ProjectDetailView.tsx` → `GithubIntegrationCard`) — repo URL input with normalize preview, link/update/unlink buttons, webhook setup hint (endpoint URL + `Copy URL` + direct link to `Settings/hooks/new`).
   - Overview tab (`GithubActivityCard`) — 4 mini-stats (commits/7d, contributors/30d, open PRs, last push) + latest 10 events with per-kind badge colors. Empty state when repo not linked.
+
+## Project Access Tokens
+
+Per-user, project-scoped bearer tokens so coding agents (mis. Claude Code) bisa membaca/memperbarui data satu project — otomatis ter-scope tanpa perlu tahu `projectId`. Idenya: tiap project punya token; token menentukan project + identitas pembuat + izin (READ/WRITE).
+
+- **Schema**: `ProjectAccessToken` (lihat `@docs/ARCHITECTURE.md`). Enum `ProjectTokenScope = READ | WRITE`, `ProjectTokenStatus = ACTIVE | REVOKED`.
+- **Format token**: `pmt_<base64url(32 byte)>`. Hanya SHA-256 hash yang disimpan (`tokenHash @unique`) — plaintext tak bisa di-recover. `tokenPrefix` (12 char pertama) disimpan plaintext hanya untuk identifikasi di UI.
+- **Helper**: `src/lib/project-access-tokens.ts` — `generateProjectToken()` (`{ raw, hash, prefix }`), `hashToken()` (SHA-256 hex), `verifyProjectToken(raw)` (resolve → `{ projectId, userId, scope }`, tolak revoked/expired, update `lastUsedAt`).
+- **Lifecycle**: create → plaintext `raw` ditampilkan **sekali** → simpan di config agent. Hilang → buat token baru + revoke yang lama (tidak ada regenerate). Revoke permanen.
+- **Gate**: buat/list/revoke/delete hanya OWNER/PM/admin (`canManageProject`). Token = kredensial, jadi list pun tidak dibuka ke MEMBER/VIEWER.
+- **API**: lihat `@docs/API.md` § Access Tokens. **MCP**: `access_token_list` (readonly), `access_token_create`/`access_token_revoke` (admin) — lihat `@docs/MCP.md`.
+- **Frontend**: `AccessTokensCard` di tab Settings project — create form (nama + scope + expiry preset), show-once modal dengan copy, tabel token + revoke/delete.
+
+### HTTP MCP endpoint (Tahap 2a — aktif)
+
+Agent coding (mis. Claude Code) connect ke `POST /mcp` dengan token `pmt_` → dapat MCP tool yang **otomatis ter-scope ke project token**. Tidak perlu kirim `projectId`.
+
+- **Endpoint**: `POST /mcp` (+ `GET`/`DELETE` per spec MCP). Auth: `Authorization: Bearer pmt_…`. Header wajib client: `Accept: application/json, text/event-stream` + `Content-Type: application/json`. Token invalid/revoked/expired/hilang → **401**.
+- **Transport**: `WebStandardStreamableHTTPServerTransport` (SDK MCP, Web-standard Request→Response), **stateless** (`sessionIdGenerator: undefined`, `enableJsonResponse: true`) — server + transport baru per request. Tidak perlu `initialize` sebelum `tools/call`.
+- **Builder**: `scripts/mcp/token-scoped-server.ts` `buildTokenScopedServer(ctx)` — memanen tool task existing via capture-proxy lalu mendaftar hanya subset sesuai scope, strip `projectId` dari schema + inject dari token, enforce ownership lintas-project, blokir mutasi IDEA. **Tidak baca `NODE_ENV`** (beda dari stdio server) — WRITE digate murni `ctx.scope`.
+- **Whitelist tool 2a**: READ → `task_list`, `task_get`. WRITE → + `task_create`, `task_update`, `task_transition`, `task_comment`, `task_checklist_add`/`update`/`delete`. IDEA read-only (create/update IDEA ditolak). **Tiket & task_delete/bulk/dependency ditunda ke Tahap 2b.**
+- **Route**: `src/routes/mcp.route.ts` (di-`use` di `src/app.ts`). Beda dari stdio MCP server (`scripts/mcp/server.ts`, auth `MCP_SECRET` + scope by `NODE_ENV`) — dua surface independen.
+- **Konfigurasi Claude Code** (`.mcp.json` di repo project):
+  ```json
+  { "mcpServers": { "pm-dashboard": {
+    "type": "http",
+    "url": "https://pm-dashboard.wibudev.com/mcp",
+    "headers": { "Authorization": "Bearer pmt_…" }
+  } } }
+  ```
+
+> **Belum di Tahap 2a:** alur tiket (`ticket_pick`/`ticket_submit`) — tool sudah ada di stdio, tinggal di-whitelist ke HTTP surface (Tahap 2b). **Keamanan:** pola `pmt_` sudah masuk scanner env-leak preflight (`scripts/mcp-deploy`) agar token tak ter-commit.
+
+### REST agent surface (CLI) — `/api/agent/*` + `/api/agent/guide`
+
+Alternatif **ringan** dari MCP untuk agent CLI/script. MCP memuat skema semua tool ke context window tiap sesi (berat); REST cukup `curl` dengan header token — nol overhead protokol. **Token `pmt_` yang sama** dipakai untuk `/mcp` (interaktif) dan `/api/agent/*` (CLI).
+
+- **Auth**: `Authorization: Bearer pmt_…` (token-only, tidak terima session). Auto-scoped ke project token; agent tak pernah kirim `projectId`. READ → GET; WRITE → + POST/PATCH. IDEA read-only. Cross-project → 404 no-leak.
+- **Endpoint**: list/get/create/update(+transition)/comment/checklist di `/api/agent/*`. Lihat `@docs/API.md` § Agent REST API. Route `src/routes/agent.route.ts`, helper `src/lib/agent-auth.ts`.
+- **`GET /api/agent/guide`** (auth-gated): dokumentasi mesin-readable (markdown/llmstxt.org format) berisi semua endpoint + contoh `curl`, base URL dari request origin. **Bukan publik** — butuh `pmt_` token ATAU sesi login (anonim → 401). Sengaja ditaruh di bawah `/api/agent/*` (bukan `llms.txt` publik di root) supaya tak menyalahi konvensi `llms.txt` yang justru mengundang crawler/LLM. Ini defense-in-depth: batas keamanan asli tetap di validasi token pada `/api/agent/*`. Konten di `src/lib/llms-content.ts`. URL + snippet curl juga ditampilkan di show-once modal saat buat token.
+- **Isolasi**: surface ini terpisah total dari endpoint session `/api/tasks` (yang tetap session-only) — nol risiko regresi. Enforcement mirror `scripts/mcp/token-scoped-server.ts`.
+- **Kapan pakai apa**: MCP untuk Claude Code interaktif (tool discovery, multi-step). REST + `/api/agent/guide` untuk CI, cron, one-shot command, atau agent non-MCP.

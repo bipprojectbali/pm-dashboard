@@ -15,6 +15,7 @@ import { presenceTools } from './tools/presence'
 import { projectTools } from './tools/project'
 import { projectsReadonly, projectsTools } from './tools/projects'
 import { qcReadonly, qcTools } from './tools/qc'
+import { accessTokensReadonly, accessTokensTools } from './tools/access-tokens'
 import { redisTools } from './tools/redis'
 import { reportAdmin, reportReadonly } from './tools/report'
 import { tagsReadonly, tagsTools } from './tools/tags'
@@ -39,6 +40,7 @@ const READONLY_MODULES: ToolModule[] = [
   tasksReadonly,
   ticketsReadonly,
   tagsReadonly,
+  accessTokensReadonly,
   milestonesReadonly,
   phasesReadonly,
   overviewReadonly,
@@ -60,6 +62,7 @@ const ADMIN_MODULES: ToolModule[] = [
   tasksTools,
   ticketsTools,
   tagsTools,
+  accessTokensTools,
   milestonesTools,
   phasesTools,
   qcTools,

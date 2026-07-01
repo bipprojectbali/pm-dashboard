@@ -107,7 +107,8 @@ Projects and tasks are project-scoped; all write endpoints gate on `requireProje
 - `PATCH /api/tasks/:id` — updates (status writes `TaskStatusChange`; status transitions are kind-aware — `IDEA` only allows `OPEN ↔ CLOSED`). Accepts `kind` (a change such as IDEA→TASK "promote" is recorded in the audit log as `kind:FROM→TO`), `tagIds` (replace set), `progressPercent`, `estimateHours`, dates.
 - `DELETE /api/tasks/:id` — OWNER/PM/SUPER_ADMIN
 - `POST /api/tasks/:id/comments`, `POST /api/tasks/:id/evidence` (+ `POST /api/tasks/:id/evidence/upload` multipart) — add-only
-- `DELETE /api/tasks/:id/evidence/:evidenceId` — remove an evidence attachment (writable member or admin; VIEWER 403). Unlinks the uploaded file for locally-stored evidence. Audited `EVIDENCE_DELETED`.
+- `DELETE /api/tasks/:id/evidence/:evidenceId` — remove an evidence attachment (writable member or admin; VIEWER 403). Removes the file from MinIO (+ legacy on-disk copy). Audited `EVIDENCE_DELETED`.
+- `GET /api/evidence/:file?task=<id>` — auth-gated proxy that streams the evidence file from MinIO (project members only). Falls back to legacy on-disk file for pre-migration evidence; 404 if absent, 502 if storage unreachable. See `@docs/ARCHITECTURE.md` § Evidence storage.
 - `PATCH /api/tasks/:id/comments/:commentId` — edit a comment body (**author-or-admin**: only the comment's own author OR an ADMIN/SUPER_ADMIN; else 403). Requires project membership. Body required (400 if blank); sets `editedAt` so the UI shows a "(telah diedit)" marker. 404 if the comment isn't on the task.
 - `DELETE /api/tasks/:id/comments/:commentId` — permanently delete a comment. Same **author-or-admin** gate as the PATCH. 404 if not found on the task.
 - `POST /api/tasks/:id/dependencies` (body: `blockedById`) / `DELETE /api/tasks/:id/dependencies/:blockedById`

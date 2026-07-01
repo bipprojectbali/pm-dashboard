@@ -82,10 +82,21 @@ Three log systems:
 - **Webhook Request Logs** (DB `WebhookRequestLog` table) — Audit trail for `/webhooks/aw`. Every request logs `tokenId`, `agentId`, `statusCode`, `reason`, `eventsIn`, `ip`. Auto-cleanup of records older than `WEBHOOK_LOG_RETENTION_DAYS` (default 7) on startup + every 24h.
 - **Pagination** — Dev Console App Logs and User Logs use client-side pagination (25 per page). Avoids rendering hundreds of rows while polling every 5s. Page resets on filter change.
 
+## Evidence storage (MinIO / S3)
+
+Evidence files (screenshots, logs, PDFs on tasks & QC tickets) are stored in **MinIO** (S3-compatible) via `Bun.S3Client` — not on local disk, so files survive container redeploys. Single helper `src/lib/evidence-storage.ts` (`putEvidence`/`getEvidence`/`removeEvidence`) is the only module that talks to MinIO; upload/serve/delete paths all route through it.
+
+- **Config**: `MINIO_ENDPOINT` (scheme optional — `https://` assumed), `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` (all `required` — app crash-fasts at boot if unset), `MINIO_BUCKET` (default `pm-dashboard`). See `@docs/DEPLOYMENT.md`.
+- **Object key**: `evidence/<taskId>/<uuid>.<ext>`. DB `TaskEvidence.url` stays `/api/evidence/<name>?task=<id>` (unchanged from the disk era → FE + old rows keep working).
+- **Serving = auth-gated proxy**: `GET /api/evidence/:file` checks project membership, then streams the object from MinIO (reads directly — MinIO's HEAD makes Bun's `exists()` throw). Bucket must be **PRIVATE**; access control is the proxy, not object ACL.
+- **Migration fallback**: if an object isn't in MinIO (`NoSuchKey`), the serve handler falls back to the legacy on-disk file (`UPLOADS_DIR`) so pre-migration evidence still resolves. `UPLOADS_DIR` is kept for this fallback only.
+- **Bucket auto-create**: first upload ensures the bucket exists via a hand-signed SigV4 `PUT` (`Bun.S3Client` has no createBucket API).
+
 ## Bun APIs used
 
 - `Bun.password.hash()` / `Bun.password.verify()` for bcrypt
 - `Bun.RedisClient` for Redis (native, no package)
+- `Bun.S3Client` for MinIO/S3 evidence storage (native, no package)
 - `Bun.file()` for static file serving in production
 - `Bun.which()` / `Bun.spawn()` for editor integration
 - `crypto.randomUUID()` for session tokens

@@ -7,6 +7,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.26] - 2026-07-02
+
+### Ditambahkan
+- **Fase (tab project detail)**: tiga tampilan via toggle — Stepper (default), Grid, dan List — plus filter status (Planning/Active/Completed dengan warna + ikon), pencarian judul, dan pagination 10/halaman. Pilihan view + filter status tersimpan di browser.
+- **Filter Fase di panel Tasks (`/pm`)**: kotak pencarian, filter status (warna + ikon), toggle tampilan Grid/List, dan pagination 12/halaman saat fase mencapai puluhan. Pilihan view + filter status tersimpan.
+- **Panel Filter di panel Tasks (`/pm`)** kini bisa diciutkan (collapse) dan pilihannya tersimpan — saat diciutkan muncul badge jumlah filter aktif + tombol reset cepat.
+
+### Diperbaiki
+- **Restore & Hapus Permanen task dari Trash** selalu gagal dengan "Task not found in trash". Query keliru mencari task aktif (`deletedAt: null`) alih-alih task di trash; kini menargetkan trash dengan benar. Ditambah cakupan test integrasi untuk restore/purge.
+
 ## [0.7.25] - 2026-07-01
 
 ### Ditambahkan

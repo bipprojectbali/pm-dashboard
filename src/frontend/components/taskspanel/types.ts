@@ -56,3 +56,29 @@ export interface ProjectOption {
 }
 
 export type QuickFilter = 'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null
+
+// Props for the advanced (collapsible) filter sections: Scope / Tipe Task /
+// Urutan / Tanggal Due. Shared between TasksFilterBar and TasksAdvancedFilters.
+export interface AdvancedFilterProps {
+  activeProject: ProjectOption | null
+  projects: ProjectOption[]
+  activeProjectId: string | null
+  onProjectChange: (v: string | null) => void
+  mine: boolean
+  onMineChange: (v: boolean) => void
+  kind: string | null
+  onKindChange: (v: string | null) => void
+  status: string | null
+  onStatusChange: (v: string | null) => void
+  priorityFilter: string | null
+  onPriorityFilterChange: (v: string | null) => void
+  tagFilter: string | null
+  onTagFilterChange: (v: string | null) => void
+  tags: TagListItem[]
+  sortBy: string | null
+  onSortByChange: (v: string | null) => void
+  sortDir: 'asc' | 'desc'
+  onSortDirToggle: () => void
+  dueDateRange: [Date | null, Date | null]
+  onDueDateRangeChange: (v: [Date | null, Date | null]) => void
+}

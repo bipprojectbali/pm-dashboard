@@ -1,11 +1,9 @@
 import {
   ActionIcon,
-  Alert,
   Badge,
   Button,
   Card,
   Code,
-  CopyButton,
   Group,
   Menu,
   Select,
@@ -16,57 +14,19 @@ import {
 } from '@mantine/core'
 import { modals } from '@mantine/modals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { TbCheck, TbCopy, TbDots, TbKey, TbPlus, TbShieldOff, TbTrash } from 'react-icons/tb'
+import { TbDots, TbKey, TbPlus, TbShieldOff, TbTrash } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
-
-type TokenScope = 'READ' | 'WRITE'
-type TokenStatus = 'ACTIVE' | 'REVOKED'
-
-interface TokenRow {
-  id: string
-  name: string
-  tokenPrefix: string
-  scope: TokenScope
-  status: TokenStatus
-  expiresAt: string | null
-  lastUsedAt: string | null
-  createdAt: string
-  createdBy: { id: string; name: string; email: string } | null
-}
-
-interface CreateResponse {
-  token: Omit<TokenRow, 'lastUsedAt' | 'createdBy'>
-  raw: string
-}
-
-const STATUS_COLOR: Record<TokenStatus, string> = { ACTIVE: 'green', REVOKED: 'red' }
-const SCOPE_COLOR: Record<TokenScope, string> = { READ: 'blue', WRITE: 'grape' }
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...init })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
-  return res.json()
-}
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return '—'
-  const diff = Date.now() - new Date(iso).getTime()
-  if (diff < 60_000) return 'baru saja'
-  const m = Math.floor(diff / 60_000)
-  if (m < 60) return `${m}m lalu`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}j lalu`
-  return `${Math.floor(h / 24)}h lalu`
-}
-
-function formatExpiry(iso: string | null): string {
-  if (!iso) return 'Tidak ada'
-  const d = new Date(iso)
-  return d.getTime() <= Date.now() ? `Kedaluwarsa` : d.toLocaleDateString()
-}
+import {
+  api,
+  type CreateResponse,
+  formatExpiry,
+  formatRelative,
+  SCOPE_COLOR,
+  STATUS_COLOR,
+  type TokenRow,
+  type TokenScope,
+} from './accesstokens/helpers'
+import { openShowOnceModal } from './accesstokens/ShowOnceModal'
 
 export function AccessTokensCard({ projectId, canManage }: { projectId: string; canManage: boolean }) {
   const qc = useQueryClient()
@@ -110,75 +70,6 @@ export function AccessTokensCard({ projectId, canManage }: { projectId: string; 
   })
 
   const tokens = data?.tokens ?? []
-
-  const openShowOnceModal = (raw: string, name: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const docsUrl = `${origin}/api/agent/guide`
-    const curlSnippet = `curl -H "Authorization: Bearer ${raw}" ${origin}/api/agent/tasks`
-    modals.open({
-      title: `Token dibuat: ${name}`,
-      size: 'lg',
-      children: (
-        <Stack gap="sm">
-          <Alert color="yellow" variant="light">
-            Simpan token ini sekarang — setelah modal ditutup, token tidak bisa dilihat lagi.
-          </Alert>
-          <Card withBorder padding="sm" radius="sm">
-            <Group gap="xs" wrap="nowrap">
-              <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{raw}</Code>
-              <CopyButton value={raw}>
-                {({ copied, copy }) => (
-                  <Button size="xs" leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />} onClick={copy}>
-                    {copied ? 'Tersalin' : 'Salin'}
-                  </Button>
-                )}
-              </CopyButton>
-            </Group>
-          </Card>
-          <Text size="xs" c="dimmed">
-            Token untuk agent (Claude Code / CLI) mengakses project ini. Panduan endpoint (butuh token/login):
-          </Text>
-          <Card withBorder padding="sm" radius="sm">
-            <Stack gap={6}>
-              <Group gap="xs" wrap="nowrap">
-                <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{docsUrl}</Code>
-                <CopyButton value={docsUrl}>
-                  {({ copied, copy }) => (
-                    <Button
-                      size="xs"
-                      variant="light"
-                      leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />}
-                      onClick={copy}
-                    >
-                      {copied ? 'Tersalin' : 'Salin'}
-                    </Button>
-                  )}
-                </CopyButton>
-              </Group>
-              <Group gap="xs" wrap="nowrap">
-                <Code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{curlSnippet}</Code>
-                <CopyButton value={curlSnippet}>
-                  {({ copied, copy }) => (
-                    <Button
-                      size="xs"
-                      variant="light"
-                      leftSection={copied ? <TbCheck size={14} /> : <TbCopy size={14} />}
-                      onClick={copy}
-                    >
-                      {copied ? 'Tersalin' : 'Salin'}
-                    </Button>
-                  )}
-                </CopyButton>
-              </Group>
-            </Stack>
-          </Card>
-          <Text size="xs" c="dimmed">
-            Alternatif interaktif: MCP endpoint <Code>{origin}/mcp</Code> untuk Claude Code.
-          </Text>
-        </Stack>
-      ),
-    })
-  }
 
   const openCreate = () => {
     let name = ''

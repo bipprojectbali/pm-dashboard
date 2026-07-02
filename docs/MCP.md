@@ -20,6 +20,7 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 - **Tools by scope**: READ → `task_list`, `task_get`. WRITE → + `task_create`, `task_update`, `task_transition`, `task_comment`, `task_checklist_add`/`update`/`delete`. IDEA is read-only. Tickets/task_delete/bulk/dependency deferred to Tahap 2b.
 - **Independent from stdio cap**: `buildTokenScopedServer` never reads `NODE_ENV`; WRITE is gated solely by `ctx.scope`. The stdio server's `MCP_SECRET` + `NODE_ENV` readonly cap is unchanged.
 - **MCP vs REST trade-off**: MCP loads all tool schemas into the agent's context each session (heavier) — best for interactive Claude Code. For CLI/scripts/CI, the lighter token-only REST surface `/api/agent/*` (+ auth-gated `GET /api/agent/guide`) does the same operations via plain `curl` with the **same `pmt_` token**. See `@docs/INTEGRATIONS.md` § REST agent surface + `@docs/API.md` § Agent REST API.
+- **Parity note (REST ahead of MCP)**: the REST surface now has true pagination (`page`/`limit`/`total`/`totalPages`), a `GET /api/agent/tasks/stats` aggregate, rich task detail (comments/evidence/history/checklist ids), and `GET /api/agent/project` metadata. The token-scoped MCP `task_list`/`task_get` are still shallow (cap-only `take`, `count = page length`, no stats). Bringing the MCP surface to parity is a follow-up (`token-scoped-server.ts` was intentionally untouched in the REST maturity work).
 
 ## Tools by module
 

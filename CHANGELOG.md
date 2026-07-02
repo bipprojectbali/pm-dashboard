@@ -7,6 +7,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Ditambahkan
+- **Agent REST API — pagination & statistik**: `GET /api/agent/tasks` kini paginasi penuh (`page`/`limit`, respons `{count,page,limit,total,totalPages,tasks}`) sehingga project dengan >200 task bisa dibaca seluruhnya dan agent tahu total sebenarnya. Endpoint baru `GET /api/agent/tasks/stats` memberi rekap jumlah per status/kind/priority dalam satu panggilan.
+- **Agent REST API — baca lebih lengkap**: `GET /api/agent/tasks/:id` kini mengembalikan komentar, evidence, riwayat perubahan status, dan item checklist lengkap dengan `id` (agar bisa di-update/hapus). Endpoint baru `GET /api/agent/project` memberi metadata project (anggota, fase, milestone) agar agent tak buta konteks.
+- **CLI agent** (`bun run agent <cmd>`): pembungkus lokal yang membaca `.env.agent` untuk menjalankan surface di atas dari terminal — `tasks`, `stats`, `get`, `project`, `guide`, `create`, `comment`.
+- **Agent REST API — endpoint baru (write parity)**: `POST /api/agent/tasks/:id/evidence` (link evidence), `POST /api/agent/tasks/:id/claim` (atomic OPEN/REOPENED→IN_PROGRESS dengan guard updateMany), `DELETE /api/agent/tasks/:id` (soft-delete via `deletedAt`), `POST/DELETE /api/agent/tasks/:id/dependencies` (tambah/hapus dependency dengan deteksi siklus BFS), `PATCH/DELETE /api/agent/tasks/:id/comments/:commentId` (edit/hapus komentar bertag `AGENT` — komentar manusia dilindungi).
+- **Agent REST API — PATCH field parity**: PATCH kini menerima `kind`, `route`, `startsAt`, `phaseId`, `tagIds` (ganti set tag sekaligus), plus notifikasi `notifyTaskStatusChanged`/`notifyTaskAssigned` otomatis dikirim saat transisi status atau pergantian assignee.
+- **Agent REST API — `retryCount` + `shouldEscalate`**: `GET /api/agent/tasks/:id` kini menyertakan jumlah bounce READY_FOR_QC→REOPENED dan sinyal eskalasi (≥3 bounce → `shouldEscalate: true`), mirroring signal yang ada di `ticket_pick` MCP.
+- **Agent REST API — filter `?tag=`**: `GET /api/agent/tasks` menerima `?tag=<nama>` (case-insensitive) dan respons list kini menyertakan array `tags[]` per task.
+- **Agent REST API — rate limiter**: middleware Redis fixed-window 100 req/60s per token prefix diterapkan ke semua route `/api/agent/*`; melebihi batas → 429 `{ error, retryAfter }`.
+
+### Diperbaiki
+- **Agent REST API — error 400, bukan 500**: `kind`/`priority` tak valid dan body JSON rusak kini dijawab 400 yang jelas (sebelumnya memicu error Prisma → 500). Diperluas ke `dueAt` tak valid, `estimateHours` non-angka, dan tipe salah pada update checklist — semuanya kini 400 (terverifikasi memang 500 sebelumnya).
+- **Agent REST API — filter enum case-insensitive + filter baru**: `status`/`kind`/`priority` menerima huruf kecil (mis. `?kind=task`); ditambah filter `priority` dan `search` (judul/deskripsi) di `GET /api/agent/tasks`. Pesan error disamakan ke bahasa Inggris agar konsisten.
+- **Agent REST API — detail lebih lengkap**: `GET /api/agent/tasks/:id` kini menyertakan `tags` dan dependency `blockedBy`/`blocks` beserta info task tertaut (id/judul/status/kind), bukan sekadar hitungan.
+- **Panduan agent (`GET /api/agent/guide`) akurat**: state machine transisi status diperbaiki (TASK tak punya READY_FOR_QC), plus dokumentasi pagination, envelope respons, endpoint baru, dan cara membaca id checklist.
+
 ## [0.7.27] - 2026-07-02
 
 ### Ditambahkan

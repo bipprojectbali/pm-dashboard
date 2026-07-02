@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/serve.ts",
+    "agent": "bun scripts/agent-cli.ts",
     "build": "vite build",
     "start": "NODE_ENV=production bun src/index.tsx",
     "typecheck": "tsc --noEmit",

@@ -23,7 +23,7 @@ Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canW
 
 ## Admin API (SUPER_ADMIN only)
 
-- `GET /api/admin/users` — list all users with role, blocked status, createdAt
+- `GET /api/admin/users` — list users with role, blocked status, createdAt. Optional query: `search` (substring over name/email, case-insensitive), `role` (USER|QC|ADMIN|SUPER_ADMIN; 400 on invalid). Pagination is opt-in: **without `limit`** returns the full roster as `{ users }` (legacy shape — used by OverviewPanel/AuditLogsPanel); **with `limit`** returns `{ users, total, limit, offset }` (`limit` clamped 1–200, `offset` default 0).
 - `PUT /api/admin/users/:id/role` — change role to USER or ADMIN (cannot change self or to SUPER_ADMIN)
 - `PUT /api/admin/users/:id/block` — block/unblock user (deletes all sessions on block)
 - `GET /api/admin/presence` — list online user IDs

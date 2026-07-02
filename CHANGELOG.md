@@ -7,6 +7,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Ditambahkan
+- **Agent REST API — pagination & statistik**: `GET /api/agent/tasks` kini paginasi penuh (`page`/`limit`, respons `{count,page,limit,total,totalPages,tasks}`) sehingga project dengan >200 task bisa dibaca seluruhnya dan agent tahu total sebenarnya. Endpoint baru `GET /api/agent/tasks/stats` memberi rekap jumlah per status/kind/priority dalam satu panggilan.
+- **Agent REST API — baca lebih lengkap**: `GET /api/agent/tasks/:id` kini mengembalikan komentar, evidence, riwayat perubahan status, dan item checklist lengkap dengan `id` (agar bisa di-update/hapus). Endpoint baru `GET /api/agent/project` memberi metadata project (anggota, fase, milestone) agar agent tak buta konteks.
+- **CLI agent** (`bun run agent <cmd>`): pembungkus lokal yang membaca `.env.agent` untuk menjalankan surface di atas dari terminal — `tasks`, `stats`, `get`, `project`, `guide`, `create`, `comment`.
+
+### Diperbaiki
+- **Agent REST API — error 400, bukan 500**: `kind`/`priority` tak valid dan body JSON rusak kini dijawab 400 yang jelas (sebelumnya memicu error Prisma → 500).
+- **Panduan agent (`GET /api/agent/guide`) akurat**: state machine transisi status diperbaiki (TASK tak punya READY_FOR_QC), plus dokumentasi pagination, envelope respons, endpoint baru, dan cara membaca id checklist.
+
 ## [0.7.26] - 2026-07-02
 
 ### Ditambahkan

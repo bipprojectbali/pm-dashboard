@@ -9,17 +9,19 @@ Schemas, enums, and helpers live in `@docs/ARCHITECTURE.md`. Feature-specific AP
 
 ## Agent REST API (`/api/agent/*`)
 
-Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Bearer pmt_…` (project access token). Auto-scoped to the token's project — never pass `projectId`. READ token → GET; WRITE token → + POST/PATCH. `IDEA`-kind read-only. Cross-project access → 404 (no-leak). Errors: 401 (bad/expired/revoked token), 403 (READ doing write, or IDEA mutation), 404, 400.
+Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Bearer pmt_…` (project access token). Auto-scoped to the token's project — never pass `projectId`. READ token → GET; WRITE token → + POST/PATCH/DELETE. `IDEA`-kind read-only. Cross-project access → 404 (no-leak). Errors: 401 (bad/expired/revoked token), 403 (READ doing write, or IDEA mutation), 404, 400 (bad body / invalid enum / invalid transition / malformed JSON — never a 500). Route split: `src/routes/agent/` (`tasks.route.ts` reads, `writes.route.ts`, `checklist.route.ts`, `project.route.ts`, `shared.ts`, `index.ts` barrel).
 
-- `GET /api/agent/tasks` — list token-project tasks. Query: `status`, `kind`, `assigneeEmail`, `limit` (max 200).
-- `GET /api/agent/tasks/:id` — task detail (404 if not in token project).
-- `POST /api/agent/tasks` (WRITE) — create. Body: `title`, `description` (both required), `kind?` (TASK|BUG|QC|TICKET — not IDEA), `priority?`, `assigneeEmail?`, `dueAt?`, `estimateHours?`.
-- `PATCH /api/agent/tasks/:id` (WRITE) — update + status transition (validated against state machine; writes `TaskStatusChange`).
-- `POST /api/agent/tasks/:id/comments` (WRITE) — body `{ body }`; comment tagged `AGENT`.
-- `POST /api/agent/tasks/:id/checklist` (WRITE) — body `{ title }`. `PATCH/DELETE /api/agent/checklist/:itemId` (WRITE).
+- `GET /api/agent/tasks` — list token-project tasks (paginated). Query: `status`, `kind` (invalid → 400), `assigneeEmail`, `page` (default 1), `limit` (default 50, max 200). Response: `{ count, page, limit, total, totalPages, tasks }` — `count` = rows on this page, `total` = all matching rows. Lean shape (comment/evidence as counts).
+- `GET /api/agent/tasks/stats` — project-wide aggregate `{ total, byStatus:{open,inProgress,readyForQc,reopened,closed,total}, byPriority, byKind }`. `total` includes IDEA (byKind breaks it out — no `WORKLOAD_KIND_FILTER`, unlike admin-overview). Mounted before `/tasks/:id` so `/stats` is a static path.
+- `GET /api/agent/tasks/:id` — rich task detail (404 if not in token project): scalars + full `comments` (author+body), `evidence` (url/note), `statusChanges` (history), `checklist` items with `id`+`title` (so an agent can PATCH/DELETE them), plus computed `actualHours`/`progressPercent`.
+- `GET /api/agent/project` — token-project metadata: scalars + `members` (with email, for `assigneeEmail`) + `phases` + `milestones` + `_count`.
+- `POST /api/agent/tasks` (WRITE) — create. Body: `title`, `description` (both required), `kind?` (TASK|BUG|QC|TICKET — not IDEA; invalid → 400), `priority?` (invalid → 400), `assigneeEmail?`, `dueAt?`, `estimateHours?`.
+- `PATCH /api/agent/tasks/:id` (WRITE) — update + status transition (validated against kind-aware state machine; writes `TaskStatusChange`). Invalid `priority` → 400.
+- `POST /api/agent/tasks/:id/comments` (WRITE) — body `{ body }`; comment tagged `AGENT` (read back via the detail route).
+- `POST /api/agent/tasks/:id/checklist` (WRITE) — body `{ title }`. `PATCH/DELETE /api/agent/checklist/:itemId` (WRITE). All three audited (`AGENT_CHECKLIST_ADDED/UPDATED/DELETED`).
 - `GET /api/agent/guide` — machine-readable guide (markdown/llmstxt.org format) to this surface with `curl` examples; base URL from request origin. **Auth-gated**: needs a `pmt_` token OR a logged-in session → else 401 (internal tool, not publicly discoverable). Lives under `/api/agent/*` rather than a public `llms.txt` on purpose.
 
-Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted.
+Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`), `src/lib/task-enums.ts` (`isValidStatus/Kind/Priority` — shared validators), `src/routes/agent/shared.ts` (`deny`, `parseJson`, `LIST_INCLUDE`/`DETAIL_INCLUDE`, `enrich`, `ownedTask`, `resolveChecklistWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted. A local CLI wrapper (`scripts/agent-cli.ts`, `bun run agent <cmd>`) reads `.env.agent` and drives this surface.
 
 ## Admin API (SUPER_ADMIN only)
 

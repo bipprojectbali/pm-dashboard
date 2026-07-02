@@ -7,6 +7,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Ditambahkan
+- **Pencarian & pagination di panel Pengguna (Konsol Dev)**: kotak cari nama/email (debounced), filter role, dan pagination 20/halaman — sebelumnya seluruh tabel user dirender sekaligus. Endpoint `GET /api/admin/users` kini menerima query opsional `search`/`role`/`limit`/`offset` (backward-compatible: tanpa `limit` tetap mengembalikan seluruh roster untuk pemakai lain). Ditambah test integrasi.
+
+### Diperbaiki
+- **Dokumentasi setup test** (`.env.example`): `.env.test` wajib memuat variabel `MINIO_*` (nilai dummy cukup) agar `bun test` bisa boot — sebelumnya suite gagal total karena `MINIO_ENDPOINT` wajib di `src/lib/env.ts`.
+
 ## [0.7.26] - 2026-07-02
 
 ### Ditambahkan

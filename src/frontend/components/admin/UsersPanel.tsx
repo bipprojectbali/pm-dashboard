@@ -1,10 +1,35 @@
-import { ActionIcon, Badge, Card, Group, Menu, Stack, Table, Text, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Badge,
+  Card,
+  Group,
+  Menu,
+  Pagination,
+  Select,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core'
+import { useDebouncedValue } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
+import { useEffect, useState } from 'react'
+import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbSearch, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { type Role, useSession } from '@/frontend/hooks/useAuth'
 import { usePresence } from '@/frontend/hooks/usePresence'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
+
+const PAGE_SIZE = 20
+
+const roleFilterOptions = [
+  { value: '', label: 'Semua role' },
+  { value: 'USER', label: 'User' },
+  { value: 'QC', label: 'QC' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+]
 
 interface AdminUser {
   id: string
@@ -25,10 +50,33 @@ const roleBadge: Record<string, { color: string; label: string }> = {
 
 export function UsersPanel() {
   const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [debouncedSearch] = useDebouncedValue(search, 300)
+  const [roleFilter, setRoleFilter] = useState('')
+  const [page, setPage] = useState(1)
+
+  // Reset to first page whenever the filters change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setPage is stable; deps are the filter triggers
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, roleFilter])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'users'],
-    queryFn: () =>
-      fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()) as Promise<{ users: AdminUser[] }>,
+    queryKey: ['admin', 'users', debouncedSearch, roleFilter, page],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String((page - 1) * PAGE_SIZE),
+      })
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+      if (roleFilter) params.set('role', roleFilter)
+      return fetch(`/api/admin/users?${params}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
+        users: AdminUser[]
+        total: number
+        limit: number
+        offset: number
+      }>
+    },
   })
 
   const { data: sessionData } = useSession()
@@ -75,14 +123,33 @@ export function UsersPanel() {
   })
 
   const users = data?.users ?? []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <Stack gap="lg">
       <Group justify="space-between">
         <Title order={3}>User Management</Title>
         <Badge variant="light" size="lg">
-          {users.length} users
+          {total} users
         </Badge>
+      </Group>
+
+      <Group gap="sm" wrap="wrap">
+        <TextInput
+          placeholder="Cari nama atau email…"
+          leftSection={<TbSearch size={16} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          w={{ base: '100%', sm: 280 }}
+        />
+        <Select
+          data={roleFilterOptions}
+          value={roleFilter}
+          onChange={(v) => setRoleFilter(v ?? '')}
+          w={{ base: '100%', sm: 180 }}
+          allowDeselect={false}
+        />
       </Group>
 
       <Card withBorder radius="md" p={0}>
@@ -101,6 +168,15 @@ export function UsersPanel() {
                 <Table.Td colSpan={4}>
                   <Text ta="center" c="dimmed" py="md">
                     Loading...
+                  </Text>
+                </Table.Td>
+              </Table.Tr>
+            )}
+            {!isLoading && users.length === 0 && (
+              <Table.Tr>
+                <Table.Td colSpan={4}>
+                  <Text ta="center" c="dimmed" py="md">
+                    {debouncedSearch || roleFilter ? 'Tidak ada user yang cocok.' : 'Belum ada user.'}
                   </Text>
                 </Table.Td>
               </Table.Tr>
@@ -231,6 +307,15 @@ export function UsersPanel() {
           </Table.Tbody>
         </Table>
       </Card>
+
+      {total > PAGE_SIZE && (
+        <Group justify="space-between">
+          <Text size="xs" c="dimmed">
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          </Text>
+          <Pagination value={page} onChange={setPage} total={totalPages} size="sm" />
+        </Group>
+      )}
     </Stack>
   )
 }

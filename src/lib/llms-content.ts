@@ -33,9 +33,9 @@ export function renderLlmsTxt(baseUrl: string): string {
 Base URL: \`${baseUrl}\`
 
 ### List tasks — GET /api/agent/tasks
-Query (optional): \`status\`, \`kind\`, \`assigneeEmail\`, \`page\` (default 1), \`limit\` (default 50, max 200). Invalid \`status\`/\`kind\` → 400. List items are lean (comment/evidence as counts only) — use the detail route to read bodies.
+Query (optional, all case-insensitive for enums): \`status\`, \`kind\`, \`priority\`, \`assigneeEmail\`, \`search\` (matches title/description), \`page\` (default 1), \`limit\` (default 50, max 200). Invalid \`status\`/\`kind\`/\`priority\` → 400. List items are lean (comment/evidence as counts only) — use the detail route to read bodies.
 \`\`\`
-curl -H "Authorization: Bearer pmt_..." "${baseUrl}/api/agent/tasks?status=OPEN&page=1&limit=50"
+curl -H "Authorization: Bearer pmt_..." "${baseUrl}/api/agent/tasks?status=open&priority=HIGH&search=login&page=1&limit=50"
 \`\`\`
 
 ### Task stats — GET /api/agent/tasks/stats
@@ -45,7 +45,7 @@ curl -H "Authorization: Bearer pmt_..." "${baseUrl}/api/agent/tasks/stats"
 \`\`\`
 
 ### Get a task — GET /api/agent/tasks/:id
-Full detail: scalars + \`comments\` (with author + body), \`evidence\` (url/note), \`statusChanges\` (history), and \`checklist\` items (with \`id\` + \`title\` — needed to PATCH/DELETE them).
+Full detail: scalars + \`comments\` (with author + body), \`evidence\` (url/note), \`statusChanges\` (history), \`checklist\` items (with \`id\` + \`title\` — needed to PATCH/DELETE them), \`tags\`, and dependencies \`blockedBy\`/\`blocks\` (each with the linked task's \`id\`/\`title\`/\`status\`/\`kind\`).
 \`\`\`
 curl -H "Authorization: Bearer pmt_..." "${baseUrl}/api/agent/tasks/<taskId>"
 \`\`\`

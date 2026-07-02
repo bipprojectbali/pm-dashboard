@@ -274,6 +274,87 @@ describe('robustness: 400 not 500', () => {
     const res = await req(writeToken, 'PATCH', `/api/agent/tasks/${created.task.id}`, { priority: 'SUPER' })
     expect(res.status).toBe(400)
   })
+  test('invalid dueAt string on create → 400 (not 500)', async () => {
+    const res = await req(writeToken, 'POST', '/api/agent/tasks', { title: 't', description: 'd', dueAt: 'garbage' })
+    expect(res.status).toBe(400)
+  })
+  test('invalid dueAt string on update → 400', async () => {
+    const created = await (await req(writeToken, 'POST', '/api/agent/tasks', { title: 'due', description: 'd' })).json()
+    const res = await req(writeToken, 'PATCH', `/api/agent/tasks/${created.task.id}`, { dueAt: 'not-a-date' })
+    expect(res.status).toBe(400)
+  })
+  test('non-numeric estimateHours on update → 400 (not 500)', async () => {
+    const created = await (await req(writeToken, 'POST', '/api/agent/tasks', { title: 'est', description: 'd' })).json()
+    const res = await req(writeToken, 'PATCH', `/api/agent/tasks/${created.task.id}`, { estimateHours: 'five' })
+    expect(res.status).toBe(400)
+  })
+  test('numeric-string estimateHours is coerced, not rejected', async () => {
+    const res = await req(writeToken, 'POST', '/api/agent/tasks', { title: 'coerce', description: 'd', estimateHours: '5' })
+    expect(res.status).toBe(200)
+    expect((await res.json()).task.estimateHours).toBe(5)
+  })
+  test('checklist update with wrong-typed done → 400 (not 500)', async () => {
+    const t = await (await req(writeToken, 'POST', '/api/agent/tasks', { title: 'ck', description: 'd' })).json()
+    const item = await (await req(writeToken, 'POST', `/api/agent/tasks/${t.task.id}/checklist`, { title: 'x' })).json()
+    const res = await req(writeToken, 'PATCH', `/api/agent/checklist/${item.item.id}`, { done: 'yes' })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('enum case-insensitivity + list filters', () => {
+  test('lowercase kind filter is accepted', async () => {
+    const res = await req(readToken, 'GET', '/api/agent/tasks?kind=task')
+    expect(res.status).toBe(200)
+  })
+  test('lowercase status filter is accepted', async () => {
+    const res = await req(readToken, 'GET', '/api/agent/tasks?status=open')
+    expect(res.status).toBe(200)
+  })
+  test('priority filter narrows results', async () => {
+    await prisma.task.create({
+      data: { projectId, reporterId: ownerId, title: 'crit-filter', description: 'd', kind: 'TASK', status: 'OPEN', priority: 'CRITICAL' },
+    })
+    const res = await req(readToken, 'GET', '/api/agent/tasks?priority=critical&limit=200')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.tasks.length).toBeGreaterThanOrEqual(1)
+    for (const t of body.tasks) expect(t.priority).toBe('CRITICAL')
+  })
+  test('search filter matches title substring', async () => {
+    await prisma.task.create({
+      data: { projectId, reporterId: ownerId, title: 'UNIQUENEEDLE task', description: 'd', kind: 'TASK', status: 'OPEN', priority: 'LOW' },
+    })
+    const res = await req(readToken, 'GET', '/api/agent/tasks?search=uniqueneedle')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.tasks.some((t: { title: string }) => t.title.includes('UNIQUENEEDLE'))).toBe(true)
+  })
+  test('lowercase kind on create is accepted + normalized', async () => {
+    const res = await req(writeToken, 'POST', '/api/agent/tasks', { title: 'lk', description: 'd', kind: 'bug' })
+    expect(res.status).toBe(200)
+    expect((await res.json()).task.kind).toBe('BUG')
+  })
+})
+
+describe('detail includes tags + dependencies', () => {
+  test('tags and blockedBy/blocks with linked task info are returned', async () => {
+    const a = await prisma.task.create({
+      data: { projectId, reporterId: ownerId, title: 'blocker', description: 'd', kind: 'TASK', status: 'OPEN', priority: 'LOW' },
+    })
+    const b = await prisma.task.create({
+      data: { projectId, reporterId: ownerId, title: 'blocked', description: 'd', kind: 'TASK', status: 'OPEN', priority: 'LOW' },
+    })
+    await prisma.taskDependency.create({ data: { taskId: b.id, blockedById: a.id } })
+    const tag = await prisma.tag.create({ data: { projectId, name: 'urgent', color: 'red' } })
+    await prisma.taskTag.create({ data: { taskId: b.id, tagId: tag.id } })
+
+    const res = await req(readToken, 'GET', `/api/agent/tasks/${b.id}`)
+    expect(res.status).toBe(200)
+    const { task } = await res.json()
+    expect(task.tags[0].tag.name).toBe('urgent')
+    expect(task.blockedBy[0].blockedBy.title).toBe('blocker')
+    expect(task.blockedBy[0].blockedBy.status).toBe('OPEN')
+  })
 })
 
 describe('checklist update + delete', () => {

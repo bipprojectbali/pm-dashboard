@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { agentChecklistRoutes } from './checklist.route'
+import { agentCommentRoutes } from './comments.route'
 import { agentProjectRoutes } from './project.route'
 import { agentTaskReadRoutes } from './tasks.route'
 import { agentTaskWriteRoutes } from './writes.route'
@@ -12,6 +13,7 @@ export function agentRoutes() {
   return new Elysia()
     .use(agentTaskReadRoutes())
     .use(agentTaskWriteRoutes())
+    .use(agentCommentRoutes())
     .use(agentChecklistRoutes())
     .use(agentProjectRoutes())
 }

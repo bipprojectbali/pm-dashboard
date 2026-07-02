@@ -16,7 +16,7 @@ export function agentChecklistRoutes() {
       if (!task) return deny(set, 404, 'Task not found')
       const parsed = await parseJson<{ title?: string }>(request)
       if (!parsed.ok) return deny(set, 400, 'Invalid JSON body')
-      if (!parsed.body.title?.trim()) return deny(set, 400, 'title wajib diisi')
+      if (!parsed.body.title?.trim()) return deny(set, 400, 'title is required')
       const last = await prisma.taskChecklistItem.findFirst({
         where: { taskId: params.id },
         orderBy: { order: 'desc' },
@@ -36,8 +36,16 @@ export function agentChecklistRoutes() {
       const parsed = await parseJson<{ title?: string; done?: boolean }>(request)
       if (!parsed.ok) return deny(set, 400, 'Invalid JSON body')
       const data: Record<string, unknown> = {}
-      if (parsed.body.title !== undefined) data.title = parsed.body.title
-      if (parsed.body.done !== undefined) data.done = parsed.body.done
+      if (parsed.body.title !== undefined) {
+        if (typeof parsed.body.title !== 'string' || !parsed.body.title.trim())
+          return deny(set, 400, 'title must be a non-empty string')
+        data.title = parsed.body.title.trim()
+      }
+      if (parsed.body.done !== undefined) {
+        if (typeof parsed.body.done !== 'boolean') return deny(set, 400, 'done must be a boolean')
+        data.done = parsed.body.done
+      }
+      if (Object.keys(data).length === 0) return deny(set, 400, 'Nothing to update (title or done required)')
       const item = await prisma.taskChecklistItem.update({ where: { id: params.id }, data })
       writeAuditLog(gate.userId, 'AGENT_CHECKLIST_UPDATED', `#${params.id}`, getIp(request))
       emitInvalidate('tasks', { projectId: gate.projectId })

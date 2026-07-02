@@ -19,6 +19,24 @@ export async function parseJson<T>(request: Request): Promise<{ ok: true; body: 
   }
 }
 
+// Coerce a client-supplied date. Returns a Date for a parseable value, null for
+// null/undefined, or the string 'invalid' so callers can 400 instead of letting
+// `new Date('garbage')` (Invalid Date) reach Prisma and throw a 500.
+export function parseDate(v: string | null | undefined): Date | null | 'invalid' {
+  if (v === null || v === undefined) return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'invalid' : d
+}
+
+// Coerce a client-supplied number (accepts numeric strings). Returns a number,
+// null for null/undefined, or 'invalid' for anything non-numeric — so a bad
+// estimateHours/progressPercent 400s instead of reaching Prisma as NaN/string.
+export function parseNumber(v: unknown): number | null | 'invalid' {
+  if (v === null || v === undefined) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : 'invalid'
+}
+
 // Lean include for list responses — counts only, no comment/evidence bodies.
 export const LIST_INCLUDE = {
   project: { select: { id: true, name: true } },
@@ -35,6 +53,9 @@ export const DETAIL_INCLUDE = {
   project: { select: { id: true, name: true } },
   reporter: { select: { id: true, name: true, email: true } },
   assignee: { select: { id: true, name: true, email: true } },
+  tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+  blockedBy: { select: { blockedBy: { select: { id: true, title: true, status: true, kind: true } } } },
+  blocks: { select: { task: { select: { id: true, title: true, status: true, kind: true } } } },
   checklist: { orderBy: { order: 'asc' as const }, select: { id: true, title: true, done: true, order: true } },
   comments: {
     orderBy: { createdAt: 'asc' as const },

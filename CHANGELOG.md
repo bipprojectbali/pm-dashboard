@@ -13,7 +13,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 - **CLI agent** (`bun run agent <cmd>`): pembungkus lokal yang membaca `.env.agent` untuk menjalankan surface di atas dari terminal — `tasks`, `stats`, `get`, `project`, `guide`, `create`, `comment`.
 
 ### Diperbaiki
-- **Agent REST API — error 400, bukan 500**: `kind`/`priority` tak valid dan body JSON rusak kini dijawab 400 yang jelas (sebelumnya memicu error Prisma → 500).
+- **Agent REST API — error 400, bukan 500**: `kind`/`priority` tak valid dan body JSON rusak kini dijawab 400 yang jelas (sebelumnya memicu error Prisma → 500). Diperluas ke `dueAt` tak valid, `estimateHours` non-angka, dan tipe salah pada update checklist — semuanya kini 400 (terverifikasi memang 500 sebelumnya).
+- **Agent REST API — filter enum case-insensitive + filter baru**: `status`/`kind`/`priority` menerima huruf kecil (mis. `?kind=task`); ditambah filter `priority` dan `search` (judul/deskripsi) di `GET /api/agent/tasks`. Pesan error disamakan ke bahasa Inggris agar konsisten.
+- **Agent REST API — detail lebih lengkap**: `GET /api/agent/tasks/:id` kini menyertakan `tags` dan dependency `blockedBy`/`blocks` beserta info task tertaut (id/judul/status/kind), bukan sekadar hitungan.
 - **Panduan agent (`GET /api/agent/guide`) akurat**: state machine transisi status diperbaiki (TASK tak punya READY_FOR_QC), plus dokumentasi pagination, envelope respons, endpoint baru, dan cara membaca id checklist.
 
 ## [0.7.26] - 2026-07-02

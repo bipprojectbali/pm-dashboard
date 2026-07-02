@@ -10,9 +10,9 @@ import {
   TASK_PRIORITY_VALUES,
   type TaskStatus,
 } from '../../lib/task-enums'
-import { deny, enrich, LIST_INCLUDE, ownedTask, parseJson } from './shared'
+import { deny, enrich, LIST_INCLUDE, ownedTask, parseDate, parseJson, parseNumber } from './shared'
 
-// Write routes for the token-scoped agent surface: create, update (+transition), comment.
+// Write routes for the token-scoped agent surface: create + update (+transition).
 export function agentTaskWriteRoutes() {
   return new Elysia()
     .post('/api/agent/tasks', async ({ request, set }) => {
@@ -30,12 +30,18 @@ export function agentTaskWriteRoutes() {
       }>(request)
       if (!parsed.ok) return deny(set, 400, 'Invalid JSON body')
       const body = parsed.body
-      if (!body.title?.trim() || !body.description?.trim()) return deny(set, 400, 'title, description wajib diisi')
-      if (body.kind === 'IDEA') return deny(set, 403, 'IDEA is read-only via access token')
-      if (body.kind !== undefined && !isValidKind(body.kind))
+      if (!body.title?.trim() || !body.description?.trim()) return deny(set, 400, 'title and description are required')
+      const kind = body.kind === undefined ? undefined : String(body.kind).toUpperCase()
+      const priority = body.priority === undefined ? undefined : String(body.priority).toUpperCase()
+      if (kind === 'IDEA') return deny(set, 403, 'IDEA is read-only via access token')
+      if (kind !== undefined && !isValidKind(kind))
         return deny(set, 400, `kind must be one of: ${TASK_KIND_VALUES.join(', ')}`)
-      if (body.priority !== undefined && !isValidPriority(body.priority))
+      if (priority !== undefined && !isValidPriority(priority))
         return deny(set, 400, `priority must be one of: ${TASK_PRIORITY_VALUES.join(', ')}`)
+      const dueAt = parseDate(body.dueAt)
+      if (dueAt === 'invalid') return deny(set, 400, 'dueAt must be a valid ISO date')
+      const estimateHours = parseNumber(body.estimateHours)
+      if (estimateHours === 'invalid') return deny(set, 400, 'estimateHours must be a number')
       let assigneeId: string | null = null
       if (body.assigneeEmail) {
         const a = await prisma.user.findUnique({ where: { email: body.assigneeEmail }, select: { id: true } })
@@ -48,12 +54,12 @@ export function agentTaskWriteRoutes() {
           projectId: auth.projectId, // forced from token, ignore any client value
           title: body.title.trim(),
           description: body.description.trim(),
-          kind: (body.kind as 'TASK' | 'BUG' | 'QC' | 'TICKET') ?? 'TASK',
-          priority: (body.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') ?? 'MEDIUM',
+          kind: (kind as 'TASK' | 'BUG' | 'QC' | 'TICKET') ?? 'TASK',
+          priority: (priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') ?? 'MEDIUM',
           reporterId,
           assigneeId,
-          dueAt: body.dueAt ? new Date(body.dueAt) : null,
-          estimateHours: typeof body.estimateHours === 'number' ? body.estimateHours : null,
+          dueAt,
+          estimateHours,
         },
         include: LIST_INCLUDE,
       })
@@ -81,17 +87,28 @@ export function agentTaskWriteRoutes() {
       }>(request)
       if (!parsed.ok) return deny(set, 400, 'Invalid JSON body')
       const body = parsed.body
-      if (body.priority !== undefined && !isValidPriority(body.priority))
+      const priority = body.priority === undefined ? undefined : String(body.priority).toUpperCase()
+      if (priority !== undefined && !isValidPriority(priority))
         return deny(set, 400, `priority must be one of: ${TASK_PRIORITY_VALUES.join(', ')}`)
       const data: Record<string, unknown> = {}
       if (body.title !== undefined) data.title = body.title
       if (body.description !== undefined) data.description = body.description
-      if (body.priority !== undefined) data.priority = body.priority
-      if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null
-      if (body.estimateHours !== undefined) data.estimateHours = body.estimateHours
-      if (body.progressPercent !== undefined)
-        data.progressPercent =
-          body.progressPercent === null ? null : Math.max(0, Math.min(100, Math.round(body.progressPercent)))
+      if (priority !== undefined) data.priority = priority
+      if (body.dueAt !== undefined) {
+        const d = parseDate(body.dueAt)
+        if (d === 'invalid') return deny(set, 400, 'dueAt must be a valid ISO date')
+        data.dueAt = d
+      }
+      if (body.estimateHours !== undefined) {
+        const n = parseNumber(body.estimateHours)
+        if (n === 'invalid') return deny(set, 400, 'estimateHours must be a number')
+        data.estimateHours = n
+      }
+      if (body.progressPercent !== undefined) {
+        const n = parseNumber(body.progressPercent)
+        if (n === 'invalid') return deny(set, 400, 'progressPercent must be a number')
+        data.progressPercent = n === null ? null : Math.max(0, Math.min(100, Math.round(n)))
+      }
       if (body.assigneeEmail !== undefined) {
         if (body.assigneeEmail === null) data.assigneeId = null
         else {
@@ -120,24 +137,5 @@ export function agentTaskWriteRoutes() {
       writeAuditLog(auth.userId, 'AGENT_TASK_UPDATED', `#${task.id} ${Object.keys(data).join(',')}`, getIp(request))
       emitInvalidate('tasks', { projectId: auth.projectId })
       return { task: enrich(task) }
-    })
-
-    .post('/api/agent/tasks/:id/comments', async ({ request, params, set }) => {
-      const auth = await resolveAgentAuth(request)
-      if (!auth.ok) return deny(set, auth.status, auth.error)
-      if (!canWrite(auth)) return deny(set, 403, 'Token is read-only')
-      const task = await ownedTask(params.id, auth.projectId)
-      if (!task) return deny(set, 404, 'Task not found')
-      const parsed = await parseJson<{ body?: string }>(request)
-      if (!parsed.ok) return deny(set, 400, 'Invalid JSON body')
-      const text = parsed.body.body
-      if (!text?.trim()) return deny(set, 400, 'body wajib diisi')
-      const authorId = await resolveReporterId(auth.projectId, auth.userId)
-      const comment = await prisma.taskComment.create({
-        data: { taskId: params.id, authorId, authorTag: 'AGENT', body: text.trim() },
-      })
-      writeAuditLog(auth.userId, 'AGENT_TASK_COMMENTED', `#${params.id}`, getIp(request))
-      emitInvalidate('tasks', { projectId: auth.projectId })
-      return { comment }
     })
 }

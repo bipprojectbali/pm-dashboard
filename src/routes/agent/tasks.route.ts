@@ -3,6 +3,7 @@ import { resolveAgentAuth } from '../../lib/agent-auth'
 import { prisma } from '../../lib/db'
 import {
   isValidKind,
+  isValidPriority,
   isValidStatus,
   TASK_KIND_VALUES,
   TASK_PRIORITY_VALUES,
@@ -31,14 +32,19 @@ export function agentTaskReadRoutes() {
         if (!auth.ok) return deny(set, auth.status, auth.error)
         const where: Record<string, unknown> = { projectId: auth.projectId, deletedAt: null }
         if (query.status) {
-          const s = String(query.status)
+          const s = String(query.status).toUpperCase()
           if (!isValidStatus(s)) return deny(set, 400, `status must be one of: ${TASK_STATUS_VALUES.join(', ')}`)
           where.status = s
         }
         if (query.kind) {
-          const k = String(query.kind)
+          const k = String(query.kind).toUpperCase()
           if (!isValidKind(k)) return deny(set, 400, `kind must be one of: ${TASK_KIND_VALUES.join(', ')}`)
           where.kind = k
+        }
+        if (query.priority) {
+          const p = String(query.priority).toUpperCase()
+          if (!isValidPriority(p)) return deny(set, 400, `priority must be one of: ${TASK_PRIORITY_VALUES.join(', ')}`)
+          where.priority = p
         }
         if (query.assigneeEmail) {
           const u = await prisma.user.findUnique({
@@ -46,6 +52,13 @@ export function agentTaskReadRoutes() {
             select: { id: true },
           })
           where.assigneeId = u?.id ?? '__none__'
+        }
+        if (query.search) {
+          const q = String(query.search)
+          where.OR = [
+            { title: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+          ]
         }
         const page = Math.max(1, Number(query.page) || 1)
         const limit = Math.min(200, Math.max(1, Number(query.limit) || 50))

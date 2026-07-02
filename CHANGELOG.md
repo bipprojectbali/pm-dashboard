@@ -7,6 +7,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Diubah
+- **Refactor internal**: `src/routes/agent.route.ts` (265 baris, 213% dari batas FILE-HEALTH) dipecah jadi barrel + submodul `src/routes/agent/{guide,tasks,checklist}.route.ts` + `shared.ts`. Tanpa perubahan perilaku — semua endpoint `/api/agent/*`, urutan mount, dan respons identik (21 test integrasi tetap lulus).
+
 ## [0.7.26] - 2026-07-02
 
 ### Ditambahkan

@@ -1,19 +1,23 @@
-import { Badge, Button, Group, Stack, Text, Tooltip } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
+import { Badge, Button, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { useClipboard, useDebouncedValue } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { TbCopy, TbRefresh } from 'react-icons/tb'
+import { TbCopy, TbRefresh, TbSearch } from 'react-icons/tb'
 import { FileHealthSummaryCards } from './filehealthpanel/FileHealthSummaryCards'
 import { FileHealthTable } from './filehealthpanel/FileHealthTable'
-import { buildCopyText } from './filehealthpanel/helpers'
-import { PAGE_SIZE } from './filehealthpanel/types'
+import { buildCopyText, filterFiles, type SortKey, sortFiles } from './filehealthpanel/helpers'
 import type { FileHealth, Summary } from './filehealthpanel/types'
+import { PAGE_SIZE } from './filehealthpanel/types'
 
 type FilterValue = 'all' | 'warning' | 'over'
 
 export function FileHealthPanel() {
   const clipboard = useClipboard({ timeout: 1500 })
   const [filter, setFilter] = useState<FilterValue>('all')
+  const [search, setSearch] = useState('')
+  const [debouncedSearch] = useDebouncedValue(search, 250)
+  const [sortKey, setSortKey] = useState<SortKey>('pct')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -21,7 +25,7 @@ export function FileHealthPanel() {
   useEffect(() => {
     setPage(1)
     setSelected(new Set())
-  }, [filter])
+  }, [filter, debouncedSearch])
 
   const q = useQuery<{ summary: Summary; files: FileHealth[] }>({
     queryKey: ['admin', 'file-health'],
@@ -30,11 +34,18 @@ export function FileHealthPanel() {
 
   const summary = q.data?.summary
   const filtered = useMemo(() => {
-    const all = q.data?.files ?? []
-    if (filter === 'over') return all.filter((f) => f.status === 'over')
-    if (filter === 'warning') return all.filter((f) => f.status === 'warning' || f.status === 'over')
-    return all
-  }, [q.data, filter])
+    const matched = filterFiles(q.data?.files ?? [], filter, debouncedSearch)
+    return sortFiles(matched, sortKey, sortDir)
+  }, [q.data, filter, debouncedSearch, sortKey, sortDir])
+
+  // Clicking a column header toggles direction, or switches to that column (desc default).
+  const onSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -54,8 +65,11 @@ export function FileHealthPanel() {
   const togglePage = () =>
     setSelected((prev) => {
       const next = new Set(prev)
-      if (allPageSelected) pageIds.forEach((id) => next.delete(id))
-      else pageIds.forEach((id) => next.add(id))
+      if (allPageSelected) {
+        for (const id of pageIds) next.delete(id)
+      } else {
+        for (const id of pageIds) next.add(id)
+      }
       return next
     })
 
@@ -68,8 +82,12 @@ export function FileHealthPanel() {
     <Stack gap="md">
       <Group justify="space-between" align="center">
         <div>
-          <Text fw={700} size="lg">File Health</Text>
-          <Text size="sm" c="dimmed">Ukuran file vs batas FILE_HEALTH.md. Double-click baris untuk buka di editor.</Text>
+          <Text fw={700} size="lg">
+            File Health
+          </Text>
+          <Text size="sm" c="dimmed">
+            Ukuran file vs batas FILE_HEALTH.md. Double-click baris untuk buka di editor.
+          </Text>
         </div>
         <Group gap="xs">
           <Tooltip label={clipboard.copied ? 'Tersalin!' : `Copy semua ${filtered.length} file`} withArrow>
@@ -84,7 +102,13 @@ export function FileHealthPanel() {
               Copy semua ({filtered.length})
             </Button>
           </Tooltip>
-          <Button size="xs" variant="subtle" leftSection={<TbRefresh size={13} />} onClick={() => q.refetch()} loading={q.isFetching}>
+          <Button
+            size="xs"
+            variant="subtle"
+            leftSection={<TbRefresh size={13} />}
+            onClick={() => q.refetch()}
+            loading={q.isFetching}
+          >
             Refresh
           </Button>
         </Group>
@@ -105,10 +129,20 @@ export function FileHealthPanel() {
               {f === 'all' ? 'Semua' : f === 'warning' ? '≥70% limit' : 'Over limit'}
             </Button>
           ))}
+          <TextInput
+            size="xs"
+            placeholder="Cari path…"
+            leftSection={<TbSearch size={13} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            w={220}
+          />
         </Group>
         {selected.size > 0 && (
           <Group gap="xs">
-            <Badge size="sm" color="blue" variant="light">{selected.size} dipilih</Badge>
+            <Badge size="sm" color="blue" variant="light">
+              {selected.size} dipilih
+            </Badge>
             <Tooltip label={clipboard.copied ? 'Tersalin!' : `Copy ${selected.size} path`} withArrow>
               <Button
                 size="compact-xs"
@@ -141,6 +175,9 @@ export function FileHealthPanel() {
         safePage={safePage}
         filteredLength={filtered.length}
         onPageChange={setPage}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={onSort}
       />
     </Stack>
   )

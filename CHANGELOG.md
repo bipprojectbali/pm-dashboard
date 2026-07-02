@@ -7,6 +7,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Ditambahkan
+- **Pencarian & sortir kolom di panel File Health (Konsol Dev)**: kotak cari path (debounced) dan header kolom yang bisa diklik untuk mengurutkan (File/Baris/Karakter/%/Status, toggle naik-turun) — memudahkan menemukan file spesifik atau melihat file terbesar lebih dulu. Logika filter+sort diekstrak jadi fungsi murni + unit test.
+
 ## [0.7.26] - 2026-07-02
 
 ### Ditambahkan

@@ -7,6 +7,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.27] - 2026-07-02
+
 ### Ditambahkan
 - **Pencarian & sortir kolom di panel File Health (Konsol Dev)**: kotak cari path (debounced) dan header kolom yang bisa diklik untuk mengurutkan (File/Baris/Karakter/%/Status, toggle naik-turun) — memudahkan menemukan file spesifik atau melihat file terbesar lebih dulu. Logika filter+sort diekstrak jadi fungsi murni + unit test.
 - **Pencarian & pagination di panel Pengguna (Konsol Dev)**: kotak cari nama/email (debounced), filter role, dan pagination 20/halaman — sebelumnya seluruh tabel user dirender sekaligus. Endpoint `GET /api/admin/users` kini menerima query opsional `search`/`role`/`limit`/`offset` (backward-compatible: tanpa `limit` tetap mengembalikan seluruh roster untuk pemakai lain). Ditambah test integrasi.

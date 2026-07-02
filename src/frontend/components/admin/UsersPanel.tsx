@@ -1,52 +1,13 @@
-import {
-  ActionIcon,
-  Badge,
-  Card,
-  Group,
-  Menu,
-  Pagination,
-  Select,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core'
+import { Badge, Card, Group, Pagination, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbSearch, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
-import { type Role, useSession } from '@/frontend/hooks/useAuth'
+import { TbSearch } from 'react-icons/tb'
+import { useSession } from '@/frontend/hooks/useAuth'
 import { usePresence } from '@/frontend/hooks/usePresence'
 import { notifyError, notifySuccess } from '@/frontend/lib/notify'
-
-const PAGE_SIZE = 20
-
-const roleFilterOptions = [
-  { value: '', label: 'Semua role' },
-  { value: 'USER', label: 'User' },
-  { value: 'QC', label: 'QC' },
-  { value: 'ADMIN', label: 'Admin' },
-  { value: 'SUPER_ADMIN', label: 'Super Admin' },
-]
-
-interface AdminUser {
-  id: string
-  name: string
-  email: string
-  role: Role
-  blocked: boolean
-  createdAt: string
-  image?: string | null
-}
-
-const roleBadge: Record<string, { color: string; label: string }> = {
-  USER: { color: 'blue', label: 'User' },
-  QC: { color: 'teal', label: 'QC' },
-  ADMIN: { color: 'violet', label: 'Admin' },
-  SUPER_ADMIN: { color: 'red', label: 'Super Admin' },
-}
+import { type AdminUser, PAGE_SIZE, roleFilterOptions } from './userspanel/shared'
+import { UserRow } from './userspanel/UserRow'
 
 export function UsersPanel() {
   const queryClient = useQueryClient()
@@ -181,129 +142,17 @@ export function UsersPanel() {
                 </Table.Td>
               </Table.Tr>
             )}
-            {users.map((u) => {
-              const isSelf = u.id === currentUserId
-              const badge = roleBadge[u.role] ?? roleBadge.USER
-              const isOnline = onlineUserIds.includes(u.id)
-              const isTargetSuper = u.role === 'SUPER_ADMIN'
-              const canActOnTarget = !isSelf && !isTargetSuper && currentRole === 'SUPER_ADMIN'
-
-              return (
-                <Table.Tr key={u.id} opacity={u.blocked ? 0.5 : 1}>
-                  <Table.Td>
-                    <Group gap="sm">
-                      <div style={{ position: 'relative' }}>
-                        <UserAvatar name={u.name} image={u.image} size="sm" color={badge.color} />
-                        {!u.blocked && (
-                          <TbCircleFilled
-                            size={10}
-                            color={isOnline ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-6)'}
-                            style={{
-                              position: 'absolute',
-                              bottom: -1,
-                              right: -1,
-                              borderRadius: '50%',
-                              border: '2px solid var(--mantine-color-body)',
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <Text size="sm" fw={500}>
-                          {u.name}{' '}
-                          {isSelf && (
-                            <Text span c="dimmed" size="xs">
-                              (you)
-                            </Text>
-                          )}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {u.email}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge color={badge.color} variant="light" size="sm">
-                      {badge.label}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    {u.blocked ? (
-                      <Badge color="red" variant="filled" size="sm">
-                        Blocked
-                      </Badge>
-                    ) : isOnline ? (
-                      <Badge color="green" variant="filled" size="sm">
-                        Online
-                      </Badge>
-                    ) : (
-                      <Badge color="gray" variant="light" size="sm">
-                        Offline
-                      </Badge>
-                    )}
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    {canActOnTarget && (
-                      <Menu shadow="md" width={200} position="bottom-end">
-                        <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
-                            <TbDots size={16} />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Label>Role</Menu.Label>
-                          {u.role !== 'USER' && (
-                            <Menu.Item
-                              leftSection={<TbShieldOff size={14} />}
-                              onClick={() => changeRole.mutate({ id: u.id, role: 'USER' })}
-                            >
-                              Set as User
-                            </Menu.Item>
-                          )}
-                          {u.role !== 'QC' && (
-                            <Menu.Item
-                              leftSection={<TbBug size={14} />}
-                              onClick={() => changeRole.mutate({ id: u.id, role: 'QC' })}
-                            >
-                              Set as QC
-                            </Menu.Item>
-                          )}
-                          {u.role !== 'ADMIN' && (
-                            <Menu.Item
-                              leftSection={<TbShieldCheck size={14} />}
-                              onClick={() => changeRole.mutate({ id: u.id, role: 'ADMIN' })}
-                            >
-                              Set as Admin
-                            </Menu.Item>
-                          )}
-
-                          <Menu.Divider />
-                          <Menu.Label>Status</Menu.Label>
-                          {u.blocked ? (
-                            <Menu.Item
-                              leftSection={<TbLockOpen size={14} />}
-                              color="green"
-                              onClick={() => toggleBlock.mutate({ id: u.id, blocked: false })}
-                            >
-                              Unblock User
-                            </Menu.Item>
-                          ) : (
-                            <Menu.Item
-                              leftSection={<TbLock size={14} />}
-                              color="red"
-                              onClick={() => toggleBlock.mutate({ id: u.id, blocked: true })}
-                            >
-                              Block User
-                            </Menu.Item>
-                          )}
-                        </Menu.Dropdown>
-                      </Menu>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              )
-            })}
+            {users.map((u) => (
+              <UserRow
+                key={u.id}
+                user={u}
+                currentUserId={currentUserId}
+                currentRole={currentRole}
+                isOnline={onlineUserIds.includes(u.id)}
+                onChangeRole={(id, role) => changeRole.mutate({ id, role })}
+                onToggleBlock={(id, blocked) => toggleBlock.mutate({ id, blocked })}
+              />
+            ))}
           </Table.Tbody>
         </Table>
       </Card>

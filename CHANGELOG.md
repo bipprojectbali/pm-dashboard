@@ -13,6 +13,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ### Diubah
 - **Refactor internal**: `src/routes/agent.route.ts` (265 baris, 213% dari batas FILE-HEALTH) dipecah jadi barrel + submodul `src/routes/agent/{guide,tasks,tasks.write,checklist}.route.ts` + `shared.ts`. Route task read (list/get) dan write (create/patch) dipisah agar tiap file di bawah batas karakter route-handler. Tanpa perubahan perilaku — semua endpoint `/api/agent/*`, urutan mount, dan respons identik (21 test integrasi tetap lulus).
+- **Refactor internal**: MCP tool `scripts/mcp/tools/tasks.write.ts` (331 baris, 113% dari batas FILE-HEALTH) dipecah jadi barrel + `tasks.write.{core,comments,evidence}.ts`. 9 tool (`task_create`/`task_update`/`task_delete`/`task_transition`/`task_comment`/`task_comment_update`/`task_comment_delete`/`task_add_evidence`/`task_delete_evidence`) dengan urutan registrasi identik — penting karena token-scoped MCP server memanennya via capture-proxy. Tanpa perubahan perilaku (test MCP endpoint tetap lulus).
 
 ### Diperbaiki
 - **Dokumentasi setup test** (`.env.example`): `.env.test` wajib memuat variabel `MINIO_*` (nilai dummy cukup) agar `bun test` bisa boot — sebelumnya suite gagal total karena `MINIO_ENDPOINT` wajib di `src/lib/env.ts`.

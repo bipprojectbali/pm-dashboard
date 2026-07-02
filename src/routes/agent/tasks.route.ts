@@ -9,6 +9,7 @@ import {
   TASK_PRIORITY_VALUES,
   TASK_STATUS_VALUES,
 } from '../../lib/task-enums'
+import { getRetryCount, RETRY_ESCALATION_THRESHOLD } from '../../lib/ticket-retry'
 import { deny, enrich, LIST_INCLUDE, ownedTask } from './shared'
 
 // Shape the status groupBy into named buckets (mirror projects buildTaskStats).
@@ -59,6 +60,9 @@ export function agentTaskReadRoutes() {
             { title: { contains: q, mode: 'insensitive' } },
             { description: { contains: q, mode: 'insensitive' } },
           ]
+        }
+        if (query.tag) {
+          where.tags = { some: { tag: { name: { equals: String(query.tag), mode: 'insensitive' } } } }
         }
         const page = Math.max(1, Number(query.page) || 1)
         const limit = Math.min(200, Math.max(1, Number(query.limit) || 50))
@@ -112,7 +116,8 @@ export function agentTaskReadRoutes() {
         if (!auth.ok) return deny(set, auth.status, auth.error)
         const task = await ownedTask(params.id, auth.projectId, true)
         if (!task) return deny(set, 404, 'Task not found')
-        return { task: enrich(task) }
+        const retryCount = await getRetryCount(params.id)
+        return { task: { ...enrich(task), retryCount, shouldEscalate: retryCount >= RETRY_ESCALATION_THRESHOLD } }
       })
   )
 }

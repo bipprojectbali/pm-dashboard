@@ -43,6 +43,7 @@ export const LIST_INCLUDE = {
   reporter: { select: { id: true, name: true, email: true } },
   assignee: { select: { id: true, name: true, email: true } },
   checklist: { select: { done: true } },
+  tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
   _count: { select: { comments: true, evidence: true, blockedBy: true, blocks: true } },
 } as const
 

@@ -38,7 +38,7 @@ export function PhaseListRow({
       radius="sm"
       p="xs"
       onClick={onView}
-      style={{ cursor: 'pointer', borderLeft: `3px solid var(--mantine-color-${color}-5)` }}
+      style={{ cursor: 'pointer' }}
     >
       <Group justify="space-between" wrap="nowrap" gap="sm">
         <Group gap={8} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>

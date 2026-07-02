@@ -35,7 +35,7 @@ export function PhaseCard({
       radius="md"
       padding="sm"
       onClick={onView}
-      style={{ cursor: 'pointer', borderLeft: `3px solid var(--mantine-color-${color}-5)` }}
+      style={{ cursor: 'pointer' }}
     >
       <Stack gap={6}>
         <Group justify="space-between" align="flex-start" wrap="nowrap">

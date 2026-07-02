@@ -58,7 +58,7 @@ export function ProjectsBoardView({
                 withBorder
                 padding="sm"
                 radius="md"
-                style={{ cursor: 'pointer', borderLeft: `3px solid var(--mantine-color-${STATUS_COLOR[status]}-5)` }}
+                style={{ cursor: 'pointer' }}
                 onClick={() => onSelect(p)}
               >
                 <Stack gap={4}>

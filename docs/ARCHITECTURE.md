@@ -65,7 +65,7 @@ Session-based auth with HttpOnly cookies stored in DB.
 Two ways a per-project `pmt_` access token lets a coding agent reach one project's data:
 
 - `POST /mcp` (+ `GET`/`DELETE`) — token-scoped MCP surface. Auth via `pmt_` token (not session, not `MCP_SECRET`). SDK `WebStandardStreamableHTTPServerTransport`, **stateless** (fresh `McpServer` + transport per request). `src/routes/mcp.route.ts` + `scripts/mcp/token-scoped-server.ts`. For interactive Claude Code.
-- `/api/agent/*` (incl. `GET /api/agent/guide`) — token-only REST surface (lighter than MCP) for CLI/scripts. `src/routes/agent.route.ts` + `src/lib/agent-auth.ts`; **auth-gated** guide at `/api/agent/guide` (`src/lib/llms-content.ts`) — requires a `pmt_` token OR a logged-in session (not public; internal tool). Isolated from session routes.
+- `/api/agent/*` (incl. `GET /api/agent/guide`) — token-only REST surface (lighter than MCP) for CLI/scripts. `src/routes/agent.route.ts` (barrel → `src/routes/agent/{guide,tasks,tasks.write,checklist}.route.ts` + `shared.ts`) + `src/lib/agent-auth.ts`; **auth-gated** guide at `/api/agent/guide` (`src/lib/llms-content.ts`) — requires a `pmt_` token OR a logged-in session (not public; internal tool). Isolated from session routes.
 
 Both use the same token; see `@docs/INTEGRATIONS.md` and `@docs/API.md` § Agent REST API. Distinct from the stdio MCP server.
 

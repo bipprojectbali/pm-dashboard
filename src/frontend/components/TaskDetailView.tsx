@@ -24,11 +24,16 @@ export function TaskDetailView({ taskId, onBack }: { taskId: string; onBack: () 
   const projectQ = useQuery({
     queryKey: ['project', task?.projectId],
     queryFn: () =>
-      api<{ project: ProjectDetail; myRole: ProjectMemberRole | null }>(`/api/projects/${task?.projectId}`),
+      api<{ project: ProjectDetail; myRole: ProjectMemberRole | null; canWrite: boolean }>(
+        `/api/projects/${task?.projectId}`,
+      ),
     enabled: !!task?.projectId,
   })
   const myRole = projectQ.data?.myRole ?? null
-  const canWrite = myRole !== null && myRole !== 'VIEWER'
+  // Trust the server's canWrite (isAdmin || membership) rather than recomputing
+  // from myRole here — the backend PATCH gate is the single source of truth, so
+  // a system admin who isn't a project member still gets write controls.
+  const canWrite = projectQ.data?.canWrite ?? false
 
   const phasesQ = useQuery({
     queryKey: ['phases', task?.projectId],

@@ -7,8 +7,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-06
+
+### Diperbaiki
+- **Task di Trash tidak lagi mencemari agregat**: task yang di-soft-delete (Trash) sebelumnya tetap menggelembungkan KPI, hitungan overdue/stale, skor kesehatan project, beban tim, dan retro — karena tiap lib agregasi membangun `where`-nya sendiri tanpa filter `deletedAt`. Kini sebuah Prisma client extension (`src/lib/prisma-soft-delete.ts`) menyuntikkan `deletedAt: null` ke **setiap** pembacaan Task, dan tiga blind-spot relasi (health `_count.tasks` + filter dependency, retro `taskStatusChange` + blocker) ditambal manual via `ACTIVE_TASK_FILTER`. Route Trash opt-out eksplisit dengan `deletedAt: { not: null }`.
+- **Judul fase unik per project (case-insensitive)**: judul fase bisa terduplikasi diam-diam dalam satu project, membingungkan di tampilan Stepper yang berurutan. Kini ada guard `isPhaseNameTaken()` (`src/lib/phase-name.ts`) sebagai sumber kebenaran — create/rename yang bentrok ditolak `409` di HTTP handler, `{ ok: false, error }` di MCP `phase_create`/`phase_update`, dan form frontend (`PhaseAddForm`/`PhaseEditModal`) menonaktifkan submit + menampilkan hint sebelum request. Guard di handler/MCP (bukan DB constraint) karena unique index DB case-sensitive.
+
+## [0.8.2] - 2026-07-02
+
+### Ditambahkan
+- **Edit `kind` task dari sidebar detail**: `kind` task (TASK/BUG/QC/TICKET) kini bisa diubah langsung dari sidebar detail, dengan guard kind↔status — perubahan `kind` ditolak `400` bila status task saat ini tak bisa dipegang oleh kind tujuan (mis. `READY_FOR_QC → TASK`). Promosi IDEA tetap lewat tombol "Naik Kelas" terpisah. Guard `isStatusValidForKind` diterapkan seragam di empat write surface (session/agent-REST/stdio-MCP/token-MCP).
+
+## [0.8.1] - 2026-07-02
+
 ### Diubah
 - **UI fase — hapus border kiri berwarna**: `PhaseRow` (filter fase di panel Tasks), `PhaseListRow`, `PhaseCard` (tab Phases project detail), dan card di Projects Board View tidak lagi menampilkan garis aksent berwarna di sisi kiri. Warna fase kini disampaikan sepenuhnya lewat ikon dan badge status. `PhaseRow` direfaktor dari `Paper` + inline styles ke `NavLink` (Mantine) + ikon berwarna via `Box c={color}`.
+
+## [0.8.0] - 2026-07-02
 
 ### Ditambahkan
 - **Agent REST API — pagination & statistik**: `GET /api/agent/tasks` kini paginasi penuh (`page`/`limit`, respons `{count,page,limit,total,totalPages,tasks}`) sehingga project dengan >200 task bisa dibaca seluruhnya dan agent tahu total sebenarnya. Endpoint baru `GET /api/agent/tasks/stats` memberi rekap jumlah per status/kind/priority dalam satu panggilan.

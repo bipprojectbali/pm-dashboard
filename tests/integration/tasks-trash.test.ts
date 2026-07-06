@@ -120,7 +120,10 @@ describe('DELETE /api/tasks/:id/purge', () => {
       }),
     )
     expect(res.status).toBe(403)
-    // masih di trash, tidak terhapus
-    expect(await prisma.task.findUnique({ where: { id: task.id } })).not.toBeNull()
+    // masih di trash, tidak terhapus. Query eksplisit deletedAt karena default
+    // read sudah menyaring row ter-trash (soft-delete extension).
+    expect(
+      await prisma.task.findFirst({ where: { id: task.id, deletedAt: { not: null } } }),
+    ).not.toBeNull()
   })
 })

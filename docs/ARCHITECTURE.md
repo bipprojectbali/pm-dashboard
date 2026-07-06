@@ -27,7 +27,7 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
   - `ProjectMilestone`, `ProjectExtension` — planning + audited deadline pushes
   - `ProjectAccessToken` (id, projectId, createdById?, name, tokenHash @unique, tokenPrefix, scope, status, expiresAt?, lastUsedAt?, timestamps) — per-user, project-scoped bearer token for coding agents. `tokenHash` = SHA-256 of raw `pmt_…` token (plaintext never stored); `tokenPrefix` for UI display. Enums `ProjectTokenScope` = `READ | WRITE`, `ProjectTokenStatus` = `ACTIVE | REVOKED`. See `@docs/INTEGRATIONS.md` § Project Access Tokens. **Auth resolution is Tahap 2 — Tahap 1 only manages the token lifecycle.**
   - `ProjectPhase` (id, projectId, title, description?, summary?, status=PhaseStatus, order, startsAt?, endsAt?, timestamps) — fase/sprint per project; `summary` diisi saat menutup fase (ACTIVE→COMPLETED). Tasks link via nullable FK `phaseId` with `onDelete: SetNull`. Enum `PhaseStatus` = `PLANNING | ACTIVE | COMPLETED`.
-  - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, timestamps) — plus 6 nullable QC structured bug-report columns `stepsToReproduce?`, `expected?`, `actual?`, `environment?`, `browser?`, `appVersion?` populated only by QC tickets filed via the structured create form (legacy/free-text tickets leave them null); see `@docs/QC-TICKETS.md`
+  - `Task` (id, projectId, kind, title, description, status, priority, route?, reporterId, assigneeId?, startsAt?, dueAt?, estimateHours?, progressPercent?, closedAt?, `deletedAt?`/`deletedById?`/`deleteReason?`, timestamps) — plus 6 nullable QC structured bug-report columns `stepsToReproduce?`, `expected?`, `actual?`, `environment?`, `browser?`, `appVersion?` populated only by QC tickets filed via the structured create form (legacy/free-text tickets leave them null); see `@docs/QC-TICKETS.md`. **Soft-delete**: `DELETE /api/tasks/:id` sets `deletedAt` (Trash) instead of removing the row; `POST /:id/restore` clears it, `DELETE /:id/purge` removes permanently. See § Task soft-delete below.
   - `Tag` (id, projectId, name, color) — unique per (projectId, name)
   - `TaskTag` — m2m between Task and Tag
   - `TaskDependency` (id, taskId, blockedById) — self-relation on Task via named relations `TaskDependents`/`TaskBlockers`; unique per (taskId, blockedById)
@@ -41,6 +41,14 @@ PostgreSQL via Prisma v6. Client generated to `./generated/prisma` (gitignored).
 - Seed: `prisma/seed.ts` — demo users (superadmin, admin, user) with `Bun.password.hash` bcrypt. **Seed runs local/dev only** — the prod/stg migrate sidecar in `compose.yml` runs `bun prisma migrate deploy` without seeding. Seed's `wipe()` truncates tables, so never wire it into deploy flow.
 - Migrations: single baseline `prisma/migrations/20260420014347_baseline/` represents the full schema. Earlier incremental migrations were collapsed to avoid drift; prod was marked `--applied` against this baseline.
 - Commands: `bun run db:migrate`, `bun run db:seed`, `bun run db:generate`
+
+### Task soft-delete
+
+`Task` is the only soft-deleted model. Deleting a task sets `deletedAt` (it lands in Trash) rather than removing the row; it stays there until `DELETE /:id/purge`.
+
+To guarantee trashed tasks never leak back into reads, `src/lib/prisma-soft-delete.ts` registers a Prisma client extension (`withSoftDelete`, applied in `src/lib/db.ts`) that injects `deletedAt: null` into **every Task read** (`findMany`/`findFirst`/`findUnique`/`count`/`aggregate`/`groupBy`) whose `where` doesn't already mention `deletedAt`. Callers that need the Trash (list-trash/restore/purge) opt out by passing `deletedAt: { not: null }` — their explicit clause wins. Write ops are untouched, so soft-delete/restore still work.
+
+**Extension blind spots** (must filter by hand — use `ACTIVE_TASK_FILTER` from `src/lib/task-metrics.ts`, which is `WORKLOAD_KIND_FILTER` + `deletedAt: null`): the extension only rewrites operations on the `Task` model itself. It does NOT filter task **relations** — relation counts (`project.findMany({ _count: { tasks: true } })` → use `_count: { select: { tasks: { where: { deletedAt: null } } } }`), relation filters from other models (`taskStatusChange.findMany({ where: { task: {...} } })`), or nested `include: { tasks: {...} }`. These are patched explicitly in `admin-overview/health.ts` and `retro/compute.ts`.
 
 ## Redis
 

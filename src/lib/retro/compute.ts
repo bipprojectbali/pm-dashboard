@@ -36,7 +36,8 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
           ...WORKLOAD_KIND_FILTER,
           projectId,
           status: { notIn: ['CLOSED'] },
-          blockedBy: { some: { blockedBy: { status: { notIn: ['CLOSED'] } } } },
+          // A trashed blocker no longer blocks — exclude it from the "still blocked" test.
+          blockedBy: { some: { blockedBy: { status: { notIn: ['CLOSED'] }, deletedAt: null } } },
         },
         include: {
           assignee: { select: { id: true, email: true, name: true } },
@@ -55,7 +56,10 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
         where: { projectId, createdAt: { gte: since, lte: until } },
       }),
       prisma.taskStatusChange.findMany({
-        where: { task: { projectId }, createdAt: { gte: since, lte: until }, toStatus: 'CLOSED' },
+        // `task` is a relation — extension can't reach it, so exclude trashed
+        // tasks explicitly (a status-change on a since-trashed task shouldn't
+        // credit a contributor).
+        where: { task: { projectId, deletedAt: null }, createdAt: { gte: since, lte: until }, toStatus: 'CLOSED' },
         include: { author: { select: { id: true, email: true, name: true } } },
       }),
     ])
@@ -65,16 +69,26 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
   )
 
   const mapTask = (t: (typeof closedTasks)[number]): RetroTaskRow => ({
-    id: t.id, title: t.title, status: t.status, priority: t.priority,
-    assigneeEmail: t.assignee?.email ?? null, dueAt: t.dueAt, closedAt: t.closedAt,
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    assigneeEmail: t.assignee?.email ?? null,
+    dueAt: t.dueAt,
+    closedAt: t.closedAt,
     estimateHours: t.estimateHours,
   })
 
   const shipped = closedTasks.map(mapTask)
   const slipped = slippedFiltered.map(mapTask)
   const stillBlocked = blockedTasks.map((t) => ({
-    id: t.id, title: t.title, status: t.status, priority: t.priority,
-    assigneeEmail: t.assignee?.email ?? null, dueAt: t.dueAt, closedAt: t.closedAt,
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    assigneeEmail: t.assignee?.email ?? null,
+    dueAt: t.dueAt,
+    closedAt: t.closedAt,
     estimateHours: t.estimateHours,
   }))
 
@@ -110,7 +124,12 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
   const ghByUser = await prisma.projectGithubEvent.groupBy({
     by: ['matchedUserId', 'kind'],
     _count: true,
-    where: { projectId, createdAt: { gte: since, lte: until }, matchedUserId: { not: null }, kind: { in: ['PUSH_COMMIT', 'PR_MERGED'] } },
+    where: {
+      projectId,
+      createdAt: { gte: since, lte: until },
+      matchedUserId: { not: null },
+      kind: { in: ['PUSH_COMMIT', 'PR_MERGED'] },
+    },
   })
   const ghUserIds = [...new Set(ghByUser.map((g) => g.matchedUserId).filter((v): v is string => !!v))]
   const ghUsers = ghUserIds.length
@@ -135,9 +154,26 @@ export async function computeRetro(opts: RetroOptions): Promise<RetroResult | nu
   return {
     project,
     window: { since, until, days: Math.max(1, Math.round((until.getTime() - since.getTime()) / DAY_MS)) },
-    summary: { closed: shipped.length, slipped: slipped.length, stillBlocked: stillBlocked.length, extensions: extensions.length, newTasks: createdTasks, estimateHoursClosed },
-    shipped, slipped, stillBlocked, biggestMisses,
-    extensions: extensions.map((e) => ({ id: e.id, previousEndAt: e.previousEndAt, newEndAt: e.newEndAt, reason: e.reason, extendedBy: e.extendedBy?.email ?? null, createdAt: e.createdAt })),
+    summary: {
+      closed: shipped.length,
+      slipped: slipped.length,
+      stillBlocked: stillBlocked.length,
+      extensions: extensions.length,
+      newTasks: createdTasks,
+      estimateHoursClosed,
+    },
+    shipped,
+    slipped,
+    stillBlocked,
+    biggestMisses,
+    extensions: extensions.map((e) => ({
+      id: e.id,
+      previousEndAt: e.previousEndAt,
+      newEndAt: e.newEndAt,
+      reason: e.reason,
+      extendedBy: e.extendedBy?.email ?? null,
+      createdAt: e.createdAt,
+    })),
     github,
     contributors,
   }

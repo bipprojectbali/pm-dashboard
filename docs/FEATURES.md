@@ -7,6 +7,8 @@ Admin-facing aggregates. Each lib is the single source of truth — MCP tools an
 System-wide "what needs attention right now" dashboard at `/admin?tab=overview`. Answers: is anything on fire? which projects are failing? who's overloaded?
 
 > **Kind exclusion:** all task aggregations below (health/load/risk/analytics + effort/retro/chat) filter out `kind = IDEA` via `WORKLOAD_KIND_FILTER` (`src/lib/task-metrics.ts`). Ideas are backlog captures, not committed work, so they never count toward overdue/stale/load/health. `TICKET` **is** counted (real work).
+>
+> **Soft-delete exclusion:** trashed tasks (`deletedAt != null`) are also excluded from every aggregate. Direct `prisma.task` reads get `deletedAt: null` injected automatically by the soft-delete client extension (see `@docs/ARCHITECTURE.md` § Task soft-delete); task **relation** filters/counts (health's `_count.tasks`, retro's `taskStatusChange`) filter it explicitly via `ACTIVE_TASK_FILTER`. So a task in Trash stops inflating KPIs/overdue/health the moment it's deleted, and returns on restore.
 
 - **Helpers**: `src/lib/admin-overview.ts`
   - `computeAdminOverview({ recentAuditLimit? })` — aggregated KPIs (users/projects/tasks/agents/webhooks24h/velocity/recentAudit). Mirrors `/admin` top cards.

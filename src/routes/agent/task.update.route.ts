@@ -3,7 +3,7 @@ import { canWrite, resolveAgentAuth, resolveReporterId } from '../../lib/agent-a
 import { prisma } from '../../lib/db'
 import { notifyTaskAssigned, notifyTaskStatusChanged } from '../../lib/notifications'
 import { emitInvalidate } from '../../lib/presence'
-import { getAllowedTaskTransitions, getIp, writeAuditLog } from '../../lib/route-helpers'
+import { getAllowedTaskTransitions, getIp, isStatusValidForKind, writeAuditLog } from '../../lib/route-helpers'
 import {
   isValidKind,
   isValidPriority,
@@ -47,6 +47,19 @@ export function agentTaskUpdateRoutes() {
     if (kind !== undefined && !isValidKind(kind))
       return deny(set, 400, `kind must be one of: ${TASK_KIND_VALUES.join(', ')}`)
     if (kind === 'IDEA') return deny(set, 403, 'Cannot change kind to IDEA via access token')
+    // Kind↔status guard (mirrors the session route): reject a kind change when
+    // the task's effective status can't be held by the target kind's lifecycle
+    // (e.g. READY_FOR_QC → TASK). The effective status is the one in this
+    // request if it also transitions, else the current status.
+    if (kind !== undefined) {
+      const effectiveStatus = body.status ?? current.status
+      if (!isStatusValidForKind(effectiveStatus, kind))
+        return deny(
+          set,
+          400,
+          `Status '${effectiveStatus}' tidak valid untuk kind ${kind} — ubah status ke yang valid dulu`,
+        )
+    }
     const data: Record<string, unknown> = {}
     if (body.title !== undefined) data.title = body.title
     if (body.description !== undefined) data.description = body.description

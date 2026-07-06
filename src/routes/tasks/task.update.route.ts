@@ -1,16 +1,18 @@
 import { Elysia } from 'elysia'
 import { prisma } from '../../lib/db'
 import { notifyTaskAssigned, notifyTaskStatusChanged } from '../../lib/notifications'
-import { emitInvalidate } from '../../lib/presence'
 import { getPermissionRule, meetsMinProjectRole } from '../../lib/permission-config'
+import { emitInvalidate } from '../../lib/presence'
 import {
   getAllowedTaskTransitions,
   getIp,
+  isStatusValidForKind,
   isSystemAdmin,
   requireAuth,
   requireProjectMember,
   writeAuditLog,
 } from '../../lib/route-helpers'
+import { isValidKind } from '../../lib/task-enums'
 
 export function taskUpdateRoute() {
   return new Elysia().patch('/api/tasks/:id', async ({ request, params, set }) => {
@@ -59,6 +61,21 @@ export function taskUpdateRoute() {
     // trail records where a piece of work originated.
     let kindChange: { from: string; to: string } | null = null
     if (body.kind !== undefined) {
+      if (!isValidKind(body.kind)) {
+        set.status = 400
+        return { error: `kind must be one of: TASK, BUG, QC, TICKET, IDEA` }
+      }
+      // Guard against reassigning a task to a kind whose lifecycle can't hold
+      // its current status (e.g. a TICKET in READY_FOR_QC turned into a TASK,
+      // which has no QC stage). The status the task will end up with is the one
+      // in this request if it also transitions, else the current status.
+      const effectiveStatus = body.status ?? current.status
+      if (!isStatusValidForKind(effectiveStatus, body.kind)) {
+        set.status = 400
+        return {
+          error: `Status '${effectiveStatus}' tidak valid untuk kind ${body.kind} — ubah status ke yang valid dulu`,
+        }
+      }
       data.kind = body.kind
       if (body.kind !== current.kind) kindChange = { from: current.kind, to: body.kind }
     }

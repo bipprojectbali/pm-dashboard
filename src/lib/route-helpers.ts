@@ -124,10 +124,24 @@ export async function canReadProject(
   return { ok: true, status: null, membership }
 }
 
-export function getAllowedTaskTransitions(
-  current: string,
-  kind: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA',
-): string[] {
+// Statuses a kind can legitimately hold — the set reachable from OPEN through
+// that kind's state machine. TASK's lifecycle has no QC stage so it never
+// enters READY_FOR_QC; IDEA is OPEN/CLOSED only. Used to guard kind changes: a
+// task must not be reassigned to a kind whose lifecycle can't hold its current
+// status (e.g. a TICKET sitting in READY_FOR_QC being turned into a TASK).
+const VALID_STATUSES_BY_KIND: Record<string, readonly string[]> = {
+  TASK: ['OPEN', 'IN_PROGRESS', 'REOPENED', 'CLOSED'],
+  BUG: ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'],
+  QC: ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'],
+  TICKET: ['OPEN', 'IN_PROGRESS', 'READY_FOR_QC', 'REOPENED', 'CLOSED'],
+  IDEA: ['OPEN', 'CLOSED'],
+}
+
+export function isStatusValidForKind(status: string, kind: string): boolean {
+  return (VALID_STATUSES_BY_KIND[kind] ?? []).includes(status)
+}
+
+export function getAllowedTaskTransitions(current: string, kind: 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'): string[] {
   if (kind === 'TASK') {
     const m: Record<string, string[]> = {
       OPEN: ['IN_PROGRESS', 'CLOSED'],

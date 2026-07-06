@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { appLog } from '../../../src/lib/applog'
 import { prisma } from '../../../src/lib/db'
+import { isStatusValidForKind } from '../../../src/lib/route-helpers'
 import { jsonText } from './shared'
 import {
   audit,
@@ -99,6 +100,18 @@ export function registerTaskWriteCoreTools(server: McpServer) {
         select: { id: true, projectId: true, status: true, kind: true },
       })
       if (!current) return jsonText({ error: 'Task not found' })
+      // Kind↔status guard (mirrors the HTTP routes): a kind change must not
+      // leave the task at a status the target kind's lifecycle can't hold
+      // (e.g. READY_FOR_QC → TASK). Effective status = the one in this call if
+      // it also transitions, else the current status.
+      if (rest.kind !== undefined) {
+        const effectiveStatus = status ?? current.status
+        if (!isStatusValidForKind(effectiveStatus, rest.kind)) {
+          return jsonText({
+            error: `Status '${effectiveStatus}' tidak valid untuk kind ${rest.kind} — ubah status ke yang valid dulu`,
+          })
+        }
+      }
       const data: Record<string, unknown> = { ...rest }
       let statusChange: { from: TaskStatus; to: TaskStatus } | null = null
       if (status !== undefined && status !== current.status) {

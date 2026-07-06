@@ -117,6 +117,20 @@ export function TaskDetailSidebar({
           <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
             Pengaturan
           </Text>
+          {/* Kind editor — IDEA is intentionally excluded here; it has its own
+              explicit "Naik Kelas" flow above. If the current status can't be
+              held by the target kind (e.g. READY_FOR_QC → TASK) the server
+              rejects with 400, surfaced via updateError below. */}
+          {task.kind !== 'IDEA' && (
+            <Select
+              label="Tipe"
+              size="xs"
+              allowDeselect={false}
+              data={['TASK', 'BUG', 'QC', 'TICKET']}
+              value={task.kind}
+              onChange={(v) => v && v !== task.kind && onUpdate({ kind: v as TaskDetail['kind'] })}
+            />
+          )}
           <Select
             label="Prioritas"
             size="xs"

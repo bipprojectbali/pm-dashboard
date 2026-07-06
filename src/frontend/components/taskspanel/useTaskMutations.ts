@@ -1,24 +1,40 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ExportTaskRow } from '../../lib/csv'
+import type { ExportTaskRow } from '../../lib/csv'
 import { notifyError, notifySuccess } from '../../lib/notify'
 import { api } from './helpers'
 import type { TaskKind, TaskListItem, TaskPriority } from './types'
 
 interface CreateTaskBody {
-  projectId: string; title: string; description: string; kind: TaskKind; priority: TaskPriority
-  startsAt: string | null; dueAt: string | null; estimateHours: number | null; tagIds: string[]; phaseId: string | null
+  projectId: string
+  title: string
+  description: string
+  kind: TaskKind
+  priority: TaskPriority
+  assigneeId: string | null
+  startsAt: string | null
+  dueAt: string | null
+  estimateHours: number | null
+  tagIds: string[]
+  phaseId: string | null
 }
 
 interface BulkCreatePayload {
   projectId: string
   tasks: Array<{
-    title: string; description: string; kind: string; priority: string
-    startsAt: string | null; dueAt: string | null; estimateHours: number | null
-    assigneeEmail: string | null; tagNames: string[]; phaseName: string | null
+    title: string
+    description: string
+    kind: string
+    priority: string
+    startsAt: string | null
+    dueAt: string | null
+    estimateHours: number | null
+    assigneeEmail: string | null
+    tagNames: string[]
+    phaseName: string | null
   }>
 }
 
-export type { CreateTaskBody, BulkCreatePayload }
+export type { BulkCreatePayload, CreateTaskBody }
 
 export function useTaskMutations({
   onCreateSuccess,
@@ -108,10 +124,24 @@ export function useTaskMutations({
 
 export function buildExportRows(tasks: TaskListItem[]): ExportTaskRow[] {
   return tasks.map((t) => ({
-    id: t.id, title: t.title, description: t.description, kind: t.kind, status: t.status, priority: t.priority,
-    startsAt: t.startsAt, dueAt: t.dueAt, estimateHours: t.estimateHours, actualHours: t.actualHours,
-    progressPercent: t.progressPercent, assigneeEmail: t.assignee?.email ?? null, assigneeName: t.assignee?.name ?? null,
-    reporterEmail: t.reporter.email, projectName: t.project.name, phaseTitle: t.phase?.title ?? null,
-    tags: t.tags.map((tg) => tg.tag.name), createdAt: t.createdAt, closedAt: t.closedAt,
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    kind: t.kind,
+    status: t.status,
+    priority: t.priority,
+    startsAt: t.startsAt,
+    dueAt: t.dueAt,
+    estimateHours: t.estimateHours,
+    actualHours: t.actualHours,
+    progressPercent: t.progressPercent,
+    assigneeEmail: t.assignee?.email ?? null,
+    assigneeName: t.assignee?.name ?? null,
+    reporterEmail: t.reporter.email,
+    projectName: t.project.name,
+    phaseTitle: t.phase?.title ?? null,
+    tags: t.tags.map((tg) => tg.tag.name),
+    createdAt: t.createdAt,
+    closedAt: t.closedAt,
   }))
 }

@@ -15,6 +15,13 @@ export interface ProjectOption {
   canWrite?: boolean
 }
 
+export interface ProjectMemberOption {
+  id: string
+  name: string
+  role: 'OWNER' | 'PM' | 'MEMBER' | 'VIEWER'
+  image?: string | null
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {

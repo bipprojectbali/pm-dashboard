@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
+import { isPhaseNameTaken, phaseNameTakenError } from '../../../src/lib/phase-name'
 import { jsonText, type ToolModule } from './shared'
 
 const PhaseStatusEnum = z.enum(['PLANNING', 'ACTIVE', 'COMPLETED'])
@@ -60,6 +61,9 @@ export const phasesTools: ToolModule = {
         },
       },
       async ({ projectId, title, description, summary, status, startsAt, endsAt, order }) => {
+        if (await isPhaseNameTaken(projectId, title)) {
+          return jsonText({ ok: false, error: phaseNameTakenError(title) })
+        }
         let nextOrder = order
         if (nextOrder === undefined) {
           const last = await prisma.projectPhase.findFirst({
@@ -105,6 +109,16 @@ export const phasesTools: ToolModule = {
         },
       },
       async ({ phaseId, startsAt, endsAt, tagIds, ...rest }) => {
+        if (rest.title !== undefined) {
+          const existing = await prisma.projectPhase.findUnique({
+            where: { id: phaseId },
+            select: { projectId: true },
+          })
+          if (!existing) return jsonText({ ok: false, error: 'Phase not found' })
+          if (await isPhaseNameTaken(existing.projectId, rest.title, phaseId)) {
+            return jsonText({ ok: false, error: phaseNameTakenError(rest.title) })
+          }
+        }
         const data: Record<string, unknown> = { ...rest }
         if (startsAt !== undefined) data.startsAt = startsAt ? new Date(startsAt) : null
         if (endsAt !== undefined) data.endsAt = endsAt ? new Date(endsAt) : null

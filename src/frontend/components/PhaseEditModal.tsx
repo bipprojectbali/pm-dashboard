@@ -2,16 +2,18 @@ import { Button, Group, Select, Stack, TagsInput, Textarea, TextInput } from '@m
 import { DateInput } from '@mantine/dates'
 import { modals } from '@mantine/modals'
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { type PhaseStatus, type ProjectPhase, STATUS_OPTIONS, type TagOption } from './phase.types'
 
 export function EditPhaseModal({
   phase,
   availableTags,
+  existingNames,
   onSubmit,
 }: {
   phase: ProjectPhase
   availableTags: TagOption[]
+  existingNames: string[]
   onSubmit: (data: Record<string, unknown>) => void
 }) {
   const qc = useQueryClient()
@@ -21,6 +23,11 @@ export function EditPhaseModal({
   const [startsAt, setStartsAt] = useState<Date | null>(phase.startsAt ? new Date(phase.startsAt) : null)
   const [endsAt, setEndsAt] = useState<Date | null>(phase.endsAt ? new Date(phase.endsAt) : null)
   const [tagNames, setTagNames] = useState<string[]>(phase.tags.map((t) => t.tag.name))
+
+  const isDuplicate = useMemo(() => {
+    const t = title.trim().toLowerCase()
+    return t.length > 0 && existingNames.some((n) => n.trim().toLowerCase() === t)
+  }, [title, existingNames])
 
   const resolveTagIds = async (names: string[]): Promise<string[]> => {
     const ids: string[] = []
@@ -50,7 +57,7 @@ export function EditPhaseModal({
   }
 
   const submit = async () => {
-    if (!title.trim()) return
+    if (!title.trim() || isDuplicate) return
     const tagIds = await resolveTagIds(tagNames)
     onSubmit({
       title: title.trim(),
@@ -69,6 +76,7 @@ export function EditPhaseModal({
         label="Nama fase"
         value={title}
         onChange={(e) => setTitle(e.currentTarget.value)}
+        error={isDuplicate ? 'Nama fase sudah dipakai di project ini' : null}
         required
         data-autofocus
       />
@@ -116,7 +124,7 @@ export function EditPhaseModal({
         <Button variant="subtle" color="gray" size="xs" onClick={() => modals.closeAll()}>
           Batal
         </Button>
-        <Button size="xs" onClick={submit} disabled={!title.trim()}>
+        <Button size="xs" onClick={submit} disabled={!title.trim() || isDuplicate}>
           Simpan
         </Button>
       </Group>

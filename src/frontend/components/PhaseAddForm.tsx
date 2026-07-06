@@ -1,7 +1,7 @@
 import { Button, Card, Group, Stack, TagsInput, Text, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { TbPlus } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../lib/notify'
 import type { TagOption } from './phase.types'
@@ -31,10 +31,12 @@ async function createPhase(projectId: string, body: PhaseCreateInput) {
 export function PhaseAddForm({
   projectId,
   availableTags,
+  existingNames,
   onSuccess,
 }: {
   projectId: string
   availableTags: TagOption[]
+  existingNames: string[]
   onSuccess: () => void
 }) {
   const qc = useQueryClient()
@@ -42,6 +44,11 @@ export function PhaseAddForm({
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [endsAt, setEndsAt] = useState<Date | null>(null)
   const [tagNames, setTagNames] = useState<string[]>([])
+
+  const isDuplicate = useMemo(() => {
+    const t = title.trim().toLowerCase()
+    return t.length > 0 && existingNames.some((n) => n.trim().toLowerCase() === t)
+  }, [title, existingNames])
 
   const create = useMutation({
     mutationFn: (body: PhaseCreateInput) => createPhase(projectId, body),
@@ -84,7 +91,7 @@ export function PhaseAddForm({
   }
 
   const submit = async () => {
-    if (!title.trim() || create.isPending) return
+    if (!title.trim() || isDuplicate || create.isPending) return
     const tagIds = await resolveTagIds(tagNames)
     create.mutate({
       title: title.trim(),
@@ -106,6 +113,7 @@ export function PhaseAddForm({
           value={title}
           onChange={(e) => setTitle(e.currentTarget.value)}
           size="xs"
+          error={isDuplicate ? 'Nama fase sudah dipakai di project ini' : null}
           onKeyDown={(e) => {
             if (e.key === 'Enter') submit()
           }}
@@ -144,7 +152,7 @@ export function PhaseAddForm({
           <Button
             leftSection={<TbPlus size={13} />}
             size="xs"
-            disabled={!title.trim() || create.isPending}
+            disabled={!title.trim() || isDuplicate || create.isPending}
             loading={create.isPending}
             onClick={submit}
           >

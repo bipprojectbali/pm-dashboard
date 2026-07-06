@@ -129,6 +129,75 @@ describe('POST /api/projects/:id/phases', () => {
   })
 })
 
+describe('Keunikan nama fase per project', () => {
+  test('create — nama duplikat persis → 409', async () => {
+    // "Sprint 1" sudah dibuat di describe POST sebelumnya
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects/${projectId}/phases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ title: 'Sprint 1' }),
+      }),
+    )
+    expect(res.status).toBe(409)
+  })
+
+  test('create — duplikat case-insensitive + spasi → 409', async () => {
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects/${projectId}/phases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ title: '  sprint 1  ' }),
+      }),
+    )
+    expect(res.status).toBe(409)
+  })
+
+  test('create — nama sama di project lain → boleh (scoped per project)', async () => {
+    const other = await seedTestProject(ownerId, 'Phases Other Project')
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects/${other.id}/phases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ title: 'Sprint 1' }),
+      }),
+    )
+    expect(res.status).toBe(200)
+  })
+
+  test('rename ke nama fase lain yang sudah ada → 409', async () => {
+    const target = await prisma.projectPhase.findFirst({
+      where: { projectId, title: 'Sprint 2' },
+      select: { id: true },
+    })
+    const res = await app.handle(
+      new Request(`http://localhost/api/phases/${target!.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ title: 'Sprint 1' }),
+      }),
+    )
+    expect(res.status).toBe(409)
+  })
+
+  test('rename ke nama sendiri (case beda) → boleh', async () => {
+    const self = await prisma.projectPhase.findFirst({
+      where: { projectId, title: 'Sprint 2' },
+      select: { id: true },
+    })
+    const res = await app.handle(
+      new Request(`http://localhost/api/phases/${self!.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', cookie: `session=${ownerToken}` },
+        body: JSON.stringify({ title: 'SPRINT 2' }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.phase.title).toBe('SPRINT 2')
+  })
+})
+
 describe('PATCH /api/phases/:id', () => {
   let phaseId = ''
 

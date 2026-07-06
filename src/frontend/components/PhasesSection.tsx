@@ -160,6 +160,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
         <EditPhaseModal
           phase={phase}
           availableTags={availableTags}
+          existingNames={allPhases.filter((p) => p.id !== phase.id).map((p) => p.title)}
           onSubmit={(data) => update.mutate({ id: phase.id, body: data })}
         />
       ),
@@ -285,7 +286,14 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
         </Group>
       )}
 
-      {canManage && <PhaseAddForm projectId={projectId} availableTags={availableTags} onSuccess={invalidate} />}
+      {canManage && (
+        <PhaseAddForm
+          projectId={projectId}
+          availableTags={availableTags}
+          existingNames={allPhases.map((p) => p.title)}
+          onSuccess={invalidate}
+        />
+      )}
     </Stack>
   )
 }

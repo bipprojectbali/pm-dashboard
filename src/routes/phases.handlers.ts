@@ -1,4 +1,5 @@
 import { prisma } from '../lib/db'
+import { isPhaseNameTaken, phaseNameTakenError } from '../lib/phase-name'
 import { emitInvalidate } from '../lib/presence'
 import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMember } from '../lib/route-helpers'
 
@@ -60,6 +61,10 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
     set.status = 400
     return { error: `status must be one of: ${PHASE_STATUS_VALUES.join(', ')}` }
   }
+  if (await isPhaseNameTaken(params.id, body.title)) {
+    set.status = 409
+    return { error: phaseNameTakenError(body.title) }
+  }
   const last = await prisma.projectPhase.findFirst({
     where: { projectId: params.id },
     orderBy: { order: 'desc' },
@@ -108,7 +113,15 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
     return { error: `status must be one of: ${PHASE_STATUS_VALUES.join(', ')}` }
   }
   const data: Record<string, unknown> = {}
-  if (body.title !== undefined) data.title = body.title.trim()
+  if (body.title !== undefined) {
+    const trimmed = body.title.trim()
+    if (!trimmed) { set.status = 400; return { error: 'title tidak boleh kosong' } }
+    if (await isPhaseNameTaken(existing.projectId, trimmed, params.id)) {
+      set.status = 409
+      return { error: phaseNameTakenError(trimmed) }
+    }
+    data.title = trimmed
+  }
   if (body.description !== undefined) data.description = body.description?.trim() || null
   if (body.summary !== undefined) data.summary = body.summary?.trim() || null
   if (body.status !== undefined) data.status = body.status

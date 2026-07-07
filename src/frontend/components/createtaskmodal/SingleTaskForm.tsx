@@ -1,7 +1,7 @@
 import { Group, MultiSelect, NumberInput, Select, Textarea, TextInput } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { TbClock, TbTag } from 'react-icons/tb'
-import type { TagListItem, TaskKind, TaskPriority } from './types'
+import type { ProjectMemberOption, TagListItem, TaskKind, TaskPriority } from './types'
 
 type Phase = { id: string; title: string; status: string }
 
@@ -14,6 +14,9 @@ type Props = {
   setKind: (v: TaskKind) => void
   priority: TaskPriority
   setPriority: (v: TaskPriority) => void
+  assigneeId: string | null
+  setAssigneeId: (v: string | null) => void
+  members: ProjectMemberOption[]
   startsAt: Date | null
   setStartsAt: (v: Date | null) => void
   dueAt: Date | null
@@ -30,16 +33,28 @@ type Props = {
 }
 
 export function SingleTaskForm({
-  title, setTitle,
-  description, setDescription,
-  kind, setKind,
-  priority, setPriority,
-  startsAt, setStartsAt,
-  dueAt, setDueAt,
+  title,
+  setTitle,
+  description,
+  setDescription,
+  kind,
+  setKind,
+  priority,
+  setPriority,
+  assigneeId,
+  setAssigneeId,
+  members,
+  startsAt,
+  setStartsAt,
+  dueAt,
+  setDueAt,
   invalidRange,
-  estimateHours, setEstimateHours,
-  tagIds, setTagIds,
-  phaseId, setPhaseId,
+  estimateHours,
+  setEstimateHours,
+  tagIds,
+  setTagIds,
+  phaseId,
+  setPhaseId,
   availableTags,
   phases,
 }: Props) {
@@ -74,6 +89,16 @@ export function SingleTaskForm({
           data={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']}
           value={priority}
           onChange={(v) => setPriority((v as TaskPriority) || 'MEDIUM')}
+        />
+        <Select
+          label="Assignee"
+          placeholder={members.length ? 'Unassigned' : 'Pilih project dulu'}
+          data={members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))}
+          value={assigneeId}
+          onChange={setAssigneeId}
+          disabled={members.length === 0}
+          clearable
+          searchable
         />
       </Group>
       <Group grow>

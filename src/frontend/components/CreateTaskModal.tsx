@@ -6,7 +6,14 @@ import { parseTaskCsv, type RowError } from '../lib/csv'
 import { notifyError } from '../lib/notify'
 import { BulkCsvForm } from './createtaskmodal/BulkCsvForm'
 import { SingleTaskForm } from './createtaskmodal/SingleTaskForm'
-import { api, type ProjectOption, type TagListItem, type TaskKind, type TaskPriority } from './createtaskmodal/types'
+import {
+  api,
+  type ProjectMemberOption,
+  type ProjectOption,
+  type TagListItem,
+  type TaskKind,
+  type TaskPriority,
+} from './createtaskmodal/types'
 
 export function CreateTaskModal({
   opened,
@@ -31,6 +38,7 @@ export function CreateTaskModal({
     description: string
     kind: TaskKind
     priority: TaskPriority
+    assigneeId: string | null
     startsAt: string | null
     dueAt: string | null
     estimateHours: number | null
@@ -62,6 +70,7 @@ export function CreateTaskModal({
   const [description, setDescription] = useState('')
   const [kind, setKind] = useState<TaskKind>(defaultKind)
   const [priority, setPriority] = useState<TaskPriority>('MEDIUM')
+  const [assigneeId, setAssigneeId] = useState<string | null>(null)
   const [startsAt, setStartsAt] = useState<Date | null>(null)
   const [dueAt, setDueAt] = useState<Date | null>(null)
   const [estimateHours, setEstimateHours] = useState<number | string>('')
@@ -80,6 +89,22 @@ export function CreateTaskModal({
     queryFn: () => api<{ tags: TagListItem[] }>(`/api/projects/${projectId}/tags`),
     enabled: !!projectId,
   })
+  // Members of the selected project — the assignee picker is scoped to them so
+  // a task is never assigned to someone without access to the project.
+  const membersQ = useQuery({
+    queryKey: ['project-members', projectId, 'modal'],
+    queryFn: () =>
+      api<{ project: { members: Array<{ role: string; user: { id: string; name: string; image: string | null } }> } }>(
+        `/api/projects/${projectId}`,
+      ),
+    enabled: !!projectId,
+  })
+  const members: ProjectMemberOption[] = (membersQ.data?.project.members ?? []).map((m) => ({
+    id: m.user.id,
+    name: m.user.name,
+    role: m.role as ProjectMemberOption['role'],
+    image: m.user.image,
+  }))
 
   const parsed = useMemo(() => (csvText.trim() ? parseTaskCsv(csvText) : null), [csvText])
   const errorsByRow = useMemo(() => {
@@ -115,6 +140,7 @@ export function CreateTaskModal({
     setTitle('')
     setDescription('')
     setKind(defaultKind)
+    setAssigneeId(null)
     setStartsAt(null)
     setDueAt(null)
     setEstimateHours('')
@@ -174,7 +200,10 @@ export function CreateTaskModal({
           label="Project"
           data={projects.map((p) => ({ value: p.id, label: p.name }))}
           value={projectId}
-          onChange={setProjectId}
+          onChange={(v) => {
+            setProjectId(v)
+            setAssigneeId(null) // members differ per project
+          }}
           required
         />
         {mode === 'single' ? (
@@ -187,6 +216,9 @@ export function CreateTaskModal({
             setKind={setKind}
             priority={priority}
             setPriority={setPriority}
+            assigneeId={assigneeId}
+            setAssigneeId={setAssigneeId}
+            members={members}
             startsAt={startsAt}
             setStartsAt={setStartsAt}
             dueAt={dueAt}
@@ -232,6 +264,7 @@ export function CreateTaskModal({
                   description: description.trim(),
                   kind,
                   priority,
+                  assigneeId,
                   startsAt: startsAt ? startsAt.toISOString() : null,
                   dueAt: dueAt ? dueAt.toISOString() : null,
                   estimateHours: typeof estimateHours === 'number' ? estimateHours : null,

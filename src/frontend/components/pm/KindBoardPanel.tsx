@@ -61,7 +61,7 @@ export function KindBoardPanel({
   })
 
   const create = useMutation({
-    mutationFn: (body: { projectId: string; title: string; description: string; kind: string }) =>
+    mutationFn: (body: { projectId: string; title: string; description: string; kind: string; assigneeId?: string | null }) =>
       api('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

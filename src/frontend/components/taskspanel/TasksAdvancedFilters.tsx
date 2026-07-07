@@ -1,6 +1,6 @@
-import { ActionIcon, Badge, Divider, Group, Select, Stack, Switch, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Divider, Group, Select, Stack, Text, Tooltip } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
-import { TbFilter, TbSortAscending, TbSortDescending, TbTag, TbX } from 'react-icons/tb'
+import { TbFilter, TbSortAscending, TbSortDescending, TbTag, TbUser, TbX } from 'react-icons/tb'
 import type { AdvancedFilterProps } from './types'
 
 // The collapsible advanced-filter body: Scope / Tipe Task / Urutan / Tanggal Due.
@@ -10,8 +10,9 @@ export function TasksAdvancedFilters({
   projects,
   activeProjectId,
   onProjectChange,
-  mine,
-  onMineChange,
+  assigneeFilter,
+  onAssigneeFilterChange,
+  members,
   kind,
   onKindChange,
   status,
@@ -74,11 +75,20 @@ export function TasksAdvancedFilters({
             w={220}
           />
         )}
-        <Switch
-          label="Assigned to me"
-          checked={mine}
-          onChange={(e) => onMineChange(e.currentTarget.checked)}
-          size="sm"
+        <Select
+          placeholder="Semua assignee"
+          leftSection={<TbUser size={12} />}
+          data={[
+            { value: 'me', label: 'Saya' },
+            { value: 'unassigned', label: 'Unassigned' },
+            ...members.map((m) => ({ value: m.id, label: m.name })),
+          ]}
+          value={assigneeFilter}
+          onChange={onAssigneeFilterChange}
+          clearable
+          size="xs"
+          w={200}
+          comboboxProps={{ withinPortal: true }}
         />
       </Group>
 

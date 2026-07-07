@@ -26,7 +26,7 @@ export function TasksPanel({
     projects, writableProjects, activeProjectId, activeProject, canDeleteTask,
     tasksQ, tagsQ, phasesQ, chartTasksQ,
     rawTasks, tasks, total, totalPages, safePage,
-    status, setStatus, kind, setKind, mine, setMine,
+    status, setStatus, kind, setKind, assigneeFilter, setAssigneeFilter, members, currentUserId,
     tagFilter, setTagFilter, phaseFilter, setPhaseFilter,
     search, setSearch, quickFilter, setQuickFilter,
     dueDateRange, setDueDateRange, priorityFilter, setPriorityFilter,
@@ -106,7 +106,8 @@ export function TasksPanel({
       <TasksFilterBar
         activeProject={activeProject} projects={projects} activeProjectId={activeProjectId}
         status={status} onStatusChange={setStatus} kind={kind} onKindChange={setKind}
-        mine={mine} onMineChange={setMine} tagFilter={tagFilter} onTagFilterChange={setTagFilter}
+        assigneeFilter={assigneeFilter} onAssigneeFilterChange={setAssigneeFilter} members={members}
+        tagFilter={tagFilter} onTagFilterChange={setTagFilter}
         tags={tagsQ.data?.tags ?? []} search={search} onSearchChange={setSearch}
         quickFilter={quickFilter} onQuickFilterChange={setQuickFilter}
         dueDateRange={dueDateRange} onDueDateRangeChange={setDueDateRange}
@@ -123,7 +124,7 @@ export function TasksPanel({
       ) : view === 'kanban' ? (
         <TasksKanbanView
           projectId={activeProjectId ?? null}
-          filters={{ kind: kind || null, mine, tagId: tagFilter || null, phaseId: phaseFilter || null, search: search.trim() || undefined, priority: priorityFilter || null }}
+          filters={{ kind: kind || null, assigneeFilter, currentUserId, tagId: tagFilter || null, phaseId: phaseFilter || null, search: search.trim() || undefined, priority: priorityFilter || null }}
           canWrite={activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0}
           onSelect={openTask}
           onDeleteOne={confirmDeleteOne}

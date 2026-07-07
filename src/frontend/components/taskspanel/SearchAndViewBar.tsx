@@ -15,7 +15,6 @@ import {
   TbDownload,
   TbLock,
   TbSearch,
-  TbUserQuestion,
 } from 'react-icons/tb'
 import type { QuickFilter } from './types'
 
@@ -79,16 +78,6 @@ export function SearchAndViewBar({
           onClick={() => onQuickFilterChange(quickFilter === 'overdue' ? null : 'overdue')}
         >
           Overdue
-        </Badge>
-        <Badge
-          color={quickFilter === 'unassigned' ? 'orange' : 'gray'}
-          variant={quickFilter === 'unassigned' ? 'filled' : 'light'}
-          size="sm"
-          leftSection={<TbUserQuestion size={10} />}
-          style={{ cursor: 'pointer' }}
-          onClick={() => onQuickFilterChange(quickFilter === 'unassigned' ? null : 'unassigned')}
-        >
-          Unassigned
         </Badge>
         <Badge
           color={quickFilter === 'blocked' ? 'gray' : 'gray'}

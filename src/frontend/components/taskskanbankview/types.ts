@@ -44,7 +44,8 @@ export interface TaskListItem {
 
 export interface KanbanFilters {
   kind?: string | null
-  mine?: boolean
+  assigneeFilter?: string | null
+  currentUserId?: string | null
   tagId?: string | null
   phaseId?: string | null
   search?: string

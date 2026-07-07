@@ -3,7 +3,7 @@ import { useLocalStorage } from '@mantine/hooks'
 import { TbChevronDown, TbChevronUp, TbFilter, TbX } from 'react-icons/tb'
 import { SearchAndViewBar } from './SearchAndViewBar'
 import { TasksAdvancedFilters } from './TasksAdvancedFilters'
-import type { ProjectOption, QuickFilter, TagListItem } from './types'
+import type { AssigneeOption, ProjectOption, QuickFilter, TagListItem } from './types'
 
 export function TasksFilterBar({
   activeProject,
@@ -13,8 +13,9 @@ export function TasksFilterBar({
   onStatusChange,
   kind,
   onKindChange,
-  mine,
-  onMineChange,
+  assigneeFilter,
+  onAssigneeFilterChange,
+  members,
   tagFilter,
   onTagFilterChange,
   tags,
@@ -46,8 +47,9 @@ export function TasksFilterBar({
   onStatusChange: (v: string | null) => void
   kind: string | null
   onKindChange: (v: string | null) => void
-  mine: boolean
-  onMineChange: (v: boolean) => void
+  assigneeFilter: string | null
+  onAssigneeFilterChange: (v: string | null) => void
+  members: AssigneeOption[]
   tagFilter: string | null
   onTagFilterChange: (v: string | null) => void
   tags: TagListItem[]
@@ -81,7 +83,7 @@ export function TasksFilterBar({
   // supaya user tahu ada filter berjalan tanpa harus membuka panel.
   const activeCount = [
     activeProjectId,
-    mine || null,
+    assigneeFilter,
     kind,
     status,
     priorityFilter,
@@ -132,8 +134,9 @@ export function TasksFilterBar({
             projects={projects}
             activeProjectId={activeProjectId}
             onProjectChange={onProjectChange}
-            mine={mine}
-            onMineChange={onMineChange}
+            assigneeFilter={assigneeFilter}
+            onAssigneeFilterChange={onAssigneeFilterChange}
+            members={members}
             kind={kind}
             onKindChange={onKindChange}
             status={status}

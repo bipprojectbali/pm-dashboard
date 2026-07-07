@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../hooks/useAuth'
 import { downloadTasksCsv } from '../../lib/csv'
 import { api, buildTasksQueryString, filterAndSortTasks } from './helpers'
-import type { ProjectOption, TagListItem, TaskListItem } from './types'
+import type { AssigneeOption, ProjectOption, TagListItem, TaskListItem } from './types'
 import { buildExportRows, useTaskMutations } from './useTaskMutations'
 import { DeleteReasonModal } from './DeleteReasonModal'
 
@@ -29,11 +29,11 @@ export function useTasksPanelState({ projectId, onProjectChange, canWriteOverrid
   const [trashView, setTrashView] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [kind, setKind] = useState<string | null>(null)
-  const [mine, setMine] = useState(false)
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null>(null)
+  const [quickFilter, setQuickFilter] = useState<'overdue' | 'openOnly' | 'blocked' | 'nodue' | null>(null)
   const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<string | null>(null)
@@ -72,14 +72,24 @@ export function useTasksPanelState({ projectId, onProjectChange, canWriteOverrid
     queryFn: () => api<{ phases: Array<{ id: string; title: string; status: string; _count: { tasks: number } }> }>(`/api/projects/${activeProjectId}/phases`),
     enabled: !!activeProjectId,
   })
+  // Anggota project aktif untuk dropdown filter assignee (reuse pola modal Create Task).
+  const membersQ = useQuery({
+    queryKey: ['project-members', activeProjectId, 'tasks-filter'],
+    queryFn: () => api<{ project: { members: Array<{ user: { id: string; name: string } }> } }>(`/api/projects/${activeProjectId}`),
+    enabled: !!activeProjectId,
+  })
+  const members: AssigneeOption[] = useMemo(
+    () => (membersQ.data?.project.members ?? []).map((m) => ({ id: m.user.id, name: m.user.name })),
+    [membersQ.data],
+  )
 
-  const query = buildTasksQueryString({ projectId: activeProjectId, status, kind, mine, tagFilter, phaseFilter, view, page, pageSize: PAGE_SIZE, search, priorityFilter, quickFilter })
+  const query = buildTasksQueryString({ projectId: activeProjectId, status, kind, assigneeFilter, currentUserId, tagFilter, phaseFilter, view, page, pageSize: PAGE_SIZE, search, priorityFilter, quickFilter })
   const tasksQ = useQuery({
     queryKey: ['tasks', query],
     queryFn: () => api<{ tasks: TaskListItem[]; total: number; limit: number; offset: number }>(`/api/tasks${query ? `?${query}` : ''}`),
     enabled: view !== 'kanban',
   })
-  const chartQuery = buildTasksQueryString({ projectId: activeProjectId, status: null, kind: null, mine: false, tagFilter: null, phaseFilter: null, view: 'table', page: 1, pageSize: 500, search: '', priorityFilter: null, quickFilter: null })
+  const chartQuery = buildTasksQueryString({ projectId: activeProjectId, status: null, kind: null, assigneeFilter: null, currentUserId, tagFilter: null, phaseFilter: null, view: 'table', page: 1, pageSize: 500, search: '', priorityFilter: null, quickFilter: null })
   const chartTasksQ = useQuery({
     queryKey: ['tasks-chart', chartQuery],
     queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
@@ -168,17 +178,17 @@ export function useTasksPanelState({ projectId, onProjectChange, canWriteOverrid
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
-  useEffect(() => { setPage(1) }, [activeProjectId, status, kind, mine, tagFilter, phaseFilter, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
+  useEffect(() => { setPage(1) }, [activeProjectId, status, kind, assigneeFilter, tagFilter, phaseFilter, search, quickFilter, dueDateRange, priorityFilter, sortBy, sortDir])
   useEffect(() => { setPhaseFilter(null); setTagFilter(null) }, [activeProjectId])
 
-  const showClearAll = !!(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy || phaseFilter)
-  const clearAllFilters = () => { setQuickFilter(null); setSearch(''); setDueDateRange([null, null]); setPriorityFilter(null); setSortBy(null); setSortDir('asc'); setPhaseFilter(null) }
+  const showClearAll = !!(quickFilter || search || dueDateRange[0] || dueDateRange[1] || priorityFilter || sortBy || phaseFilter || assigneeFilter)
+  const clearAllFilters = () => { setQuickFilter(null); setSearch(''); setDueDateRange([null, null]); setPriorityFilter(null); setSortBy(null); setSortDir('asc'); setPhaseFilter(null); setAssigneeFilter(null) }
 
   return {
     projects, writableProjects, activeProjectId, activeProject, canDeleteTask,
     tasksQ, tagsQ, phasesQ, chartTasksQ,
     rawTasks, tasks, total, totalPages, safePage,
-    status, setStatus, kind, setKind, mine, setMine,
+    status, setStatus, kind, setKind, assigneeFilter, setAssigneeFilter, members, currentUserId,
     tagFilter, setTagFilter, phaseFilter, setPhaseFilter,
     search, setSearch, quickFilter, setQuickFilter,
     dueDateRange, setDueDateRange, priorityFilter, setPriorityFilter,

@@ -7,6 +7,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-07-07
+
+### Ditambahkan
+- **Assign user langsung dari modal Create Task**: form "Single" di modal Create Task kini punya field pilih assignee (opsional), jadi task bisa langsung ditugaskan saat dibuat tanpa harus buka detail dulu. `POST /api/tasks` menerima `assigneeId` dan memicu `notifyTaskAssigned` (kecuali self-assign).
+
+### Diperbaiki
+- **Admin bisa mengedit task detail meski bukan member project**: `TaskDetailView` dulu menghitung izin edit di sisi klien dan mengabaikan `canWrite` dari server, sehingga ADMIN/SUPER_ADMIN non-member melihat detail read-only. Kini FE mempercayai `canWrite` dari server (server sudah otorisasi admin-bypass), jadi admin bisa mengedit sesuai perannya.
+
 ## [0.8.3] - 2026-07-06
 
 ### Diperbaiki

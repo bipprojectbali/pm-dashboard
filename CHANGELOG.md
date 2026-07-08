@@ -7,6 +7,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-07-08
+
+### Ditambahkan
+- **Filter task berdasarkan assignee di panel Tasks**: panel Tasks (triage board) kini punya filter assignee, jadi bisa memfokuskan daftar task ke satu penanggung jawab. Filter berlaku di tampilan list maupun kanban.
+
 ## [0.8.4] - 2026-07-07
 
 ### Ditambahkan

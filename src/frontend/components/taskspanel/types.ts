@@ -55,7 +55,14 @@ export interface ProjectOption {
   canWrite?: boolean
 }
 
-export type QuickFilter = 'overdue' | 'unassigned' | 'openOnly' | 'blocked' | 'nodue' | null
+export type QuickFilter = 'overdue' | 'openOnly' | 'blocked' | 'nodue' | null
+
+// Nilai filter assignee gabungan: null = Semua, 'me' = Saya, 'unassigned' = tanpa
+// assignee, atau userId member spesifik.
+export interface AssigneeOption {
+  id: string
+  name: string
+}
 
 // Props for the advanced (collapsible) filter sections: Scope / Tipe Task /
 // Urutan / Tanggal Due. Shared between TasksFilterBar and TasksAdvancedFilters.
@@ -64,8 +71,9 @@ export interface AdvancedFilterProps {
   projects: ProjectOption[]
   activeProjectId: string | null
   onProjectChange: (v: string | null) => void
-  mine: boolean
-  onMineChange: (v: boolean) => void
+  assigneeFilter: string | null
+  onAssigneeFilterChange: (v: string | null) => void
+  members: AssigneeOption[]
   kind: string | null
   onKindChange: (v: string | null) => void
   status: string | null

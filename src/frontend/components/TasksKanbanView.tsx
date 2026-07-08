@@ -62,7 +62,7 @@ export function TasksKanbanView({
     setColOffset({ OPEN: 0, IN_PROGRESS: 0, READY_FOR_QC: 0, REOPENED: 0, CLOSED: 0 })
     setSelectedIds(new Set())
     setSelectMode(false)
-  }, [projectId, filters.kind, filters.mine, filters.tagId, filters.search, filters.priority])
+  }, [projectId, filters.kind, filters.assigneeFilter, filters.tagId, filters.search, filters.priority])
 
   const exitSelect = useCallback(() => { setSelectedIds(new Set()); setSelectMode(false) }, [])
 

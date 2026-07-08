@@ -1,3 +1,4 @@
+import { applyAssigneeParam } from '../taskspanel/helpers'
 import type { KanbanFilters, TaskKind, TaskPriority, TaskStatus } from './types'
 
 export const STATUS_COLOR: Record<TaskStatus, string> = {
@@ -84,7 +85,7 @@ export function buildColParams(
   const p = new URLSearchParams({ status, limit: String(KANBAN_COL_SIZE), offset: String(offset) })
   if (projectId) p.set('projectId', projectId)
   if (filters.kind) p.set('kind', filters.kind)
-  if (filters.mine) p.set('mine', '1')
+  applyAssigneeParam(p, filters.assigneeFilter ?? null, filters.currentUserId ?? null)
   if (filters.tagId) p.set('tagId', filters.tagId)
   if (filters.phaseId) p.set('phaseId', filters.phaseId)
   if (filters.search) p.set('search', filters.search)

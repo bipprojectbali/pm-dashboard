@@ -30,7 +30,7 @@ export const phasesReadonly: ToolModule = {
         if (status) where.status = status
         const phases = await prisma.projectPhase.findMany({
           where,
-          include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+          include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
           orderBy: [{ projectId: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
           take: limit,
         })
@@ -84,7 +84,7 @@ export const phasesTools: ToolModule = {
             endsAt: endsAt ? new Date(endsAt) : null,
             order: nextOrder,
           },
-          include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+          include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
         })
         await audit(null, 'MCP_PHASE_CREATED', `${projectId} ← ${title}`)
         return jsonText({ ok: true, phase })
@@ -133,7 +133,7 @@ export const phasesTools: ToolModule = {
         const phase = await prisma.projectPhase.update({
           where: { id: phaseId },
           data,
-          include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+          include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
         })
         await audit(null, 'MCP_PHASE_UPDATED', `${phaseId} ${Object.keys(data).join(',')}`)
         return jsonText({ ok: true, phase })

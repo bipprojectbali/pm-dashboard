@@ -11,6 +11,7 @@ let adminToken: string
 let adminId: string
 let projectId: string
 let taskId: string
+let phaseId: string
 
 const get = (path: string, token: string) =>
   app.handle(new Request(`http://localhost${path}`, { headers: { Cookie: `session=${token}` } }))
@@ -40,11 +41,17 @@ beforeAll(async () => {
     },
   })
   projectId = project.id
-  // An overdue, open task assigned to the admin — shows up in every aggregate.
+  const phase = await prisma.projectPhase.create({
+    data: { projectId, title: 'Awal', status: 'PLANNING', order: 0 },
+  })
+  phaseId = phase.id
+  // An overdue, open task assigned to the admin, linked to the phase — shows up
+  // in every aggregate AND in the phase's task count.
   const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
   const task = await prisma.task.create({
     data: {
       projectId,
+      phaseId,
       reporterId: adminId,
       assigneeId: adminId,
       title: 'Overdue trashable task',
@@ -72,6 +79,11 @@ describe('soft-deleted tasks are excluded from aggregates', () => {
     const risks = await get('/api/admin/overview/risks', adminToken).then((r) => r.json())
     const titles = (risks.overdueTasks ?? []).map((t: { title: string }) => t.title)
     expect(titles).toContain('Overdue trashable task')
+
+    // Phase task count includes the live task before deletion.
+    const phases = await get(`/api/projects/${projectId}/phases`, adminToken).then((r) => r.json())
+    const phase = phases.phases.find((p: { id: string }) => p.id === phaseId)
+    expect(phase._count.tasks).toBe(1)
   })
 
   it('drops the task from KPIs, risks, and health AFTER soft-delete', async () => {
@@ -94,6 +106,14 @@ describe('soft-deleted tasks are excluded from aggregates', () => {
     const row = health.projects.find((p: { id: string }) => p.id === projectId)
     expect(row.overdueTasks).toBe(0)
     expect(row.counts.tasks).toBe(0) // relation count also excludes trashed
+
+    // Phase task count + project Tasks-tab badge must drop the trashed task too.
+    const phases = await get(`/api/projects/${projectId}/phases`, adminToken).then((r) => r.json())
+    const phase = phases.phases.find((p: { id: string }) => p.id === phaseId)
+    expect(phase._count.tasks).toBe(0)
+
+    const project = await get(`/api/projects/${projectId}`, adminToken).then((r) => r.json())
+    expect(project.project._count.tasks).toBe(0)
   })
 
   it('still lists the trashed task in Trash', async () => {
@@ -113,5 +133,10 @@ describe('soft-deleted tasks are excluded from aggregates', () => {
     const risks = await get('/api/admin/overview/risks', adminToken).then((r) => r.json())
     const titles = (risks.overdueTasks ?? []).map((t: { title: string }) => t.title)
     expect(titles).toContain('Overdue trashable task')
+
+    // Restoring the task returns it to the phase count as well.
+    const phases = await get(`/api/projects/${projectId}/phases`, adminToken).then((r) => r.json())
+    const phase = phases.phases.find((p: { id: string }) => p.id === phaseId)
+    expect(phase._count.tasks).toBe(1)
   })
 })

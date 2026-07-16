@@ -45,7 +45,7 @@ export function agentProjectRoutes() {
               orderBy: { order: 'asc' },
               select: { id: true, title: true, dueAt: true, completedAt: true, order: true },
             },
-            _count: { select: { tasks: true, members: true } },
+            _count: { select: { tasks: { where: { deletedAt: null } }, members: true } },
           },
         })
         if (!project) return deny(set, 404, 'Project not found')

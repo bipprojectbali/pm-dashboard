@@ -11,7 +11,9 @@ const PROJECT_INCLUDE = {
     include: { user: { select: { id: true, name: true, email: true, role: true, image: true } } },
     orderBy: { joinedAt: 'asc' as const },
   },
-  _count: { select: { members: true, tasks: true, milestones: true, phases: true } },
+  // tasks count must exclude trashed rows — the soft-delete extension only
+  // rewrites direct Task reads, not relation `_count` (see ARCHITECTURE.md).
+  _count: { select: { members: true, tasks: { where: { deletedAt: null } }, milestones: true, phases: true } },
 } as const
 
 function buildTaskStats(s: Record<string, number>) {

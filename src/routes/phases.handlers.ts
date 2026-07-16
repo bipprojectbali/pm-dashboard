@@ -38,7 +38,7 @@ export async function listProjectPhasesHandler({ request, params, set }: CtxWith
   }
   const phases = await prisma.projectPhase.findMany({
     where: { projectId: params.id },
-    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
   })
   return { phases }
@@ -83,7 +83,7 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
         ? { createMany: { data: body.tagIds.map((tagId) => ({ tagId })), skipDuplicates: true } }
         : undefined,
     },
-    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
   })
   audit(auth.userId, 'PHASE_CREATED', `${params.id} ${phase.title}`, getIp(request))
   emitInvalidate('phases', { projectId: params.id })
@@ -139,7 +139,7 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
   const phase = await prisma.projectPhase.update({
     where: { id: params.id },
     data,
-    include: { _count: { select: { tasks: true } }, tags: { include: { tag: true } } },
+    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
   })
   audit(auth.userId, 'PHASE_UPDATED', `${existing.projectId}/${params.id} ${Object.keys(data).join(',')}`, getIp(request))
   emitInvalidate('phases', { projectId: existing.projectId })

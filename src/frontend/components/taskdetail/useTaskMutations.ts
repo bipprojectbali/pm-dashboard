@@ -52,7 +52,18 @@ export function useTaskMutations({ taskId, task, onBack, setEditingTitle, setEdi
         body: JSON.stringify({ reason }),
       }),
     onSuccess: () => {
+      // Task rows live in several caches keyed by view: ['tasks'] (table/gantt),
+      // ['tasks-kanban'] (per-column) and ['tasks-chart'] (overlay). Deleting from
+      // the drawer must refresh all of them, plus the phase task counts and the
+      // project Tasks-tab badge, so nothing lingers until a manual reload.
       qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['tasks-kanban'] })
+      qc.invalidateQueries({ queryKey: ['tasks-chart'] })
+      qc.invalidateQueries({ queryKey: ['tasks-trash'] })
+      if (task?.projectId) {
+        qc.invalidateQueries({ queryKey: ['phases', task.projectId] })
+        qc.invalidateQueries({ queryKey: ['project', task.projectId] })
+      }
       notifySuccess({ message: 'Task dipindahkan ke Trash.' })
       onBack()
     },

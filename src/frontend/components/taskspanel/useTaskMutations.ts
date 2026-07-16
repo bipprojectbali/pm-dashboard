@@ -50,10 +50,15 @@ export function useTaskMutations({
   // Task data is split across several caches by view: ['tasks'] (table/gantt),
   // ['tasks-kanban'] (per-column fetch), ['tasks-chart'] (overlay). Invalidate
   // all of them after a write so every view refreshes without a manual reload.
+  // ['phases'] + ['project'] carry task counts (phase chips, Tasks-tab badge)
+  // that must also refresh — invalidated by prefix since these boards can span
+  // multiple projects and no single projectId is in scope here.
   const invalidateAllTaskViews = () => {
     qc.invalidateQueries({ queryKey: ['tasks'] })
     qc.invalidateQueries({ queryKey: ['tasks-kanban'] })
     qc.invalidateQueries({ queryKey: ['tasks-chart'] })
+    qc.invalidateQueries({ queryKey: ['phases'] })
+    qc.invalidateQueries({ queryKey: ['project'] })
   }
 
   const create = useMutation({

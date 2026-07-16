@@ -7,6 +7,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-07-16
+
+### Diperbaiki
+- **Task yang dihapus langsung hilang dari board & jumlah fase ikut berkurang**: menghapus task dari drawer detail dulu menyisakan card di board Kanban sampai halaman di-refresh manual, dan jumlah task pada chip Fase serta badge tab Tasks tidak berkurang. Kini penghapusan me-refresh semua tampilan task (table/kanban/chart), jumlah fase, dan badge project sekaligus. Di sisi server, `_count.tasks` pada endpoint phases, detail project, dan agent project sekarang mengecualikan task yang di-Trash (sebelumnya task terhapus masih ikut terhitung).
+- **Jawaban Chat AI langsung ke inti**: kalimat "berpikir keras" AI (mis. "Saya perlu mengumpulkan data komprehensif...") tidak lagi ikut tersimpan di jawaban final — jawaban langsung dimulai dari isinya ("Berdasarkan analisis: ...").
+
+### Diubah
+- **Indikator loading Chat AI lebih informatif**: selama AI memproses, ditampilkan pesan "Mohon tunggu sebentar, sedang ..." yang mengikuti fase (menganalisis pertanyaan → mencari data → menyusun jawaban); pada fase menyusun jawaban yang panjang, pesan berjalan maju bertahap lalu berhenti agar tidak terasa nyangkut.
+
 ## [0.8.5] - 2026-07-08
 
 ### Ditambahkan

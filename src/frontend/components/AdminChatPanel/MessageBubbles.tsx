@@ -81,6 +81,13 @@ export function AssistantBubble({
             )}
           </Group>
           {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
+          {/* Prefix penenang, hanya selama AI masih memproses — tidak ikut
+              tersimpan di jawaban final (murni indikator loading). */}
+          {streaming && (
+            <Text size="xs" c="dimmed" fw={500} mb={msg.content ? 6 : 0}>
+              ⏳ Mohon tunggu sebentar…
+            </Text>
+          )}
           {msg.content && (
             <TypographyStylesProvider style={{ fontSize: 13 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>

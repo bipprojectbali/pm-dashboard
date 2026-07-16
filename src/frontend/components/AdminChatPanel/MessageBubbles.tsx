@@ -49,6 +49,18 @@ export function SourcesFooter({ sources }: { sources: ChatSource[] }) {
   )
 }
 
+// Gabungkan pesan penenang tetap dengan label fase yang berubah dari backend
+// ("Menganalisis pertanyaan..." → "Mencari data..." → "Memproses data & …").
+// "Mohon tunggu sebentar" selalu tampil; ekornya mengikuti fase, huruf awal
+// diturunkan + trailing "..." dirapikan jadi satu elipsis.
+function waitLabel(phase?: string): string {
+  const base = 'Mohon tunggu sebentar'
+  if (!phase) return `${base}…`
+  const tail = phase.replace(/\.+$/, '').trim()
+  if (!tail) return `${base}…`
+  return `${base}, sedang ${tail.charAt(0).toLowerCase()}${tail.slice(1)}…`
+}
+
 export function AssistantBubble({
   msg,
   streaming,
@@ -81,26 +93,21 @@ export function AssistantBubble({
             )}
           </Group>
           {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
-          {/* Prefix penenang, hanya selama AI masih memproses — tidak ikut
-              tersimpan di jawaban final (murni indikator loading). */}
-          {streaming && (
-            <Text size="xs" c="dimmed" fw={500} mb={msg.content ? 6 : 0}>
-              ⏳ Mohon tunggu sebentar…
-            </Text>
-          )}
-          {msg.content && (
+          {/* Selama streaming, teks preamble AI ("Saya perlu mengumpulkan
+              data…") disembunyikan — user hanya melihat loader dengan pesan
+              "Mohon tunggu sebentar, …". Konten baru dirender saat jawaban
+              final sudah lengkap (bubble tersimpan, streaming=false). */}
+          {!streaming && msg.content && (
             <TypographyStylesProvider style={{ fontSize: 13 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             </TypographyStylesProvider>
           )}
           {streaming && (
-            <Group gap="xs" align="center" mt={msg.content ? 6 : 0}>
+            <Group gap="xs" align="center">
               <Loader type="dots" size="sm" color="violet" />
-              {phase && (
-                <Text size="xs" c="dimmed">
-                  {phase}
-                </Text>
-              )}
+              <Text size="xs" c="dimmed">
+                {waitLabel(phase)}
+              </Text>
             </Group>
           )}
           {!streaming && msg.sources && msg.sources.length > 0 && <SourcesFooter sources={msg.sources} />}

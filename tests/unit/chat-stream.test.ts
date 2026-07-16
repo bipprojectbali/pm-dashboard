@@ -89,6 +89,42 @@ describe('streamChatSSE phase events', () => {
     expect(labels.indexOf('Mencari data...')).toBeGreaterThan(labels.indexOf('Menganalisis pertanyaan...'))
   })
 
+  test('excludes pre-tool preamble text from the final saved answer', async () => {
+    let call = 0
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      // First Anthropic call: emit a "thinking out loud" preamble alongside a tool_use.
+      if (call === 0) {
+        call += 1
+        return new Response(
+          JSON.stringify({
+            stop_reason: 'tool_use',
+            content: [
+              { type: 'text', text: 'Saya perlu mengumpulkan data komprehensif. ' },
+              { type: 'tool_use', id: 'tu_1', name: 'query_users', input: {} },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (typeof url === 'string' && url.includes('/v1/messages')) {
+        call += 1
+        return new Response(
+          JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Berdasarkan analisis: hasil.' }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return realFetch(url, init)
+    }) as unknown as typeof fetch
+
+    const { ctrl, frames } = collectSSE()
+    await streamChatSSE(baseParams(), ctrl)
+
+    const done = frames.find((f) => f.event === 'done')
+    // The saved answer is the final iteration's text only — the preamble is dropped.
+    expect(done?.data.full).toBe('Berdasarkan analisis: hasil.')
+    expect(done?.data.full as string).not.toContain('mengumpulkan data komprehensif')
+  })
+
   test('still streams the answer token after the phase event', async () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'jawaban' }] }), {

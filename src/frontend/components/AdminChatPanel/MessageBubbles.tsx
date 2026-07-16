@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Box, Card, CopyButton, Group, Loader, Text, ThemeIcon, Tooltip, TypographyStylesProvider } from '@mantine/core'
+import { useEffect, useState } from 'react'
 import { TbCheck, TbCopy, TbRobot, TbUser } from 'react-icons/tb'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -49,6 +50,60 @@ export function SourcesFooter({ sources }: { sources: ChatSource[] }) {
   )
 }
 
+// Gabungkan pesan penenang tetap dengan label fase yang berubah dari backend
+// ("Menganalisis pertanyaan..." → "Mencari data..." → "Menyusun jawaban...").
+// "Mohon tunggu sebentar" selalu tampil; ekornya mengikuti fase, huruf awal
+// diturunkan + trailing "..." dirapikan jadi satu elipsis.
+function waitLabel(phase?: string): string {
+  const base = 'Mohon tunggu sebentar'
+  if (!phase) return `${base}…`
+  const tail = phase.replace(/\.+$/, '').trim()
+  if (!tail) return `${base}…`
+  return `${base}, sedang ${tail.charAt(0).toLowerCase()}${tail.slice(1)}…`
+}
+
+// Fase "menyusun jawaban" adalah bagian terlama (AI menulis jawaban akhir,
+// 10–60 dtk). Backend mengirim satu label statis untuk fase ini, jadi tanpa
+// bantuan terasa nyangkut. Deteksi via prefix "Menyusun" (label iter 1+).
+const LONG_PHASE_MARKER = 'Menyusun'
+// Progresi MAJU-LALU-BERHENTI (bukan loop): tiap step tampil ROTATE_STEP_MS,
+// lalu diam di pesan terakhir sampai AI selesai. Bukan rotasi tak-berujung.
+const PROGRESS_TAILS = [
+  'sedang mencari data…',
+  'sedang memproses data…',
+  'sedang menyusun jawaban…',
+]
+const ROTATE_STEP_MS = 4000
+
+// Indikator loading: fase pendek pakai label backend apa adanya; fase panjang
+// berjalan maju melalui PROGRESS_TAILS lalu berhenti di step terakhir.
+function WaitIndicator({ phase }: { phase?: string }) {
+  const isLongPhase = !!phase && phase.startsWith(LONG_PHASE_MARKER)
+  const [step, setStep] = useState(0)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sengaja reset saat masuk/keluar fase panjang
+  useEffect(() => {
+    setStep(0)
+    if (!isLongPhase) return
+    // Maju satu step tiap interval, berhenti di step terakhir (tak me-loop).
+    const id = setInterval(() => {
+      setStep((s) => (s < PROGRESS_TAILS.length - 1 ? s + 1 : s))
+    }, ROTATE_STEP_MS)
+    return () => clearInterval(id)
+  }, [isLongPhase])
+
+  const label = isLongPhase ? `Mohon tunggu sebentar, ${PROGRESS_TAILS[step]}` : waitLabel(phase)
+
+  return (
+    <Group gap="xs" align="center">
+      <Loader type="dots" size="sm" color="violet" />
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+    </Group>
+  )
+}
+
 export function AssistantBubble({
   msg,
   streaming,
@@ -81,21 +136,16 @@ export function AssistantBubble({
             )}
           </Group>
           {toolCalls && toolCalls.length > 0 && <ToolCallsSection calls={toolCalls} />}
-          {msg.content && (
+          {/* Selama streaming, teks preamble AI ("Saya perlu mengumpulkan
+              data…") disembunyikan — user hanya melihat loader dengan pesan
+              "Mohon tunggu sebentar, …". Konten baru dirender saat jawaban
+              final sudah lengkap (bubble tersimpan, streaming=false). */}
+          {!streaming && msg.content && (
             <TypographyStylesProvider style={{ fontSize: 13 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             </TypographyStylesProvider>
           )}
-          {streaming && (
-            <Group gap="xs" align="center" mt={msg.content ? 6 : 0}>
-              <Loader type="dots" size="sm" color="violet" />
-              {phase && (
-                <Text size="xs" c="dimmed">
-                  {phase}
-                </Text>
-              )}
-            </Group>
-          )}
+          {streaming && <WaitIndicator phase={phase} />}
           {!streaming && msg.sources && msg.sources.length > 0 && <SourcesFooter sources={msg.sources} />}
         </Card>
       </Box>

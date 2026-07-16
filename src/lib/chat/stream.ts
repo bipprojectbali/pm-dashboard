@@ -58,7 +58,7 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
     send('phase', {
       phase: 'thinking',
       iter,
-      label: iter === 0 ? 'Menganalisis pertanyaan...' : 'Memproses data & menyusun jawaban...',
+      label: iter === 0 ? 'Menganalisis pertanyaan...' : 'Menyusun jawaban...',
     })
 
     const body = {
@@ -91,9 +91,15 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
     const payload = (await res.json()) as { stop_reason: string; content: AnthropicContentBlock[] }
     conversation.push({ role: 'assistant', content: payload.content })
 
+    // Text dari iterasi yang berujung tool_use adalah "berpikir keras" AI
+    // ("Saya perlu mengumpulkan data...") — bukan jawaban. Simpan hanya text
+    // dari iterasi ini, lalu overwrite `full`; saat loop break (bukan tool_use)
+    // `full` = teks iterasi final saja, sehingga preamble tak ikut tersimpan.
+    let iterText = ''
     for (const block of payload.content) {
-      if (block.type === 'text' && block.text) { full += block.text; send('token', { text: block.text }) }
+      if (block.type === 'text' && block.text) { iterText += block.text; send('token', { text: block.text }) }
     }
+    full = iterText
 
     if (payload.stop_reason !== 'tool_use') break
 

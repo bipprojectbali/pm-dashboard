@@ -58,7 +58,7 @@ export async function streamChatSSE(params: ChatStreamParams, ctrl: SSEControlle
     send('phase', {
       phase: 'thinking',
       iter,
-      label: iter === 0 ? 'Menganalisis pertanyaan...' : 'Memproses data & menyusun jawaban...',
+      label: iter === 0 ? 'Menganalisis pertanyaan...' : 'Menyusun jawaban...',
     })
 
     const body = {

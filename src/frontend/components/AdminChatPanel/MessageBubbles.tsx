@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Box, Card, CopyButton, Group, Loader, Text, ThemeIcon, Tooltip, TypographyStylesProvider } from '@mantine/core'
+import { useEffect, useState } from 'react'
 import { TbCheck, TbCopy, TbRobot, TbUser } from 'react-icons/tb'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -61,6 +62,47 @@ function waitLabel(phase?: string): string {
   return `${base}, sedang ${tail.charAt(0).toLowerCase()}${tail.slice(1)}…`
 }
 
+// Fase "menyusun jawaban" adalah bagian terlama (AI menulis jawaban akhir,
+// bisa 10–60 dtk). Backend mengirim label statis, jadi tanpa rotasi ini label
+// terasa nyangkut. Deteksi via prefix "Memproses" (label iter 1+ dari backend).
+const LONG_PHASE_MARKER = 'Memproses'
+const ROTATING_TAILS = [
+  'sedang menyusun jawaban…',
+  'sedang merapikan hasil…',
+  'sebentar lagi selesai…',
+]
+const ROTATE_INTERVAL_MS = 4000
+
+// Indikator loading: label statis untuk fase pendek, tapi berputar tiap
+// ROTATE_INTERVAL_MS saat fase panjang supaya tidak terasa macet.
+function WaitIndicator({ phase }: { phase?: string }) {
+  const isLongPhase = !!phase && phase.startsWith(LONG_PHASE_MARKER)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!isLongPhase) return
+    const id = setInterval(() => setTick((t) => t + 1), ROTATE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [isLongPhase])
+
+  // Reset ke pesan pertama tiap kali masuk/keluar fase panjang.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sengaja reset saat fase berubah
+  useEffect(() => { setTick(0) }, [isLongPhase])
+
+  const label = isLongPhase
+    ? `Mohon tunggu sebentar, ${ROTATING_TAILS[tick % ROTATING_TAILS.length]}`
+    : waitLabel(phase)
+
+  return (
+    <Group gap="xs" align="center">
+      <Loader type="dots" size="sm" color="violet" />
+      <Text size="xs" c="dimmed">
+        {label}
+      </Text>
+    </Group>
+  )
+}
+
 export function AssistantBubble({
   msg,
   streaming,
@@ -102,14 +144,7 @@ export function AssistantBubble({
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             </TypographyStylesProvider>
           )}
-          {streaming && (
-            <Group gap="xs" align="center">
-              <Loader type="dots" size="sm" color="violet" />
-              <Text size="xs" c="dimmed">
-                {waitLabel(phase)}
-              </Text>
-            </Group>
-          )}
+          {streaming && <WaitIndicator phase={phase} />}
           {!streaming && msg.sources && msg.sources.length > 0 && <SourcesFooter sources={msg.sources} />}
         </Card>
       </Box>

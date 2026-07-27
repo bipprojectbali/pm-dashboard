@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { getVersionsSince, WHATS_NEW, type WhatsNewVersion } from '../lib/whats-new'
+import { getRecentVersions, getVersionsSince, WHATS_NEW, type WhatsNewVersion } from '../lib/whats-new'
 
 const LS_KEY = 'pm:last-seen-version'
 export const WHATS_NEW_EVENT = 'pm:open-whats-new'
+// Jumlah versi yang ditampilkan saat modal dibuka manual (ikon "Yang Baru" di
+// sidebar) — supaya user bisa menelusuri riwayat pembaruan, bukan cuma versi
+// terbaru. Dibatasi agar modal tidak terlalu panjang saat changelog membesar.
+const MANUAL_HISTORY_LIMIT = 5
 
 export function useWhatsNew() {
   const [open, setOpen] = useState(false)
@@ -32,7 +36,7 @@ export function useWhatsNew() {
   // Manual trigger via DOM event (dari tombol di sidebar)
   useEffect(() => {
     const handler = () => {
-      setVersions(WHATS_NEW.slice(0, 1))
+      setVersions(getRecentVersions(WHATS_NEW, MANUAL_HISTORY_LIMIT))
       setOpen(true)
     }
     window.addEventListener(WHATS_NEW_EVENT, handler)

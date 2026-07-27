@@ -84,3 +84,10 @@ export function getVersionsSince(allVersions: WhatsNewVersion[], lastSeen: strin
     .filter((v) => compareVersions(v.version, lastSeen) > 0)
     .sort((a, b) => compareVersions(b.version, a.version))
 }
+
+// Ambil `limit` versi terbaru untuk mode "buka manual" (ikon Yang Baru di
+// sidebar) — memungkinkan user menelusuri riwayat pembaruan, bukan hanya versi
+// terbaru. `allVersions` sudah terurut terbaru-dulu dari parseChangelog.
+export function getRecentVersions(allVersions: WhatsNewVersion[], limit: number): WhatsNewVersion[] {
+  return allVersions.slice(0, Math.max(0, limit))
+}

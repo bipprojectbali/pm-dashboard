@@ -5,6 +5,7 @@ import {
   parseChangelog,
   compareVersions,
   getVersionsSince,
+  getRecentVersions,
 } from '../../src/frontend/lib/parse-changelog'
 
 // Baca CHANGELOG.md langsung — menghindari Vite ?raw yang tidak berjalan di Bun test
@@ -146,5 +147,31 @@ describe('getVersionsSince', () => {
 
   test('versi masa depan → array kosong', () => {
     expect(getVersionsSince(WHATS_NEW, '99.0.0')).toHaveLength(0)
+  })
+})
+
+// ─── getRecentVersions ────────────────────────────────────────────────────────
+
+describe('getRecentVersions', () => {
+  test('golden path — ambil N versi terbaru, urut terbaru-dulu', () => {
+    const result = getRecentVersions(WHATS_NEW, 3)
+    expect(result).toHaveLength(Math.min(3, WHATS_NEW.length))
+    expect(result[0].version).toBe(WHATS_NEW[0].version)
+    for (let i = 0; i < result.length - 1; i++) {
+      expect(compareVersions(result[i].version, result[i + 1].version)).toBeGreaterThan(0)
+    }
+  })
+
+  test('edge — limit lebih besar dari jumlah versi → kembalikan semua tanpa error', () => {
+    const result = getRecentVersions(WHATS_NEW, WHATS_NEW.length + 100)
+    expect(result).toHaveLength(WHATS_NEW.length)
+  })
+
+  test('edge — limit 0 → array kosong', () => {
+    expect(getRecentVersions(WHATS_NEW, 0)).toHaveLength(0)
+  })
+
+  test('failure — limit negatif di-clamp ke 0 (bukan slice dari belakang)', () => {
+    expect(getRecentVersions(WHATS_NEW, -5)).toHaveLength(0)
   })
 })

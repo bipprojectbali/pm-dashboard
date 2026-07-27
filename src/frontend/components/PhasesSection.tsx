@@ -61,6 +61,9 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['phases', projectId] })
+    // ['project', projectId] adalah sumber badge _count.phases di ProjectTabs —
+    // tanpa ini badge stuck di angka lama setelah create/delete fase.
+    qc.invalidateQueries({ queryKey: ['project', projectId] })
     qc.invalidateQueries({ queryKey: ['projects'] })
     qc.invalidateQueries({ queryKey: ['tasks'] })
   }

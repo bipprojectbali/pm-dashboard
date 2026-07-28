@@ -1,6 +1,7 @@
 import type { NotificationKind } from '../../generated/prisma'
 import { prisma } from './db'
 import { broadcastToUser } from './presence'
+import { isGatedKind, isNotificationAllowed } from './user-preferences'
 
 export type NotifyInput = {
   recipientId: string
@@ -14,6 +15,16 @@ export type NotifyInput = {
 
 export async function createNotification(input: NotifyInput): Promise<void> {
   if (input.actorId && input.actorId === input.recipientId) return
+  // Honour the recipient's notification preferences (opt-out). Only gated kinds
+  // (TASK_ASSIGNED / TASK_STATUS_CHANGED / TASK_MENTIONED) hit the DB for prefs;
+  // others always deliver.
+  if (isGatedKind(input.kind)) {
+    const recipient = await prisma.user.findUnique({
+      where: { id: input.recipientId },
+      select: { preferences: true },
+    })
+    if (!isNotificationAllowed(input.kind, recipient?.preferences)) return
+  }
   const n = await prisma.notification.create({
     data: {
       recipientId: input.recipientId,

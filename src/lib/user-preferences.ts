@@ -29,6 +29,32 @@ export function defaultPreferences(): UserPreferences {
 const PM_TABS: PMTab[] = ['overview', 'projects', 'tasks', 'activity', 'team']
 const TASK_FILTERS: TaskDefaultFilter[] = ['mine', 'all', 'priority']
 
+// Maps a NotificationKind to the boolean preference that gates it. Kinds absent
+// from this map are never gated (e.g. TASK_COMMENTED / TASK_DUE_SOON /
+// TASK_OVERDUE always send). Keyed by the Prisma NotificationKind string.
+const NOTIFICATION_PREF_KEY: Record<string, keyof UserPreferences> = {
+  TASK_ASSIGNED: 'notifyTaskAssigned',
+  TASK_STATUS_CHANGED: 'notifyTaskStatusChanged',
+  TASK_MENTIONED: 'notifyMentioned',
+}
+
+// True when a kind is subject to a preference toggle (so the caller knows to
+// look up recipient prefs before delivering).
+export function isGatedKind(kind: string): boolean {
+  return kind in NOTIFICATION_PREF_KEY
+}
+
+// Decide whether a notification of `kind` should be delivered to a recipient,
+// given their raw stored preferences (User.preferences JSON, possibly null).
+// Opt-out model: anything not explicitly disabled is delivered — so a recipient
+// with no saved preferences (or an ungated kind) always receives it.
+export function isNotificationAllowed(kind: string, rawPreferences: unknown): boolean {
+  const prefKey = NOTIFICATION_PREF_KEY[kind]
+  if (!prefKey) return true
+  const prefs = sanitizePreferences((rawPreferences ?? {}) as Record<string, unknown>)
+  return prefs[prefKey] !== false
+}
+
 // Coerce arbitrary input into a valid UserPreferences, falling back to defaults
 // for any missing/invalid field. Unknown keys (e.g. the removed tableDensity)
 // are dropped — only the fields above are ever returned.

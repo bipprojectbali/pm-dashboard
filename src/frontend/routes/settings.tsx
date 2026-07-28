@@ -15,7 +15,7 @@ import {
 import { useDisclosure, useMediaQuery } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useState, type ComponentType } from 'react'
+import { type ComponentType, useState } from 'react'
 import { TbBell, TbSettings, TbShieldLock, TbUser } from 'react-icons/tb'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
@@ -114,7 +114,9 @@ function SettingsPage() {
             <Badge color={roleBadgeColor[user?.role ?? 'USER']} variant="light" size="sm">
               {user?.role}
             </Badge>
-            <Text size="sm" visibleFrom="sm" c="dimmed">{user?.email}</Text>
+            <Text size="sm" visibleFrom="sm" c="dimmed">
+              {user?.email}
+            </Text>
           </Group>
         </Group>
       </AppShell.Header>
@@ -135,8 +137,12 @@ function SettingsPage() {
                     key={item.key}
                     label={
                       <Stack gap={0}>
-                        <Text size="xs" fw={600}>{item.label}</Text>
-                        <Text size="xs" c="dimmed">{item.description}</Text>
+                        <Text size="xs" fw={600}>
+                          {item.label}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {item.description}
+                        </Text>
                       </Stack>
                     }
                     position="right"
@@ -180,7 +186,7 @@ function SettingsPage() {
       <AppShell.Main>
         <Container size="xl" px={0}>
           {active === 'profile' && <ProfileSection user={user} />}
-          {active === 'security' && <SecuritySection />}
+          {active === 'security' && <SecuritySection hasPassword={user?.hasPassword ?? true} />}
           {active === 'preferences' && <PreferencesSection />}
         </Container>
       </AppShell.Main>

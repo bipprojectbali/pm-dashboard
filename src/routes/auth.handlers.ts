@@ -126,7 +126,9 @@ export async function sessionHandler({ request, set }: Ctx) {
   const token = decoded.includes('.') ? decoded.slice(0, decoded.lastIndexOf('.')) : decoded
   const session = await prisma.session.findUnique({
     where: { token },
-    include: { user: { select: { id: true, name: true, email: true, role: true, blocked: true, image: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, role: true, blocked: true, image: true, password: true } },
+    },
   })
   if (!session || session.expiresAt < new Date() || session.user.blocked) {
     if (session) await prisma.session.delete({ where: { id: session.id } }).catch(() => {})
@@ -139,5 +141,9 @@ export async function sessionHandler({ request, set }: Ctx) {
     await prisma.session.update({ where: { id: session.id }, data: { expiresAt: newExpiry } }).catch(() => {})
     set.headers['set-cookie'] = sessionCookie(rawToken, SESSION_TTL_SEC)
   }
-  return { user: session.user }
+  // hasPassword lets the client distinguish Google-only accounts (password === '')
+  // from email/password accounts, so Settings can offer "Buat Password" vs "Ubah
+  // Password". Never leak the hash itself.
+  const { password, ...safeUser } = session.user
+  return { user: { ...safeUser, hasPassword: password !== '' } }
 }

@@ -10,6 +10,9 @@ export interface User {
   role: Role
   blocked: boolean
   image?: string | null
+  // false for Google-only accounts (no local password yet) → Settings shows
+  // "Buat Password" instead of "Ubah Password".
+  hasPassword?: boolean
 }
 
 export function getDefaultRoute(role: Role): string {

@@ -12,9 +12,9 @@ export function meSecurityRoutes() {
         return { error: 'Unauthorized' }
       }
       const { currentPassword, newPassword } = (body ?? {}) as { currentPassword?: string; newPassword?: string }
-      if (!currentPassword || !newPassword) {
+      if (!newPassword) {
         set.status = 400
-        return { error: 'currentPassword and newPassword required' }
+        return { error: 'newPassword required' }
       }
       if (newPassword.length < 8) {
         set.status = 400
@@ -25,16 +25,31 @@ export function meSecurityRoutes() {
         set.status = 404
         return { error: 'User not found' }
       }
-      const ok = await Bun.password.verify(currentPassword, user.password)
-      if (!ok) {
-        set.status = 403
-        return { error: 'Password saat ini salah' }
+      // Google-only accounts have password === '' — they set their first local
+      // password without proving a current one. Accounts that already have a
+      // password must verify it (prevents session-hijack password takeover).
+      const isSettingFirst = user.password === ''
+      if (!isSettingFirst) {
+        if (!currentPassword) {
+          set.status = 400
+          return { error: 'currentPassword required' }
+        }
+        const ok = await Bun.password.verify(currentPassword, user.password)
+        if (!ok) {
+          set.status = 403
+          return { error: 'Password saat ini salah' }
+        }
       }
       const hashed = await Bun.password.hash(newPassword)
       await prisma.user.update({ where: { id: auth.userId }, data: { password: hashed } })
       const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
       await prisma.auditLog.create({
-        data: { userId: auth.userId, action: 'PASSWORD_CHANGED', detail: null, ip },
+        data: {
+          userId: auth.userId,
+          action: isSettingFirst ? 'PASSWORD_CREATED' : 'PASSWORD_CHANGED',
+          detail: null,
+          ip,
+        },
       })
       return { ok: true }
     })
@@ -90,7 +105,15 @@ export function meSecurityRoutes() {
         where: {
           userId: auth.userId,
           action: {
-            in: ['LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'LOGIN_BLOCKED', 'PASSWORD_CHANGED', 'SESSIONS_REVOKED'],
+            in: [
+              'LOGIN',
+              'LOGOUT',
+              'LOGIN_FAILED',
+              'LOGIN_BLOCKED',
+              'PASSWORD_CREATED',
+              'PASSWORD_CHANGED',
+              'SESSIONS_REVOKED',
+            ],
           },
         },
         orderBy: { createdAt: 'desc' },

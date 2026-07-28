@@ -18,7 +18,7 @@ function formatDateTime(iso: string): string {
   return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-export function SecuritySection() {
+export function SecuritySection({ hasPassword = true }: { hasPassword?: boolean }) {
   const qc = useQueryClient()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -56,10 +56,21 @@ export function SecuritySection() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      notifications.show({ color: 'teal', title: 'Password diubah', message: 'Password kamu sudah diperbarui.' })
+      qc.invalidateQueries({ queryKey: ['auth', 'session'] })
+      notifications.show({
+        color: 'teal',
+        title: hasPassword ? 'Password diubah' : 'Password dibuat',
+        message: hasPassword
+          ? 'Password kamu sudah diperbarui.'
+          : 'Password berhasil dibuat. Sekarang kamu bisa login dengan email + password.',
+      })
     },
     onError: (e: Error) => {
-      notifications.show({ color: 'red', title: 'Gagal mengubah password', message: e.message })
+      notifications.show({
+        color: 'red',
+        title: hasPassword ? 'Gagal mengubah password' : 'Gagal membuat password',
+        message: e.message,
+      })
     },
   })
 
@@ -89,7 +100,7 @@ export function SecuritySection() {
       })
       return
     }
-    changePwd.mutate({ currentPassword, newPassword })
+    changePwd.mutate({ currentPassword: hasPassword ? currentPassword : '', newPassword })
   }
 
   return (
@@ -101,17 +112,25 @@ export function SecuritySection() {
               <TbLock size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={500} size="sm">Ubah Password</Text>
-              <Text size="xs" c="dimmed">Gunakan password yang tidak dipakai di layanan lain.</Text>
+              <Text fw={500} size="sm">
+                {hasPassword ? 'Ubah Password' : 'Buat Password'}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {hasPassword
+                  ? 'Gunakan password yang tidak dipakai di layanan lain.'
+                  : 'Kamu masuk lewat Google. Buat password agar bisa login dengan email + password.'}
+              </Text>
             </Stack>
           </Group>
           <Divider />
-          <PasswordInput
-            label="Password saat ini"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.currentTarget.value)}
-            required
-          />
+          {hasPassword && (
+            <PasswordInput
+              label="Password saat ini"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+              required
+            />
+          )}
           <PasswordInput
             label="Password baru"
             description="Minimal 8 karakter."
@@ -130,9 +149,9 @@ export function SecuritySection() {
               leftSection={<TbCheck size={14} />}
               onClick={submitPwd}
               loading={changePwd.isPending}
-              disabled={!currentPassword || !newPassword || !confirmPassword}
+              disabled={(hasPassword && !currentPassword) || !newPassword || !confirmPassword}
             >
-              Ubah password
+              {hasPassword ? 'Ubah password' : 'Buat password'}
             </Button>
           </Group>
         </Stack>
@@ -146,8 +165,12 @@ export function SecuritySection() {
                 <TbKey size={16} />
               </ThemeIcon>
               <Stack gap={0}>
-                <Text fw={500} size="sm">Sesi Aktif ({sessions.length})</Text>
-                <Text size="xs" c="dimmed">Perangkat/browser yang sedang masuk dengan akunmu.</Text>
+                <Text fw={500} size="sm">
+                  Sesi Aktif ({sessions.length})
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Perangkat/browser yang sedang masuk dengan akunmu.
+                </Text>
               </Stack>
             </Group>
             {otherSessions.length > 0 && (
@@ -165,16 +188,22 @@ export function SecuritySection() {
           </Group>
           <Divider />
           {sessions.length === 0 ? (
-            <Text size="xs" c="dimmed">Tidak ada sesi aktif.</Text>
+            <Text size="xs" c="dimmed">
+              Tidak ada sesi aktif.
+            </Text>
           ) : (
             <Stack gap="xs">
               {sessions.map((s) => (
                 <Group key={s.id} justify="space-between" wrap="nowrap">
                   <Stack gap={0} style={{ minWidth: 0 }}>
                     <Group gap={6}>
-                      <Text size="sm" fw={500}>{s.isCurrent ? 'Sesi ini' : 'Sesi lain'}</Text>
+                      <Text size="sm" fw={500}>
+                        {s.isCurrent ? 'Sesi ini' : 'Sesi lain'}
+                      </Text>
                       {s.isCurrent && (
-                        <Badge size="xs" color="teal" variant="light">aktif</Badge>
+                        <Badge size="xs" color="teal" variant="light">
+                          aktif
+                        </Badge>
                       )}
                     </Group>
                     <Text size="xs" c="dimmed">
@@ -195,7 +224,9 @@ export function SecuritySection() {
               <TbClock size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={500} size="sm">Aktivitas Masuk Terkini</Text>
+              <Text fw={500} size="sm">
+                Aktivitas Masuk Terkini
+              </Text>
               <Text size="xs" c="dimmed">
                 Riwayat login, logout, dan upaya gagal dalam 20 kejadian terakhir.
               </Text>
@@ -203,7 +234,9 @@ export function SecuritySection() {
           </Group>
           <Divider />
           {auditLogs.length === 0 ? (
-            <Text size="xs" c="dimmed">Belum ada riwayat.</Text>
+            <Text size="xs" c="dimmed">
+              Belum ada riwayat.
+            </Text>
           ) : (
             <Stack gap={6}>
               {auditLogs.map((log) => (
@@ -213,10 +246,16 @@ export function SecuritySection() {
                       <Badge size="xs" color={auditColor(log.action)} variant="light">
                         {log.action}
                       </Badge>
-                      {log.ip && <Text size="xs" c="dimmed">{log.ip}</Text>}
+                      {log.ip && (
+                        <Text size="xs" c="dimmed">
+                          {log.ip}
+                        </Text>
+                      )}
                     </Group>
                     {log.detail && (
-                      <Text size="xs" c="dimmed" truncate>{log.detail}</Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {log.detail}
+                      </Text>
                     )}
                   </Stack>
                   <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>

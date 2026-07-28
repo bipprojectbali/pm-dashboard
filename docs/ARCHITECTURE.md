@@ -64,8 +64,9 @@ Session-based auth with HttpOnly cookies stored in DB.
 
 - Login: `POST /api/auth/login` — finds user by email, verifies password with `Bun.password.verify`, checks blocked status, creates Session record. Logs to audit trail.
 - Google OAuth: `GET /api/auth/google` → Google → `GET /api/auth/callback/google` — upserts user, creates session. Redirect URI is built via `getPublicOrigin(request)` which honors `BETTER_AUTH_URL`, then `X-Forwarded-Proto`/`X-Forwarded-Host` (behind Traefik TLS termination), falling back to `request.url`. Prevents `redirect_uri_mismatch` when the app sits behind a reverse proxy.
-- Session: `GET /api/auth/session` — looks up session by cookie token, returns user (including role & blocked) or 401, auto-deletes expired
+- Session: `GET /api/auth/session` — looks up session by cookie token, returns user (including role, blocked & `hasPassword`) or 401, auto-deletes expired. `hasPassword` = `user.password !== ''` (the hash itself is never returned) — lets the client show "Buat Password" for Google-only accounts vs "Ubah Password" for accounts that already have one.
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
+- Password set/change: `PUT /api/me/password` — a Google-only account (`password === ''`) sets its **first** password without proving a current one (audited `PASSWORD_CREATED`); an account that already has a password must pass `currentPassword` verification (audited `PASSWORD_CHANGED`). Both require `newPassword` ≥ 8 chars.
 - Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
 
 ## Agent surfaces (token-authed)

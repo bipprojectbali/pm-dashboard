@@ -7,6 +7,20 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-07-28
+
+### Ditambahkan
+- **Preferensi notifikasi kini benar-benar berfungsi**: mematikan toggle "Tugas baru ditugaskan ke saya" atau "Perubahan status tugas saya" di Pengaturan → Preferensi sekarang benar-benar menghentikan notifikasi tersebut (sebelumnya toggle tersimpan tapi tidak berpengaruh). Model opt-out: pengguna yang belum pernah mengatur tetap menerima semua notifikasi seperti biasa.
+- **Tab & filter default Manajer Proyek**: pengaturan "Tab default saat membuka /pm" dan "Filter tugas default" di Preferensi kini berlaku — membuka halaman Manajer Proyek langsung mendarat di tab pilihanmu dengan filter tugas yang sesuai (sebelumnya tersimpan tapi tidak berpengaruh).
+- **Akun Google bisa membuat password**: pengguna yang login lewat Google kini dapat membuat password lokal dari Pengaturan → Keamanan (form otomatis jadi "Buat Password"), sehingga bisa login dengan email + password sebagai alternatif.
+
+### Diubah
+- **Kartu "Proyek yang saya ikuti" di Profil lebih akurat**: kini hanya menampilkan proyek tempat kamu benar-benar menjadi owner/PM/anggota (untuk admin sekalipun), sesuai labelnya — dilengkapi tooltip penjelasan. Sebelumnya admin melihat semua proyek sistem.
+- **Toggle notifikasi yang belum tersedia ditandai jelas**: "Disebut di komentar" dan "Tenggat proyek mendekat" kini bertanda "Segera hadir" dan dinonaktifkan (fiturnya belum dibangun), tidak lagi menyesatkan.
+
+### Diperbaiki
+- **Kepadatan tabel ganda dihapus dari Preferensi**: kontrol "Kepadatan tabel" yang tidak berfungsi dihapus dari Pengaturan (halaman Proyek sudah punya pengaturan kepadatan sendiri).
+
 ## [0.8.7] - 2026-07-28
 
 ### Ditambahkan

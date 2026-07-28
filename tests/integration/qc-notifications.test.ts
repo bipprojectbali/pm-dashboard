@@ -35,6 +35,18 @@ describe('QC ticket status-change notifications', () => {
       where: { recipientId, taskId, kind: 'TASK_STATUS_CHANGED' },
     })
 
+  // Notifications are fired fire-and-forget after the PATCH returns 200, so a
+  // read immediately after the response can race the write. Poll until at least
+  // `min` rows exist (or give up), making the positive assertions deterministic.
+  const waitForNotifs = async (recipientId: string, taskId: string, min = 1) => {
+    for (let i = 0; i < 50; i++) {
+      const rows = await notifsFor(recipientId, taskId)
+      if (rows.length >= min) return rows
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    return notifsFor(recipientId, taskId)
+  }
+
   beforeAll(async () => {
     await cleanupTestData()
     const reporter = await seedTestUser('qc-notif-reporter@test.com', 'pass', 'Reporter', 'QC' as never)
@@ -70,7 +82,7 @@ describe('QC ticket status-change notifications', () => {
     const id = await createTicket(reporterToken, { title: 'Notif golden path', description: 'x', priority: 'HIGH' })
     const res = await patchTicket(adminToken, id, { status: 'READY_FOR_QC' })
     expect(res.status).toBe(200)
-    const notifs = await notifsFor(reporterId, id)
+    const notifs = await waitForNotifs(reporterId, id)
     expect(notifs.length).toBe(1)
     expect(notifs[0].actorId).toBe(adminId)
   })
@@ -80,7 +92,10 @@ describe('QC ticket status-change notifications', () => {
     await patchTicket(adminToken, id, { assigneeId })
     const res = await patchTicket(adminToken, id, { status: 'IN_PROGRESS' })
     expect(res.status).toBe(200)
-    const [forReporter, forAssignee] = await Promise.all([notifsFor(reporterId, id), notifsFor(assigneeId, id)])
+    const [forReporter, forAssignee] = await Promise.all([
+      waitForNotifs(reporterId, id),
+      waitForNotifs(assigneeId, id),
+    ])
     expect(forReporter.length).toBe(1)
     expect(forAssignee.length).toBe(1)
   })

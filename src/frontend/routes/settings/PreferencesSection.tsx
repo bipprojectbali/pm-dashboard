@@ -1,4 +1,4 @@
-import { Button, Divider, Group, Paper, Select, Stack, Switch, Text, ThemeIcon } from '@mantine/core'
+import { Badge, Button, Divider, Group, Paper, Select, Stack, Switch, Text, ThemeIcon } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
@@ -84,17 +84,33 @@ export function PreferencesSection() {
             checked={draft.notifyTaskStatusChanged}
             onChange={(e) => set('notifyTaskStatusChanged', e.currentTarget.checked)}
           />
+          {/* Belum diimplementasikan — mention & deadline belum punya trigger notifikasi.
+              Ditampilkan sebagai "Segera hadir" + disabled agar tidak menyesatkan. */}
           <Switch
-            label="Disebut di komentar"
+            label={
+              <Group gap={6}>
+                <span>Disebut di komentar</span>
+                <Badge size="xs" variant="light" color="gray">
+                  Segera hadir
+                </Badge>
+              </Group>
+            }
             description="Saat seseorang menyebut @namamu di komentar task."
             checked={draft.notifyMentioned}
-            onChange={(e) => set('notifyMentioned', e.currentTarget.checked)}
+            disabled
           />
           <Switch
-            label="Tenggat proyek mendekat"
+            label={
+              <Group gap={6}>
+                <span>Tenggat proyek mendekat</span>
+                <Badge size="xs" variant="light" color="gray">
+                  Segera hadir
+                </Badge>
+              </Group>
+            }
             description="Peringatan saat proyek yang kamu ikuti mendekati deadline (<3 hari)."
             checked={draft.notifyProjectDeadline}
-            onChange={(e) => set('notifyProjectDeadline', e.currentTarget.checked)}
+            disabled
           />
         </Stack>
       </Paper>

@@ -29,6 +29,8 @@ QC is a dedicated app for filing bugs/tickets **against pm-dashboard itself**, n
 
 Every QC ticket status transition fires `notifyTaskStatusChanged` (`src/lib/notifications.ts`) so the pull-based Claude↔QC loop surfaces in the notification bell instead of being silent. Recipients are the ticket's **reporter and assignee**, minus the actor (`createNotification` skips when `actorId === recipientId`). Kind is `TASK_STATUS_CHANGED`. Fire-and-forget (`.catch(() => {})`) — a notification failure never blocks the status write.
 
+**Preference gate (opt-out):** `createNotification` also honours the recipient's notification preferences (Settings → Preferensi). Gated kinds — `TASK_ASSIGNED` → `notifyTaskAssigned`, `TASK_STATUS_CHANGED` → `notifyTaskStatusChanged`, `TASK_MENTIONED` → `notifyMentioned` — are suppressed when the recipient set that toggle to `false`. Mapping + decision live in `src/lib/user-preferences.ts` (`isGatedKind`, `isNotificationAllowed`). Ungated kinds (`TASK_COMMENTED`/`TASK_DUE_SOON`/`TASK_OVERDUE`) and recipients with no saved preferences always deliver. The `notifyMentioned`/`notifyProjectDeadline` toggles' underlying features (comment @mention trigger, project-deadline sweep) are not built yet — those toggles show a "Segera hadir" badge and are disabled in the UI; the mention gate is wired ahead of the feature.
+
 Wired at four call sites, all firing **after** the `TaskStatusChange` row is written:
 - `PATCH /api/qc/tickets/:id` (`src/routes/qc/write.route.ts`) — single transition.
 - `PATCH /api/qc/tickets/bulk` (`src/routes/qc/bulk.route.ts`) — one notification per status-changed ticket; post-update assignee is used when the bulk payload also reassigns.

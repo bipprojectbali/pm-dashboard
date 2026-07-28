@@ -22,6 +22,7 @@ import { tagsReadonly, tagsTools } from './tools/tags'
 import { eventsReadonly, eventsTools } from './tools/events'
 import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
 import { permissionsAdmin, permissionsReadonly } from './tools/permissions'
+import { preferencesReadonly, preferencesTools } from './tools/preferences'
 import { tasksReadonly, tasksTools } from './tools/tasks'
 import { ticketsReadonly, ticketsTools } from './tools/tickets'
 import type { McpScope, ToolModule } from './tools/shared'
@@ -47,6 +48,7 @@ const READONLY_MODULES: ToolModule[] = [
   qcReadonly,
   reportReadonly,
   eventsReadonly,
+  preferencesReadonly,
   chatReadonly,
   extensionsReadonly,
   permissionsReadonly,
@@ -68,6 +70,7 @@ const ADMIN_MODULES: ToolModule[] = [
   qcTools,
   reportAdmin,
   eventsTools,
+  preferencesTools,
   chatAdmin,
   extensionsAdmin,
   permissionsAdmin,

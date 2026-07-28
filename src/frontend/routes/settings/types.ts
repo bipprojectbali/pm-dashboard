@@ -24,7 +24,6 @@ export type UserPreferences = {
   notifyProjectDeadline: boolean
   pmDefaultTab: 'overview' | 'projects' | 'tasks' | 'team'
   tasksDefaultFilter: 'mine' | 'all' | 'priority'
-  tableDensity: 'compact' | 'comfortable'
 }
 
 export type MySession = {
@@ -72,5 +71,4 @@ export const defaultPrefs: UserPreferences = {
   notifyProjectDeadline: true,
   pmDefaultTab: 'overview',
   tasksDefaultFilter: 'mine',
-  tableDensity: 'comfortable',
 }

@@ -20,10 +20,13 @@ import { OverviewPanel } from './pm/OverviewPanel'
 import { PmNavbar } from './pm/PmNavbar'
 import { PmPageHeader } from './pm/PmPageHeader'
 import { type PmSearch, type TabKey, validTabs } from './pm/types'
+import type { UserPreferences } from './settings/types'
 
 export const Route = createFileRoute('/pm')({
   validateSearch: (search: Record<string, unknown>): PmSearch => {
-    const tab = validTabs.includes(search.tab as TabKey) ? (search.tab as TabKey) : 'overview'
+    // Leave tab undefined when absent/invalid so PmPage can fall back to the
+    // user's pmDefaultTab preference (not a hardcoded 'overview').
+    const tab = validTabs.includes(search.tab as TabKey) ? (search.tab as TabKey) : undefined
     const projectId = typeof search.projectId === 'string' ? search.projectId : undefined
     const detailTab = PROJECT_DETAIL_TABS.includes(search.detailTab as ProjectDetailTab)
       ? (search.detailTab as ProjectDetailTab)
@@ -31,7 +34,8 @@ export const Route = createFileRoute('/pm')({
     const taskId = typeof search.taskId === 'string' ? search.taskId : undefined
     const eventId = typeof search.eventId === 'string' ? search.eventId : undefined
     const eventMode = search.eventMode === 'create' || search.eventMode === 'edit' ? search.eventMode : undefined
-    const out: PmSearch = { tab }
+    const out: PmSearch = {}
+    if (tab) out.tab = tab
     if (projectId) out.projectId = projectId
     if (detailTab) out.detailTab = detailTab
     if (taskId) out.taskId = taskId
@@ -47,6 +51,14 @@ export const Route = createFileRoute('/pm')({
       })
       if (!data?.user) throw redirect({ to: '/login' })
       if (data.user.blocked) throw redirect({ to: '/blocked' })
+      // Warm the preferences cache so PmPage can resolve the default tab
+      // synchronously on first paint (no flicker from overview → preferred tab).
+      await context.queryClient
+        .ensureQueryData({
+          queryKey: ['me', 'preferences'],
+          queryFn: () => fetch('/api/me/preferences', { credentials: 'include' }).then((r) => r.json()),
+        })
+        .catch(() => {})
     } catch (e) {
       if (e instanceof Error) throw redirect({ to: '/login' })
       throw e
@@ -60,13 +72,30 @@ function PmPage() {
   const logout = useLogout()
   const user = data?.user
   const {
-    tab: active,
+    tab: tabParam,
     projectId: activeProjectId,
     detailTab,
     taskId: activeTaskId,
     eventId: activeEventId,
     eventMode,
   } = Route.useSearch()
+  // Preferences warmed in beforeLoad → available synchronously here.
+  const { data: prefsData } = useQuery<{ preferences: UserPreferences }>({
+    queryKey: ['me', 'preferences'],
+    queryFn: () => fetch('/api/me/preferences', { credentials: 'include' }).then((r) => r.json()),
+    staleTime: 5 * 60_000,
+  })
+  const prefs = prefsData?.preferences
+  // No explicit ?tab= → honour the user's default tab preference (guarded to a
+  // tab this route actually renders; backend allows 'activity' which we don't).
+  const preferredTab: TabKey = validTabs.includes(prefs?.pmDefaultTab as TabKey)
+    ? (prefs?.pmDefaultTab as TabKey)
+    : 'overview'
+  const active: TabKey = tabParam ?? preferredTab
+  // Map tasksDefaultFilter preference → initial state for the /pm Tugas board.
+  const tasksInitialAssignee = prefs?.tasksDefaultFilter === 'mine' ? 'me' : null
+  const tasksInitialSort =
+    prefs?.tasksDefaultFilter === 'priority' ? ({ by: 'priority', dir: 'desc' } as const) : undefined
   const navigate = useNavigate()
   const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false)
   const isMobile = useMediaQuery('(max-width: 48em)')
@@ -228,6 +257,8 @@ function PmPage() {
                     projectId={activeProjectId}
                     onProjectChange={setTasksProjectFilter}
                     onBackToProjects={() => setActive('projects')}
+                    initialAssigneeFilter={tasksInitialAssignee}
+                    initialSort={tasksInitialSort}
                   />
                 ))}
               {active === 'tickets' && (

@@ -16,30 +16,90 @@ export function TasksPanel({
   onProjectChange,
   onBackToProjects,
   canWriteOverride,
+  initialAssigneeFilter,
+  initialSort,
 }: {
   projectId?: string
   onProjectChange?: (id: string | null) => void
   onBackToProjects?: () => void
   canWriteOverride?: boolean
+  // Default assignee filter / sort applied once on mount (from the user's
+  // tasksDefaultFilter preference). Only wired from the /pm board.
+  initialAssigneeFilter?: string | null
+  initialSort?: { by: string; dir: 'asc' | 'desc' }
 }) {
   const {
-    projects, writableProjects, activeProjectId, activeProject, canDeleteTask,
-    tasksQ, tagsQ, phasesQ, chartTasksQ,
-    rawTasks, tasks, total, totalPages, safePage,
-    status, setStatus, kind, setKind, assigneeFilter, setAssigneeFilter, members, currentUserId,
-    tagFilter, setTagFilter, phaseFilter, setPhaseFilter,
-    search, setSearch, quickFilter, setQuickFilter,
-    dueDateRange, setDueDateRange, priorityFilter, setPriorityFilter,
-    sortBy, setSortBy, sortDir, setSortDir, showClearAll, clearAllFilters,
-    view, setView, showCharts, setShowCharts, trashView, setTrashView,
-    page, setPage,
-    selectedIds, toggleSelection, toggleAllSelection, clearSelection,
-    allDeletableSelected, someDeletableSelected, deletableTasks, deletableSelected,
-    create, bulkCreate, deleteOne, deleteBulk,
-    openTask, closeTask, changeProject,
-    confirmDeleteOne, confirmDeleteByIds, confirmDeleteSelected, handleExport,
-    drawerTaskId, createOpen, setCreateOpen,
-  } = useTasksPanelState({ projectId, onProjectChange, canWriteOverride })
+    projects,
+    writableProjects,
+    activeProjectId,
+    activeProject,
+    canDeleteTask,
+    tasksQ,
+    tagsQ,
+    phasesQ,
+    chartTasksQ,
+    rawTasks,
+    tasks,
+    total,
+    totalPages,
+    safePage,
+    status,
+    setStatus,
+    kind,
+    setKind,
+    assigneeFilter,
+    setAssigneeFilter,
+    members,
+    currentUserId,
+    tagFilter,
+    setTagFilter,
+    phaseFilter,
+    setPhaseFilter,
+    search,
+    setSearch,
+    quickFilter,
+    setQuickFilter,
+    dueDateRange,
+    setDueDateRange,
+    priorityFilter,
+    setPriorityFilter,
+    sortBy,
+    setSortBy,
+    sortDir,
+    setSortDir,
+    showClearAll,
+    clearAllFilters,
+    view,
+    setView,
+    showCharts,
+    setShowCharts,
+    trashView,
+    setTrashView,
+    page,
+    setPage,
+    selectedIds,
+    toggleSelection,
+    toggleAllSelection,
+    clearSelection,
+    allDeletableSelected,
+    someDeletableSelected,
+    deletableTasks,
+    deletableSelected,
+    create,
+    bulkCreate,
+    deleteOne,
+    deleteBulk,
+    openTask,
+    closeTask,
+    changeProject,
+    confirmDeleteOne,
+    confirmDeleteByIds,
+    confirmDeleteSelected,
+    handleExport,
+    drawerTaskId,
+    createOpen,
+    setCreateOpen,
+  } = useTasksPanelState({ projectId, onProjectChange, canWriteOverride, initialAssigneeFilter, initialSort })
 
   return (
     <Stack gap="md">
@@ -47,14 +107,27 @@ export function TasksPanel({
         <Group gap={6} wrap="nowrap">
           {onBackToProjects && (
             <Tooltip label="Back to projects">
-              <ActionIcon variant="subtle" size="sm" onClick={onBackToProjects}><TbArrowLeft size={14} /></ActionIcon>
+              <ActionIcon variant="subtle" size="sm" onClick={onBackToProjects}>
+                <TbArrowLeft size={14} />
+              </ActionIcon>
             </Tooltip>
           )}
-          <Text size="xs" c="dimmed" style={{ cursor: onBackToProjects ? 'pointer' : undefined }} onClick={onBackToProjects}>Projects</Text>
+          <Text
+            size="xs"
+            c="dimmed"
+            style={{ cursor: onBackToProjects ? 'pointer' : undefined }}
+            onClick={onBackToProjects}
+          >
+            Projects
+          </Text>
           <TbChevronRight size={12} style={{ opacity: 0.5 }} />
-          <Text size="xs" c="dimmed">{activeProject.name}</Text>
+          <Text size="xs" c="dimmed">
+            {activeProject.name}
+          </Text>
           <TbChevronRight size={12} style={{ opacity: 0.5 }} />
-          <Text size="xs" fw={500}>Tasks</Text>
+          <Text size="xs" fw={500}>
+            Tasks
+          </Text>
         </Group>
       )}
 
@@ -62,25 +135,38 @@ export function TasksPanel({
         <div>
           <Title order={3}>{activeProject ? `${activeProject.name} · Tasks` : 'Tasks'}</Title>
           <Text c="dimmed" size="sm">
-            {activeProject ? `All tasks, bugs, and QC items in ${activeProject.name}.` : 'Unified task + bug + QC view across your projects.'}
+            {activeProject
+              ? `All tasks, bugs, and QC items in ${activeProject.name}.`
+              : 'Unified task + bug + QC view across your projects.'}
           </Text>
         </div>
         <Group gap="xs">
           <Tooltip label={showCharts ? 'Hide dashboard' : 'Show dashboard'}>
-            <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}><TbChartBar size={16} /></ActionIcon>
+            <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}>
+              <TbChartBar size={16} />
+            </ActionIcon>
           </Tooltip>
           <Tooltip label={trashView ? 'Kembali ke task' : 'Lihat Trash'}>
-            <ActionIcon variant={trashView ? 'filled' : 'light'} color={trashView ? 'red' : 'gray'} onClick={() => setTrashView((v) => !v)}>
+            <ActionIcon
+              variant={trashView ? 'filled' : 'light'}
+              color={trashView ? 'red' : 'gray'}
+              onClick={() => setTrashView((v) => !v)}
+            >
               <TbTrash size={16} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Refresh">
-            <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}><TbRefresh size={16} /></ActionIcon>
+            <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}>
+              <TbRefresh size={16} />
+            </ActionIcon>
           </Tooltip>
           <Tooltip
             label={
-              activeProjectId && canWriteOverride === false ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
-                : writableProjects.length === 0 ? 'Tidak ada proyek yang bisa ditulis' : ''
+              activeProjectId && canWriteOverride === false
+                ? 'Kamu bukan anggota proyek ini — tidak bisa menambah task'
+                : writableProjects.length === 0
+                  ? 'Tidak ada proyek yang bisa ditulis'
+                  : ''
             }
             disabled={!((activeProjectId && canWriteOverride === false) || writableProjects.length === 0)}
           >
@@ -104,19 +190,39 @@ export function TasksPanel({
       )}
 
       <TasksFilterBar
-        activeProject={activeProject} projects={projects} activeProjectId={activeProjectId}
-        status={status} onStatusChange={setStatus} kind={kind} onKindChange={setKind}
-        assigneeFilter={assigneeFilter} onAssigneeFilterChange={setAssigneeFilter} members={members}
-        tagFilter={tagFilter} onTagFilterChange={setTagFilter}
-        tags={tagsQ.data?.tags ?? []} search={search} onSearchChange={setSearch}
-        quickFilter={quickFilter} onQuickFilterChange={setQuickFilter}
-        dueDateRange={dueDateRange} onDueDateRangeChange={setDueDateRange}
-        priorityFilter={priorityFilter} onPriorityFilterChange={setPriorityFilter}
-        sortBy={sortBy} onSortByChange={setSortBy} sortDir={sortDir}
+        activeProject={activeProject}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        status={status}
+        onStatusChange={setStatus}
+        kind={kind}
+        onKindChange={setKind}
+        assigneeFilter={assigneeFilter}
+        onAssigneeFilterChange={setAssigneeFilter}
+        members={members}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
+        tags={tagsQ.data?.tags ?? []}
+        search={search}
+        onSearchChange={setSearch}
+        quickFilter={quickFilter}
+        onQuickFilterChange={setQuickFilter}
+        dueDateRange={dueDateRange}
+        onDueDateRangeChange={setDueDateRange}
+        priorityFilter={priorityFilter}
+        onPriorityFilterChange={setPriorityFilter}
+        sortBy={sortBy}
+        onSortByChange={setSortBy}
+        sortDir={sortDir}
         onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-        view={view} onViewChange={setView} onProjectChange={changeProject}
-        total={total} taskCount={tasks.length} onExport={handleExport}
-        showClearAll={showClearAll} onClearAll={clearAllFilters}
+        view={view}
+        onViewChange={setView}
+        onProjectChange={changeProject}
+        total={total}
+        taskCount={tasks.length}
+        onExport={handleExport}
+        showClearAll={showClearAll}
+        onClearAll={clearAllFilters}
       />
 
       {trashView ? (
@@ -124,8 +230,18 @@ export function TasksPanel({
       ) : view === 'kanban' ? (
         <TasksKanbanView
           projectId={activeProjectId ?? null}
-          filters={{ kind: kind || null, assigneeFilter, currentUserId, tagId: tagFilter || null, phaseId: phaseFilter || null, search: search.trim() || undefined, priority: priorityFilter || null }}
-          canWrite={activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0}
+          filters={{
+            kind: kind || null,
+            assigneeFilter,
+            currentUserId,
+            tagId: tagFilter || null,
+            phaseId: phaseFilter || null,
+            search: search.trim() || undefined,
+            priority: priorityFilter || null,
+          }}
+          canWrite={
+            activeProjectId ? canWriteOverride !== false && writableProjects.length > 0 : writableProjects.length > 0
+          }
           onSelect={openTask}
           onDeleteOne={confirmDeleteOne}
           onDeleteSelected={confirmDeleteByIds}
@@ -137,16 +253,24 @@ export function TasksPanel({
             <TbListCheck size={40} />
             <Text fw={500}>{activeProject ? `No tasks in ${activeProject.name} yet` : 'No tasks found'}</Text>
             <Text size="sm" c="dimmed" ta="center">
-              {writableProjects.length === 0 ? 'Join a project to start creating tasks.'
-                : activeProject ? 'Kick things off by creating the first task for this project.'
-                : 'Try clearing filters or creating a new task.'}
+              {writableProjects.length === 0
+                ? 'Join a project to start creating tasks.'
+                : activeProject
+                  ? 'Kick things off by creating the first task for this project.'
+                  : 'Try clearing filters or creating a new task.'}
             </Text>
             {writableProjects.length > 0 && (
               <Group gap="xs">
                 {!(activeProjectId && canWriteOverride === false) && (
-                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>New Task</Button>
+                  <Button leftSection={<TbPlus size={14} />} size="xs" onClick={() => setCreateOpen(true)}>
+                    New Task
+                  </Button>
                 )}
-                {activeProject && <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>View all tasks</Button>}
+                {activeProject && (
+                  <Button variant="subtle" size="xs" onClick={() => changeProject(null)}>
+                    View all tasks
+                  </Button>
+                )}
               </Group>
             )}
           </Stack>
@@ -155,15 +279,29 @@ export function TasksPanel({
         <TasksGanttView tasks={tasks} onSelect={openTask} />
       ) : (
         <TasksTableView
-          tasks={tasks} activeProject={activeProject} total={total} page={page} setPage={setPage}
-          safePage={safePage} totalPages={totalPages} PAGE_SIZE={PAGE_SIZE}
-          selectedIds={selectedIds} toggleSelection={toggleSelection} toggleAllSelection={toggleAllSelection}
-          clearSelection={clearSelection} allDeletableSelected={allDeletableSelected}
-          someDeletableSelected={someDeletableSelected} deletableTasks={deletableTasks}
-          deletableSelected={deletableSelected} deleteBulkPending={deleteBulk.isPending}
-          deleteOnePending={deleteOne.isPending} deleteOneId={deleteOne.variables?.id}
-          onDeleteOne={confirmDeleteOne} onDeleteSelected={confirmDeleteSelected}
-          canDeleteTask={canDeleteTask} onOpen={openTask}
+          tasks={tasks}
+          activeProject={activeProject}
+          total={total}
+          page={page}
+          setPage={setPage}
+          safePage={safePage}
+          totalPages={totalPages}
+          PAGE_SIZE={PAGE_SIZE}
+          selectedIds={selectedIds}
+          toggleSelection={toggleSelection}
+          toggleAllSelection={toggleAllSelection}
+          clearSelection={clearSelection}
+          allDeletableSelected={allDeletableSelected}
+          someDeletableSelected={someDeletableSelected}
+          deletableTasks={deletableTasks}
+          deletableSelected={deletableSelected}
+          deleteBulkPending={deleteBulk.isPending}
+          deleteOnePending={deleteOne.isPending}
+          deleteOneId={deleteOne.variables?.id}
+          onDeleteOne={confirmDeleteOne}
+          onDeleteSelected={confirmDeleteSelected}
+          canDeleteTask={canDeleteTask}
+          onOpen={openTask}
         />
       )}
 

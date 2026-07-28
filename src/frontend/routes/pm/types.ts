@@ -5,7 +5,9 @@ export const validTabs = ['overview', 'projects', 'tasks', 'tickets', 'ideas', '
 export type TabKey = (typeof validTabs)[number]
 
 export type PmSearch = {
-  tab: TabKey
+  // undefined = landing on bare /pm → PmPage resolves it from the user's
+  // pmDefaultTab preference (falls back to 'overview').
+  tab?: TabKey
   projectId?: string
   detailTab?: ProjectDetailTab
   taskId?: string

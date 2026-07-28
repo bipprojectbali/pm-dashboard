@@ -1,4 +1,4 @@
-import { Button, Divider, Group, Paper, SegmentedControl, Select, Stack, Switch, Text, ThemeIcon } from '@mantine/core'
+import { Button, Divider, Group, Paper, Select, Stack, Switch, Text, ThemeIcon } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
@@ -63,8 +63,12 @@ export function PreferencesSection() {
               <TbBell size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={500} size="sm">Notifikasi</Text>
-              <Text size="xs" c="dimmed">Pilih kejadian apa yang ingin kamu dapatkan notifikasinya.</Text>
+              <Text fw={500} size="sm">
+                Notifikasi
+              </Text>
+              <Text size="xs" c="dimmed">
+                Pilih kejadian apa yang ingin kamu dapatkan notifikasinya.
+              </Text>
             </Stack>
           </Group>
           <Divider />
@@ -102,8 +106,12 @@ export function PreferencesSection() {
               <TbLayoutGrid size={16} />
             </ThemeIcon>
             <Stack gap={0}>
-              <Text fw={500} size="sm">Tampilan Manajer Proyek</Text>
-              <Text size="xs" c="dimmed">Atur cara default halaman PM dibuka.</Text>
+              <Text fw={500} size="sm">
+                Tampilan Manajer Proyek
+              </Text>
+              <Text size="xs" c="dimmed">
+                Atur cara default halaman PM dibuka.
+              </Text>
             </Stack>
           </Group>
           <Divider />
@@ -129,22 +137,13 @@ export function PreferencesSection() {
               { value: 'priority', label: 'Prioritas tinggi dulu' },
             ]}
           />
-          <Stack gap={4}>
-            <Text size="sm" fw={500}>Kepadatan tabel</Text>
-            <SegmentedControl
-              value={draft.tableDensity}
-              onChange={(v) => set('tableDensity', v as UserPreferences['tableDensity'])}
-              data={[
-                { value: 'comfortable', label: 'Nyaman' },
-                { value: 'compact', label: 'Padat' },
-              ]}
-            />
-          </Stack>
         </Stack>
       </Paper>
 
       <Group justify="flex-end">
-        <Button variant="subtle" onClick={reset} disabled={!dirty || save.isPending}>Batal</Button>
+        <Button variant="subtle" onClick={reset} disabled={!dirty || save.isPending}>
+          Batal
+        </Button>
         <Button
           leftSection={<TbCheck size={14} />}
           onClick={() => save.mutate(draft)}

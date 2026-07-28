@@ -7,6 +7,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-07-28
+
+### Ditambahkan
+- **Riwayat versi terbaru saat membuka "Apa yang baru" manual**: ketika membuka panel "Apa yang baru" secara manual, kini ditampilkan beberapa versi rilis terakhir sekaligus (bukan hanya versi terbaru), sehingga perubahan yang terlewat tetap bisa dibaca.
+
+### Diperbaiki
+- **Jumlah task pada badge tab Fase langsung ter-refresh**: setelah membuat atau menghapus fase, angka pada badge tab tidak lagi tertinggal — jumlah diperbarui otomatis tanpa perlu refresh halaman.
+
 ## [0.8.6] - 2026-07-16
 
 ### Diperbaiki

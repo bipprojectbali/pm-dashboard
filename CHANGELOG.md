@@ -7,6 +7,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Diperbaiki
+- **Indikator "Online" kini akurat**: kartu Online di Konsol Dev (dan daftar presence real-time) sebelumnya selalu menampilkan 0 walau ada pengguna aktif. Penyebabnya koneksi WebSocket presence ditolak server (cookie sesi ter-URL-encode + bertanda tangan Better Auth tidak diurai dengan benar), sehingga browser terus menyambung-ulang tanpa henti. Kini koneksi bertahan dan jumlah online tampil benar.
+
 ## [0.8.8] - 2026-07-28
 
 ### Ditambahkan

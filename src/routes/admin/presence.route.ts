@@ -10,7 +10,11 @@ export function adminPresenceRoutes() {
       .ws('/ws/presence', {
         async open(ws) {
           const cookie = ws.data.headers?.cookie ?? ''
-          const token = (cookie as string).match(/session=([^;]+)/)?.[1]
+          // Shared helper decodes the URL-encoded cookie and strips the Better Auth
+          // `.signature` suffix. A hand-rolled `match(/session=.../)` sends the raw
+          // value to the DB lookup, misses, and closes the socket 4001 — a reconnect
+          // storm that also left the "Online" count stuck at 0.
+          const token = extractSessionToken(cookie as string)
           if (!token) {
             ws.close(4001, 'Unauthorized')
             return

@@ -99,7 +99,7 @@ Team-wide events/reminders. All authenticated users can read and create. Only cr
 
 Projects and tasks are project-scoped; all write endpoints gate on `requireProjectMember`. Role hierarchy (inside a project): `OWNER > PM > MEMBER > VIEWER`. `SUPER_ADMIN` bypasses membership checks.
 
-- `GET /api/projects` — list projects visible to current user (owned or member of); counts and task stats
+- `GET /api/projects` — list projects visible to current user (owned or member of); counts and task stats. **Archived projects (`archivedAt != null`) are hidden by default** in every scope (admin, visible, `scope=mine`) — same convention as the admin-overview aggregates and the MCP `project_list` tool. Pass `?includeArchived=true` to include them (e.g. an archive view). Detail access (`GET /api/projects/:id`) is NOT gated by archive — an archived project still opens by id.
 - `POST /api/projects` — create (auto-adds creator as `OWNER`)
 - `GET /api/projects/:id` — full detail (members, milestones, extensions, recent tasks) + `myRole`
 - `PATCH /api/projects/:id` — update fields (OWNER/PM). Accepts `githubRepo` (normalized server-side, `null` to unlink; 409 on duplicate link)

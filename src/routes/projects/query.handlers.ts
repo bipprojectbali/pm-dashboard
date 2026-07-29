@@ -46,6 +46,10 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
   const scope = query.scope || 'visible'
   const limit = Math.min(Number(query.limit) || 200, 200)
   const offset = Math.max(0, Number(query.offset) || 0)
+  // Archived projects are hidden by default in listings (same convention as
+  // the admin-overview aggregates and the MCP project tools). Opt in with
+  // ?includeArchived=true when a caller genuinely needs the archive.
+  const includeArchived = query.includeArchived === 'true'
 
   const memberships = await prisma.projectMember.findMany({
     where: { userId: auth.userId },
@@ -63,10 +67,15 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
   type ProjectRow = (typeof memberships)[number]['project']
   let projectRows: ProjectRow[]
 
+  const archivedFilter = includeArchived ? {} : { archivedAt: null }
+
   if (scope === 'mine') {
-    projectRows = memberships.map((m) => m.project)
+    projectRows = memberships
+      .map((m) => m.project)
+      .filter((p) => includeArchived || p.archivedAt === null)
   } else if (isAdmin) {
     projectRows = await prisma.project.findMany({
+      where: { ...archivedFilter },
       include: PROJECT_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -75,6 +84,7 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
   } else {
     projectRows = await prisma.project.findMany({
       where: {
+        ...archivedFilter,
         OR: [{ visibility: { in: ['INTERNAL', 'PUBLIC'] } }, { members: { some: { userId: auth.userId } } }],
       },
       include: PROJECT_INCLUDE,

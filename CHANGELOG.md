@@ -8,6 +8,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 ## [Unreleased]
 
 ### Diperbaiki
+- **Proyek yang diarsipkan tak lagi bocor ke daftar proyek**: `GET /api/projects` sebelumnya tetap mengembalikan proyek ber-`archivedAt` di semua scope (admin, visible, `scope=mine`), sehingga tab Proyek Admin dan kartu KPI menghitung-ganda proyek arsip dibanding widget Ringkasan yang sudah memfilternya. Kini proyek arsip disembunyikan secara default di seluruh scope (konsisten dengan agregat admin-overview dan MCP `project_list`); tambahkan `?includeArchived=true` bila memang butuh melihat arsip. Membuka proyek arsip lewat id tetap bisa (detail tidak digate arsip).
 - **Daftar "Sinyal Peringatan" tak lagi menyesatkan**: di Ringkasan Admin, blok Overdue dan Past-due projects hanya menampilkan sebagian item (5 dan 3 teratas) sementara angka statistik di atasnya menunjukkan total penuh — sehingga terlihat seolah "6 proyek telat tapi cuma 3 tampil". Kini daftar diberi penanda jelas: judul "Past-due projects — top 3" dan baris "+N lagi — lihat semua di tab …" saat item terpotong.
 
 ## [0.8.9] - 2026-07-29

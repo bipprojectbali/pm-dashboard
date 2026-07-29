@@ -73,7 +73,10 @@ export function parseSchema(raw: string): ParsedSchema {
       const isId = attrs.includes('@id')
       const isUnique = attrs.includes('@unique')
       const isRelation = attrs.includes('@relation')
-      const defaultMatch = attrs.match(/@default\(([^)]+)\)/)
+      // First alternative captures function-call defaults with their own parens
+      // (`cuid()`, `uuid()`, `now()`); `[^)]+` alone stopped at the inner `)` and
+      // rendered `@default(cuid(` in the ER diagram for 50 fields.
+      const defaultMatch = attrs.match(/@default\((\w+\([^)]*\)|[^)]+)\)/)
 
       const isModelRef =
         /^[A-Z]/.test(fType) &&
@@ -81,8 +84,12 @@ export function parseSchema(raw: string): ParsedSchema {
         !['String', 'Int', 'Float', 'Boolean', 'DateTime', 'BigInt', 'Decimal', 'Bytes', 'Json'].includes(fType)
 
       if (isRelation) {
+        // The optional `"Name",` prefix handles named relations
+        // (e.g. `@relation("TaskReporter", fields: [...], ...)`). Without it,
+        // every named FK relation was silently dropped from the ER diagram —
+        // 14 of 41 in this schema, including all User FKs and self-relations.
         const relMatch = attrs.match(
-          /@relation\(fields:\s*\[(\w+)],\s*references:\s*\[(\w+)](?:,\s*onDelete:\s*(\w+))?\)/,
+          /@relation\((?:"[^"]*",\s*)?fields:\s*\[(\w+)],\s*references:\s*\[(\w+)](?:,\s*onDelete:\s*(\w+))?\)/,
         )
         if (relMatch) {
           relations.push({

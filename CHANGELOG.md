@@ -10,6 +10,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 ### Diperbaiki
 - **Indikator "Online" kini akurat**: kartu Online di Konsol Dev (dan daftar presence real-time) sebelumnya selalu menampilkan 0 walau ada pengguna aktif. Penyebabnya koneksi WebSocket presence ditolak server (cookie sesi ter-URL-encode + bertanda tangan Better Auth tidak diurai dengan benar), sehingga browser terus menyambung-ulang tanpa henti. Kini koneksi bertahan dan jumlah online tampil benar.
 - **Filter & label Log Audit lengkap**: panel Log Audit (Konsol Dev) dulu hanya mengenal 9 jenis aktivitas — sisanya (task, phase, project, tiket QC, evidence, tag, access token, aksi coding agent, dll.) tampil sebagai kode mentah kapital dan tidak bisa difilter. Kini seluruh ~57 jenis aktivitas punya label ramah + warna dan bisa dipilih di filter action. Teks bantuan (tooltip) juga diperbaiki agar tidak lagi menyebutkan cakupan yang keliru.
+- **Diagram ER Database lengkap & akurat**: menu Database (Konsol Dev) dulu menyembunyikan 14 dari 41 relasi antar-tabel — semua relasi bernama (`@relation("Nama", …)`) seperti FK ke User (owner/reporter/assignee) dan dependency antar-task tidak tergambar sebagai garis penghubung. Selain itu 50 field menampilkan nilai default terpotong (`@default(uuid(`, `now(`). Kini seluruh 41 relasi tergambar dan nilai default fungsi (`uuid()`/`now()`/`cuid()`) tampil utuh.
 
 ## [0.8.8] - 2026-07-28
 

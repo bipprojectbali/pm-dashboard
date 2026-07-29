@@ -1,10 +1,12 @@
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
+export type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
 export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
 
 export interface AnalyticsTask {
   id: string
   title: string
   status: TaskStatus
+  kind: TaskKind
   createdAt: string
   updatedAt: string
   closedAt: string | null

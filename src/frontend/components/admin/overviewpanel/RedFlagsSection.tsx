@@ -17,13 +17,7 @@ function RiskStat({ label, value, color }: { label: string; value: number; color
   )
 }
 
-export function RedFlagsSection({
-  risks,
-  navigate,
-}: {
-  risks: RiskReport
-  navigate: ReturnType<typeof useNavigate>
-}) {
+export function RedFlagsSection({ risks, navigate }: { risks: RiskReport; navigate: ReturnType<typeof useNavigate> }) {
   const s = risks.summary
   const nothing = s.overdueTasks + s.staleTasks + s.pastDueProjects + s.missingEnv === 0
 
@@ -102,13 +96,18 @@ export function RedFlagsSection({
               </Text>
             </Group>
           ))}
+          {risks.overdueTasks.length > 5 && (
+            <Text size="xs" c="dimmed" fs="italic">
+              +{risks.overdueTasks.length - 5} lagi — lihat semua di tab Tasks
+            </Text>
+          )}
         </Stack>
       )}
 
       {risks.pastDueProjects.length > 0 && (
         <Stack gap={4}>
           <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-            Past-due projects
+            Past-due projects{risks.pastDueProjects.length > 3 ? ' — top 3' : ''}
           </Text>
           {risks.pastDueProjects.slice(0, 3).map((p) => (
             <Group key={p.id} gap="xs" wrap="nowrap">
@@ -126,6 +125,11 @@ export function RedFlagsSection({
               </Text>
             </Group>
           ))}
+          {risks.pastDueProjects.length > 3 && (
+            <Text size="xs" c="dimmed" fs="italic">
+              +{risks.pastDueProjects.length - 3} lagi — lihat semua di tab Projects
+            </Text>
+          )}
         </Stack>
       )}
     </Card>

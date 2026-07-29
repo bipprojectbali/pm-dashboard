@@ -1,13 +1,23 @@
-import { ActionIcon, Group, Stack, Text, Title, Tooltip } from '@mantine/core'
+import { ActionIcon, Alert, Group, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
-import { TbRefresh } from 'react-icons/tb'
+import { TbInfoCircle, TbRefresh } from 'react-icons/tb'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
 import { TriageFilters } from './tasktriagepanel/TriageFilters'
-import { TriageStatCards } from './tasktriagepanel/TriageStatCards'
+import { TriageStatCards, type TriageStats } from './tasktriagepanel/TriageStatCards'
 import { TriageTable } from './tasktriagepanel/TriageTable'
-import { PAGE_SIZE, isOpen, isOverdue, isStale, type QuickFilter, type TriageTask } from './tasktriagepanel/types'
+import { isOpen, isOverdue, isStale, PAGE_SIZE, type QuickFilter, type TriageTask } from './tasktriagepanel/types'
+
+// The table pulls at most this many rows (the server hard-caps /api/tasks at
+// 200). Stat cards do NOT rely on this — they come from the /overview/triage
+// aggregate which counts in-DB, so the numbers stay correct beyond the cap.
+// /api/tasks orders by status enum-order (OPEN first … CLOSED last), so the
+// open tasks that triage cares about stay within the fetched window even when
+// truncated; the banner surfaces any overflow instead of hiding it.
+const TABLE_FETCH_LIMIT = 200
+
+const EMPTY_STATS: TriageStats = { total: 0, overdue: 0, unassigned: 0, blocked: 0, stale: 0 }
 
 export function TaskTriagePanel() {
   const navigate = useNavigate()
@@ -19,17 +29,32 @@ export function TaskTriagePanel() {
   const [quick, setQuick] = useState<QuickFilter>('all')
   const [page, setPage] = useState(1)
 
+  // Accurate, un-capped, IDEA-excluded counts for the stat cards (single source
+  // of truth shared with the sidebar "task overdue" badge via computeRiskReport's
+  // matching overdue definition). See src/lib/admin-overview/triage.ts.
+  const statsQ = useQuery({
+    queryKey: ['admin', 'task-triage', 'stats'],
+    queryFn: () =>
+      fetch('/api/admin/overview/triage', { credentials: 'include' }).then((r) => r.json()) as Promise<TriageStats>,
+    refetchInterval: 30_000,
+  })
+
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['admin', 'task-triage'],
     queryFn: () =>
-      fetch('/api/tasks?limit=500', { credentials: 'include' }).then((r) => r.json()) as Promise<{
+      fetch(`/api/tasks?limit=${TABLE_FETCH_LIMIT}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
         tasks: TriageTask[]
+        total: number
       }>,
     refetchInterval: 30_000,
   })
 
-  const tasks = data?.tasks ?? []
-  const openTasks = useMemo(() => tasks.filter(isOpen), [tasks])
+  // Exclude IDEA from the browsing table too, so it agrees with the stat cards
+  // (ideas are backlog captures, not triage-able committed work).
+  const tasks = useMemo(() => (data?.tasks ?? []).filter((t) => t.kind !== 'IDEA'), [data])
+  const serverTotal = data?.total ?? 0
+  const truncated = (data?.tasks.length ?? 0) >= TABLE_FETCH_LIMIT && serverTotal > TABLE_FETCH_LIMIT
+  const stats = statsQ.data ?? EMPTY_STATS
 
   const projectOptions = useMemo(() => {
     const map = new Map<string, string>()
@@ -44,14 +69,6 @@ export function TaskTriagePanel() {
     }
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
   }, [tasks])
-
-  const stats = useMemo(() => ({
-    total: openTasks.length,
-    overdue: openTasks.filter(isOverdue).length,
-    unassigned: openTasks.filter((t) => !t.assignee).length,
-    stale: openTasks.filter(isStale).length,
-    blocked: openTasks.filter((t) => t._count.blockedBy > 0).length,
-  }), [openTasks])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -106,7 +123,7 @@ export function TaskTriagePanel() {
             <Title order={3}>Task Triage</Title>
             <InfoTip
               width={360}
-              label="Panel untuk mencari task yang butuh perhatian lintas project: overdue, unassigned, blocked by dependency, atau stale >7 hari. Data polling 30 detik, di-cap 500 task terbaru."
+              label="Panel untuk mencari task yang butuh perhatian lintas project: overdue, unassigned, blocked by dependency, atau stale >7 hari. Kartu statistik dihitung langsung di server (akurat, mengecualikan IDEA); tabel di bawah menampilkan hingga 200 task terbaru untuk ditelusuri. Data polling 30 detik."
             />
           </Group>
           <Text size="sm" c="dimmed">
@@ -121,17 +138,33 @@ export function TaskTriagePanel() {
       </Group>
 
       <TriageStatCards stats={stats} />
+      {truncated && (
+        <Alert color="yellow" variant="light" icon={<TbInfoCircle size={16} />} py="xs">
+          <Text size="xs">
+            Tabel menampilkan 200 task terbaru dari {serverTotal} total — gunakan filter (project/status/prioritas) atau
+            buka tab project untuk menelusuri sisanya. Kartu statistik di atas tetap menghitung seluruh task.
+          </Text>
+        </Alert>
+      )}
       <TriageFilters
-        search={search} onSearchChange={setSearch}
-        projectFilter={projectFilter} onProjectFilterChange={setProjectFilter}
+        search={search}
+        onSearchChange={setSearch}
+        projectFilter={projectFilter}
+        onProjectFilterChange={setProjectFilter}
         projectOptions={projectOptions}
-        statusFilter={statusFilter} onStatusFilterChange={setStatusFilter}
-        priorityFilter={priorityFilter} onPriorityFilterChange={setPriorityFilter}
-        assigneeFilter={assigneeFilter} onAssigneeFilterChange={setAssigneeFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        priorityFilter={priorityFilter}
+        onPriorityFilterChange={setPriorityFilter}
+        assigneeFilter={assigneeFilter}
+        onAssigneeFilterChange={setAssigneeFilter}
         assigneeOptions={assigneeOptions}
-        quick={quick} onQuickChange={setQuick}
-        filteredCount={filtered.length} totalCount={tasks.length}
-        hasFilters={hasFilters} onClearFilters={clearFilters}
+        quick={quick}
+        onQuickChange={setQuick}
+        filteredCount={filtered.length}
+        totalCount={tasks.length}
+        hasFilters={hasFilters}
+        onClearFilters={clearFilters}
       />
       <TriageTable
         pagedTasks={pagedFiltered}

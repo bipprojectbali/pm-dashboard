@@ -1,13 +1,14 @@
-import { useLocalStorage } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../hooks/useAuth'
 import { downloadTasksCsv } from '../../lib/csv'
 import { DeleteReasonModal } from './DeleteReasonModal'
-import { api, buildTasksQueryString, filterAndSortTasks } from './helpers'
-import type { AssigneeOption, ProjectOption, TagListItem, TaskListItem } from './types'
+import { filterAndSortTasks } from './helpers'
+import type { TaskListItem } from './types'
+import { useTaskFilters } from './useTaskFilters'
 import { buildExportRows, useTaskMutations } from './useTaskMutations'
+import { useTaskQueries } from './useTaskQueries'
 
 export const PAGE_SIZE = 25
 
@@ -32,29 +33,16 @@ export function useTasksPanelState({
   const isAdmin = systemRole === 'ADMIN' || systemRole === 'SUPER_ADMIN'
   const currentUserId = session.data?.user?.id ?? null
 
+  const activeProjectId = projectId ?? null
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [trashView, setTrashView] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [kind, setKind] = useState<string | null>(null)
-  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(initialAssigneeFilter ?? null)
-  const [tagFilter, setTagFilter] = useState<string | null>(null)
-  const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [quickFilter, setQuickFilter] = useState<'overdue' | 'openOnly' | 'blocked' | 'nodue' | null>(null)
-  const [dueDateRange, setDueDateRange] = useState<[Date | null, Date | null]>([null, null])
-  const [priorityFilter, setPriorityFilter] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<string | null>(initialSort?.by ?? null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialSort?.dir ?? 'asc')
-  const [page, setPage] = useState(1)
-  const [showCharts, setShowCharts] = useLocalStorage({ key: 'pm:tasks:show-charts', defaultValue: true })
-  const [view, setView] = useLocalStorage<'table' | 'gantt' | 'kanban'>({ key: 'pm:tasks:view', defaultValue: 'table' })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const activeProjectId = projectId ?? null
+  const filters = useTaskFilters({ initialAssigneeFilter, initialSort, activeProjectId })
+
   const changeProject = (id: string | null) => {
-    setTagFilter(null)
-    setPhaseFilter(null)
+    filters.setTagFilter(null)
+    filters.setPhaseFilter(null)
     onProjectChange?.(id)
   }
   const openTask = (id: string) => setDrawerTaskId(id)
@@ -76,91 +64,26 @@ export function useTasksPanelState({
     onClearSelection: clearSelection,
   })
 
-  const projectsQ = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<{ projects: ProjectOption[] }>('/api/projects'),
-  })
-  const tagsQ = useQuery({
-    queryKey: ['tags', activeProjectId],
-    queryFn: () => api<{ tags: TagListItem[] }>(`/api/projects/${activeProjectId}/tags`),
-    enabled: !!activeProjectId,
-  })
-  const phasesQ = useQuery({
-    queryKey: ['phases', activeProjectId],
-    queryFn: () =>
-      api<{ phases: Array<{ id: string; title: string; status: string; _count: { tasks: number } }> }>(
-        `/api/projects/${activeProjectId}/phases`,
-      ),
-    enabled: !!activeProjectId,
-  })
-  // Anggota project aktif untuk dropdown filter assignee (reuse pola modal Create Task).
-  const membersQ = useQuery({
-    queryKey: ['project-members', activeProjectId, 'tasks-filter'],
-    queryFn: () =>
-      api<{ project: { members: Array<{ user: { id: string; name: string } }> } }>(`/api/projects/${activeProjectId}`),
-    enabled: !!activeProjectId,
-  })
-  const members: AssigneeOption[] = useMemo(
-    () => (membersQ.data?.project.members ?? []).map((m) => ({ id: m.user.id, name: m.user.name })),
-    [membersQ.data],
-  )
-
-  const query = buildTasksQueryString({
-    projectId: activeProjectId,
-    status,
-    kind,
-    assigneeFilter,
+  const queries = useTaskQueries({
+    activeProjectId,
+    projectId,
+    canWriteOverride,
+    isAdmin,
     currentUserId,
-    tagFilter,
-    phaseFilter,
-    view,
-    page,
+    status: filters.status,
+    kind: filters.kind,
+    assigneeFilter: filters.assigneeFilter,
+    tagFilter: filters.tagFilter,
+    phaseFilter: filters.phaseFilter,
+    view: filters.view,
+    page: filters.page,
     pageSize: PAGE_SIZE,
-    search,
-    priorityFilter,
-    quickFilter,
+    search: filters.search,
+    priorityFilter: filters.priorityFilter,
+    quickFilter: filters.quickFilter,
   })
-  const tasksQ = useQuery({
-    queryKey: ['tasks', query],
-    queryFn: () =>
-      api<{ tasks: TaskListItem[]; total: number; limit: number; offset: number }>(
-        `/api/tasks${query ? `?${query}` : ''}`,
-      ),
-    enabled: view !== 'kanban',
-  })
-  const chartQuery = buildTasksQueryString({
-    projectId: activeProjectId,
-    status: null,
-    kind: null,
-    assigneeFilter: null,
-    currentUserId,
-    tagFilter: null,
-    phaseFilter: null,
-    view: 'table',
-    page: 1,
-    pageSize: 500,
-    search: '',
-    priorityFilter: null,
-    quickFilter: null,
-  })
-  const chartTasksQ = useQuery({
-    queryKey: ['tasks-chart', chartQuery],
-    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
-    staleTime: 60_000,
-  })
+  const { tasksQ, projects, leadProjectIds } = queries
 
-  const projects = projectsQ.data?.projects ?? []
-  const writableProjects = projects.filter((p) => {
-    if (projectId && p.id === projectId && canWriteOverride !== undefined) return canWriteOverride
-    if (isAdmin) return true
-    if (typeof p.canWrite === 'boolean') return p.canWrite
-    return p.myRole !== null && p.myRole !== 'VIEWER'
-  })
-  const leadProjectIds = useMemo(() => {
-    const s = new Set<string>()
-    for (const p of projects) if (p.myRole === 'OWNER' || p.myRole === 'PM') s.add(p.id)
-    return s
-  }, [projects])
   const canDeleteTask = useCallback(
     (t: TaskListItem) =>
       isAdmin || (currentUserId != null && t.reporter.id === currentUserId) || leadProjectIds.has(t.projectId),
@@ -170,12 +93,12 @@ export function useTasksPanelState({
   const rawTasks = tasksQ.data?.tasks ?? []
   const total = tasksQ.data?.total ?? 0
   const tasks = useMemo(
-    () => filterAndSortTasks(rawTasks, quickFilter, dueDateRange, sortBy, sortDir),
-    [rawTasks, quickFilter, dueDateRange, sortBy, sortDir],
+    () => filterAndSortTasks(rawTasks, filters.quickFilter, filters.dueDateRange, filters.sortBy, filters.sortDir),
+    [rawTasks, filters.quickFilter, filters.dueDateRange, filters.sortBy, filters.sortDir],
   )
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
+  const safePage = Math.min(filters.page, totalPages)
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
   useEffect(() => {
@@ -241,102 +164,21 @@ export function useTasksPanelState({
   const handleExport = () => {
     const projectSlug = activeProject?.name.replace(/\s+/g, '-').toLowerCase() ?? 'all'
     const date = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
-    downloadTasksCsv(buildExportRows(tasks), `tasks-${projectSlug}-${status ?? 'all'}-${date}.csv`)
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [
-    activeProjectId,
-    status,
-    kind,
-    assigneeFilter,
-    tagFilter,
-    phaseFilter,
-    search,
-    quickFilter,
-    dueDateRange,
-    priorityFilter,
-    sortBy,
-    sortDir,
-  ])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset tag/phase filters when the active project changes
-  useEffect(() => {
-    setPhaseFilter(null)
-    setTagFilter(null)
-  }, [activeProjectId])
-
-  const showClearAll = !!(
-    quickFilter ||
-    search ||
-    dueDateRange[0] ||
-    dueDateRange[1] ||
-    priorityFilter ||
-    sortBy ||
-    phaseFilter ||
-    assigneeFilter
-  )
-  const clearAllFilters = () => {
-    setQuickFilter(null)
-    setSearch('')
-    setDueDateRange([null, null])
-    setPriorityFilter(null)
-    setSortBy(null)
-    setSortDir('asc')
-    setPhaseFilter(null)
-    setAssigneeFilter(null)
+    downloadTasksCsv(buildExportRows(tasks), `tasks-${projectSlug}-${filters.status ?? 'all'}-${date}.csv`)
   }
 
   return {
-    projects,
-    writableProjects,
+    ...filters,
+    ...queries,
     activeProjectId,
     activeProject,
     canDeleteTask,
-    tasksQ,
-    tagsQ,
-    phasesQ,
-    chartTasksQ,
     rawTasks,
     tasks,
     total,
     totalPages,
     safePage,
-    status,
-    setStatus,
-    kind,
-    setKind,
-    assigneeFilter,
-    setAssigneeFilter,
-    members,
     currentUserId,
-    tagFilter,
-    setTagFilter,
-    phaseFilter,
-    setPhaseFilter,
-    search,
-    setSearch,
-    quickFilter,
-    setQuickFilter,
-    dueDateRange,
-    setDueDateRange,
-    priorityFilter,
-    setPriorityFilter,
-    sortBy,
-    setSortBy,
-    sortDir,
-    setSortDir,
-    showClearAll,
-    clearAllFilters,
-    view,
-    setView,
-    showCharts,
-    setShowCharts,
-    trashView,
-    setTrashView,
-    page,
-    setPage,
     selectedIds,
     toggleSelection,
     toggleAllSelection,

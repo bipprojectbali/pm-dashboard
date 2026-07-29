@@ -39,7 +39,7 @@ export function TaskTriagePanel() {
     refetchInterval: 30_000,
   })
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const tableQ = useQuery({
     queryKey: ['admin', 'task-triage'],
     queryFn: () =>
       fetch(`/api/tasks?limit=${TABLE_FETCH_LIMIT}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
@@ -48,6 +48,16 @@ export function TaskTriagePanel() {
       }>,
     refetchInterval: 30_000,
   })
+  const { data, isLoading } = tableQ
+
+  // Refresh (and the loading spinner) must cover BOTH queries — the stat cards
+  // come from statsQ, the table from tableQ — otherwise clicking refresh leaves
+  // the cards showing stale counts until the next 30s poll.
+  const refetch = () => {
+    void statsQ.refetch()
+    void tableQ.refetch()
+  }
+  const isFetching = statsQ.isFetching || tableQ.isFetching
 
   // Exclude IDEA from the browsing table too, so it agrees with the stat cards
   // (ideas are backlog captures, not triage-able committed work).

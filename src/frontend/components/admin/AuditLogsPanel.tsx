@@ -113,7 +113,7 @@ export function AuditLogsPanel() {
           </Badge>
           <InfoTip
             width={360}
-            label={`Jejak aktivitas user yang persisted di DB: LOGIN / LOGOUT / LOGIN_FAILED / LOGIN_BLOCKED / ROLE_CHANGED / BLOCKED / UNBLOCKED / TASK_CREATED / perubahan role member proyek. Retensi default ${90} hari (AUDIT_LOG_RETENTION_DAYS).`}
+            label={`Jejak aktivitas yang persisted di DB — autentikasi (login/logout/gagal/blokir), manajemen user & role, serta perubahan pada project, task, phase, milestone, tag, evidence, tiket QC, access token, dan aksi dari coding agent. Filter action di bawah menampilkan seluruh jenis yang tercatat. Retensi default ${90} hari (AUDIT_LOG_RETENTION_DAYS).`}
           />
         </Group>
         <Group gap="sm">

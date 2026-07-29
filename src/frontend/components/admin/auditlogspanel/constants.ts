@@ -1,17 +1,9 @@
 import { toLocalDateStr } from '@/frontend/lib/dates'
 import type { AuditLogEntry } from './types'
 
-export const actionBadge: Record<string, { color: string; label: string }> = {
-  LOGIN: { color: 'green', label: 'Login' },
-  LOGOUT: { color: 'gray', label: 'Logout' },
-  LOGIN_FAILED: { color: 'orange', label: 'Login Failed' },
-  LOGIN_BLOCKED: { color: 'red', label: 'Login Blocked' },
-  ROLE_CHANGED: { color: 'violet', label: 'Role Changed' },
-  BLOCKED: { color: 'red', label: 'Blocked' },
-  UNBLOCKED: { color: 'teal', label: 'Unblocked' },
-  PROJECT_MEMBER_ROLE_CHANGED: { color: 'grape', label: 'Member Role Changed' },
-  TASK_CREATED: { color: 'blue', label: 'Task Created' },
-}
+// actionBadge moved to ./action-badge.ts (grew to cover all ~56 audit actions).
+// Re-exported here so existing `from './constants'` importers keep working.
+export { actionBadge } from './action-badge'
 
 export const PAGE_SIZE = 25
 

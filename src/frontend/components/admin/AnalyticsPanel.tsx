@@ -1,8 +1,8 @@
-import { ActionIcon, Group, SegmentedControl, SimpleGrid, Stack, Text, Title, Tooltip } from '@mantine/core'
+import { ActionIcon, Alert, Group, SegmentedControl, SimpleGrid, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
 import type { EChartsOption } from 'echarts'
 import { useMemo, useState } from 'react'
-import { TbCheck, TbClock, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
+import { TbCheck, TbClock, TbInfoCircle, TbListCheck, TbRefresh, TbTarget } from 'react-icons/tb'
 import { EChart } from '../charts/EChart'
 import { InfoTip } from '../shared/InfoTip'
 import { ChartCard } from './analyticspanel/ChartCard'
@@ -19,6 +19,13 @@ import { WINDOW_OPTIONS, startOfDay } from './analyticspanel/constants'
 import type { AnalyticsProject, AnalyticsTask, OverviewAnalytics } from './analyticspanel/types'
 import { useAnalyticsTimeline } from './analyticspanel/useAnalyticsTimeline'
 
+// The per-task charts (contributors, cycle time, aging WIP, WIP-per-project)
+// pull the task list, which the server hard-caps at 200. Stat cards do NOT rely
+// on this — Task Terbuka / Ditutup / Proyek Aktif come from the server-side
+// /overview/analytics aggregate (uncapped, IDEA-excluded), so they stay correct
+// past the cap. The banner surfaces any overflow instead of hiding it silently.
+const TABLE_FETCH_LIMIT = 200
+
 export function AnalyticsPanel() {
   const [windowDays, setWindowDays] = useState<'7' | '30' | '90'>('30')
   const days = Number(windowDays)
@@ -26,7 +33,7 @@ export function AnalyticsPanel() {
   const { data: overviewData, isFetching: overviewFetching, refetch: refetchOverview } = useQuery({
     queryKey: ['admin', 'analytics', 'overview', days],
     queryFn: () =>
-      fetch(`/api/admin/overview/analytics?trendDays=${days}&timelineLimit=20`, {
+      fetch(`/api/admin/overview/analytics?trendDays=${days}&timelineLimit=12`, {
         credentials: 'include',
       }).then((r) => r.json()) as Promise<OverviewAnalytics>,
   })
@@ -34,8 +41,9 @@ export function AnalyticsPanel() {
   const { data: tasksData, isFetching: tasksFetching, refetch: refetchTasks } = useQuery({
     queryKey: ['admin', 'analytics', 'tasks'],
     queryFn: () =>
-      fetch('/api/tasks?limit=500', { credentials: 'include' }).then((r) => r.json()) as Promise<{
+      fetch(`/api/tasks?limit=${TABLE_FETCH_LIMIT}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
         tasks: AnalyticsTask[]
+        total: number
       }>,
   })
 
@@ -47,7 +55,11 @@ export function AnalyticsPanel() {
       }>,
   })
 
-  const tasks = tasksData?.tasks ?? []
+  // Exclude IDEA from the per-task charts so they agree with the server-side
+  // aggregate (taskTrend/tasksByStatus already drop IDEA via WORKLOAD_KIND_FILTER).
+  const tasks = useMemo(() => (tasksData?.tasks ?? []).filter((t) => t.kind !== 'IDEA'), [tasksData])
+  const serverTotal = tasksData?.total ?? 0
+  const truncated = (tasksData?.tasks.length ?? 0) >= TABLE_FETCH_LIMIT && serverTotal > TABLE_FETCH_LIMIT
   const projects = projectsData?.projects ?? []
 
   const windowStartMs = useMemo(() => {
@@ -57,10 +69,18 @@ export function AnalyticsPanel() {
   }, [days])
 
   const stats = useMemo(() => {
-    const activeProjects = projects.filter((p) => p.status === 'ACTIVE').length
-    const openTasks = tasks.filter((t) => t.status !== 'CLOSED').length
-    const closedInWindow = tasks.filter((t) => t.closedAt && new Date(t.closedAt).getTime() >= windowStartMs)
-    const cycleDays = closedInWindow
+    // Server-accurate (uncapped, IDEA-excluded): read straight off the aggregate.
+    const byStatus = overviewData?.tasksByStatus ?? {}
+    const openTasks = Object.entries(byStatus)
+      .filter(([status]) => status !== 'CLOSED')
+      .reduce((sum, [, n]) => sum + (n ?? 0), 0)
+    // Ditutup dalam window = Σ taskTrend.closed (exactly the selected window, uncapped).
+    const closedInWindow = (overviewData?.taskTrend ?? []).reduce((sum, d) => sum + d.closed, 0)
+    const activeProjects = overviewData?.projectsByStatus?.ACTIVE ?? projects.filter((p) => p.status === 'ACTIVE').length
+    // Avg cycle needs per-task start/close pairs, so it stays client-side over the
+    // capped list (the truncation banner flags when it's computed from a subset).
+    const cycleDays = tasks
+      .filter((t) => t.closedAt && new Date(t.closedAt).getTime() >= windowStartMs)
       .map((t) => {
         const start = new Date(t.startsAt ?? t.createdAt).getTime()
         const end = new Date(t.closedAt as string).getTime()
@@ -71,10 +91,10 @@ export function AnalyticsPanel() {
     return {
       activeProjects,
       openTasks,
-      closedInWindow: closedInWindow.length,
+      closedInWindow,
       avgCycleDays: Math.round(avgCycle * 10) / 10,
     }
-  }, [projects, tasks, windowStartMs])
+  }, [overviewData, projects, tasks, windowStartMs])
 
   const trendOption = useMemo<EChartsOption>(
     () => buildTrendOption(overviewData?.taskTrend ?? []),
@@ -112,12 +132,12 @@ export function AnalyticsPanel() {
           <Group gap="xs">
             <Title order={3}>Analitik</Title>
             <InfoTip
-              width={360}
-              label="Dashboard metrik portfolio-wide: throughput (create vs close), distribusi status, cycle time, aging WIP, timeline project. Data trend & heatmap di-agregat di server; per-task chart di-cap 500 terbaru."
+              width={380}
+              label="Dashboard metrik portfolio-wide: throughput (create vs close), distribusi status, cycle time, aging WIP, timeline project. Semua mengecualikan IDEA. Kartu Proyek Aktif / Task Terbuka / Ditutup + throughput, status, heatmap di-agregat di server (akurat penuh). Chart per-task (kontributor, cycle time, aging/WIP) dan Avg Cycle dihitung dari 200 task terbaru — banner muncul bila ada yang terpotong."
             />
           </Group>
           <Text size="sm" c="dimmed">
-            Data di-cap 500 task untuk per-task chart. Trend & heatmap di-agregat di server.
+            Kartu &amp; trend di-agregat di server (akurat); chart per-task dari 200 task terbaru.
           </Text>
         </div>
         <Group gap="sm">
@@ -139,14 +159,24 @@ export function AnalyticsPanel() {
 
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
         <StatCard label="Proyek Aktif" value={stats.activeProjects.toString()} icon={TbTarget} color="blue"
-          tip="Jumlah project dengan status ACTIVE. Proyek DRAFT / ON_HOLD / COMPLETED / CANCELLED tidak dihitung." />
+          tip="Jumlah project dengan status ACTIVE (dihitung di server). Proyek DRAFT / ON_HOLD / COMPLETED / CANCELLED tidak dihitung." />
         <StatCard label="Task Terbuka" value={stats.openTasks.toString()} icon={TbListCheck} color="violet"
-          tip="Task dengan status selain CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED)." />
+          tip="Task dengan status selain CLOSED (OPEN / IN_PROGRESS / READY_FOR_QC / REOPENED). Dihitung di server — akurat penuh, mengecualikan IDEA." />
         <StatCard label={`Ditutup (${days}h)`} value={stats.closedInWindow.toString()} icon={TbCheck} color="green"
-          tip={`Task dengan closedAt dalam ${days} hari terakhir. Indikator velocity tim.`} />
+          tip={`Task ditutup dalam ${days} hari terakhir (Σ throughput per hari, dihitung di server — akurat penuh, mengecualikan IDEA). Indikator velocity tim.`} />
         <StatCard label="Avg Cycle" value={stats.avgCycleDays > 0 ? `${stats.avgCycleDays}h` : '—'} icon={TbClock} color="orange"
-          tip="Rata-rata durasi (hari) antara startsAt dan closedAt untuk task CLOSED. Semakin kecil = tim lebih responsif." />
+          tip="Rata-rata durasi (hari) antara startsAt dan closedAt untuk task CLOSED. Dihitung dari 200 task terbaru (lihat banner bila terpotong). Semakin kecil = tim lebih responsif." />
       </SimpleGrid>
+
+      {truncated && (
+        <Alert color="yellow" variant="light" icon={<TbInfoCircle size={16} />} py="xs">
+          <Text size="xs">
+            Chart per-task (Kontributor, Distribusi Cycle Time, Aging WIP, WIP per Proyek) &amp; Avg Cycle dihitung dari
+            200 task terbaru dari {serverTotal} total — kartu Proyek Aktif / Task Terbuka / Ditutup dan chart Throughput
+            / Status / Heatmap tetap akurat penuh (di-agregat di server).
+          </Text>
+        </Alert>
+      )}
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <ChartCard title="Throughput" subtitle={`Dibuka vs ditutup, ${days} hari terakhir`}

@@ -4,6 +4,7 @@ import {
   computeAnalytics,
   computeProjectHealth,
   computeRiskReport,
+  computeTaskTriage,
   computeTeamLoad,
 } from '../../lib/admin-overview'
 import { isSystemAdmin, requireAuth } from '../../lib/route-helpers'
@@ -24,6 +25,21 @@ export function adminOverviewRoutes() {
         }
         const staleDays = Math.min(30, Math.max(1, Number(query.staleDays) || 3))
         return computeRiskReport({ staleDays })
+      })
+
+      .get('/api/admin/overview/triage', async ({ request, query, set }) => {
+        const auth = await requireAuth(request)
+        if (!auth) {
+          set.status = 401
+          return { error: 'Unauthorized' }
+        }
+        if (!isSystemAdmin(auth.role)) {
+          set.status = 403
+          return { error: 'Forbidden' }
+        }
+        const projectId = typeof query.projectId === 'string' ? query.projectId : undefined
+        const staleDays = Math.min(30, Math.max(1, Number(query.staleDays) || 7))
+        return computeTaskTriage({ projectId, staleDays })
       })
 
       .get('/api/admin/overview/health', async ({ request, query, set }) => {

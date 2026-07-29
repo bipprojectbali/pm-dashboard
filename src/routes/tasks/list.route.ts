@@ -105,6 +105,11 @@ export function taskListRoutes() {
       prisma.task.findMany({
         where,
         include: taskInclude,
+        // status:asc follows the TaskStatus enum definition order (OPEN … CLOSED
+        // last), so when a caller truncates via `limit` the still-open tasks come
+        // first and CLOSED rows fall off the tail. The Admin Task Triage table
+        // relies on this to stay useful under the 200-row cap — keep CLOSED last
+        // in the enum (tests/integration/tasks-list-order.test.ts locks it).
         orderBy: [{ status: 'asc' }, { kanbanOrder: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
         take: limit,
         skip: offset,

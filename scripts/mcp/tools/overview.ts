@@ -3,6 +3,7 @@ import {
   computeAdminOverview,
   computeProjectHealth,
   computeRiskReport,
+  computeTaskTriage,
   computeTeamLoad,
 } from '../../../src/lib/admin-overview'
 import { computeRetro, renderRetroMarkdown } from '../../../src/lib/retro'
@@ -69,6 +70,21 @@ export const overviewReadonly: ToolModule = {
       },
       async ({ staleDays }) =>
         jsonText(await computeRiskReport({ staleDays })),
+    )
+
+    server.registerTool(
+      'task_triage',
+      {
+        title: 'Task triage counts',
+        description:
+          'Counts backing the Admin Task Triage cards: open (non-CLOSED), overdue, unassigned, blocked, stale (>staleDays no update). Excludes IDEA; computed in-DB (not capped). Filter by project.',
+        inputSchema: {
+          projectId: z.string().optional().describe('Filter to one project; omit for all'),
+          staleDays: z.number().int().min(1).max(30).default(7),
+        },
+      },
+      async ({ projectId, staleDays }) =>
+        jsonText(await computeTaskTriage({ projectId, staleDays })),
     )
 
     server.registerTool(

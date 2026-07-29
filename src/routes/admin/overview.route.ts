@@ -99,7 +99,9 @@ export function adminOverviewRoutes() {
           return { error: 'Forbidden' }
         }
         const timelineLimit = Math.min(50, Math.max(1, Number(query.timelineLimit) || 12))
-        const trendDays = Math.min(60, Math.max(1, Number(query.trendDays) || 14))
+        // Cap matches computeAnalytics' own Math.min(90) and the Analytics tab's
+        // "90 hari" window option — anything lower silently shrinks the 90d view.
+        const trendDays = Math.min(90, Math.max(1, Number(query.trendDays) || 14))
         return computeAnalytics({ timelineLimit, trendDays })
       })
   )

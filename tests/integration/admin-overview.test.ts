@@ -178,6 +178,16 @@ describe('GET /api/admin/overview/analytics', () => {
     const res = await get('/api/admin/overview/analytics?trendDays=9999', adminToken)
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.taskTrend.length).toBeLessThanOrEqual(60)
+    expect(body.taskTrend.length).toBeLessThanOrEqual(90)
+  })
+
+  test('honours trendDays=90 (Analytics "90 hari" window is not silently shrunk)', async () => {
+    // The Analytics tab offers a 90-day window; the endpoint cap must match the
+    // lib's Math.min(90), else the throughput/heatmap show 60 days under a
+    // "90 hari" label. Regression guard for that mismatch.
+    const res = await get('/api/admin/overview/analytics?trendDays=90', adminToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.taskTrend.length).toBe(90)
   })
 })

@@ -1,6 +1,7 @@
 import { Badge, Group, Stack, ThemeIcon, Title, Tooltip } from '@mantine/core'
 import { TbAlertTriangle, TbTarget } from 'react-icons/tb'
 import type { ProjectDetail } from '../ProjectsPanel'
+import { isExtended } from '../projects/helpers'
 import { computeOverdue, formatDate, isSystemAdmin, PRIORITY_COLOR, ROLE_COLOR, STATUS_COLOR } from './types'
 
 export function ProjectHeader({
@@ -15,10 +16,9 @@ export function ProjectHeader({
   myRole: string | null
 }) {
   const { overdue, daysOver } = computeOverdue(project)
-  const extended =
-    project.originalEndAt &&
-    project.endsAt &&
-    new Date(project.endsAt).getTime() !== new Date(project.originalEndAt).getTime()
+  // Use the shared helper: "Extended" means the deadline was pushed BACK, not
+  // any change (a shortened deadline must not be labelled Extended).
+  const extended = isExtended(project)
 
   return (
     <Stack gap="xs">

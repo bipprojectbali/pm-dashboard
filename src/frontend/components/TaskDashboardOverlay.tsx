@@ -129,7 +129,7 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
           label: { show: false },
           labelLine: { show: false },
           data: (Array.from(byStatus.entries()) as [TaskStatus, number][]).map(([s, v]) => ({
-            name: s.replace('_', ' '),
+            name: s.replace(/_/g, ' '),
             value: v,
             itemStyle: { color: STATUS_HEX[s] },
           })),

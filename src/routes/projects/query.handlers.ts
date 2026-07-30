@@ -30,7 +30,10 @@ function buildTaskStats(s: Record<string, number>) {
 
 export async function listUsersHandler({ request, set }: Ctx) {
   const auth = await requireAuth(request)
-  if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+  if (!auth) {
+    set.status = 401
+    return { error: 'Unauthorized' }
+  }
   const users = await prisma.user.findMany({
     where: { blocked: false },
     select: { id: true, name: true, email: true, role: true, image: true },
@@ -41,7 +44,10 @@ export async function listUsersHandler({ request, set }: Ctx) {
 
 export async function listProjectsHandler({ request, query, set }: CtxWithQuery) {
   const auth = await requireAuth(request)
-  if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+  if (!auth) {
+    set.status = 401
+    return { error: 'Unauthorized' }
+  }
 
   const isAdmin = isSystemAdmin(auth.role)
   const scope = query.scope || 'visible'
@@ -87,7 +93,13 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
           OR: [{ visibility: { in: ['INTERNAL', 'PUBLIC'] } }, { members: { some: { userId: auth.userId } } }],
         }
     ;[projectRows, total] = await Promise.all([
-      prisma.project.findMany({ where, include: PROJECT_INCLUDE, orderBy: { createdAt: 'desc' }, take: limit, skip: offset }),
+      prisma.project.findMany({
+        where,
+        include: PROJECT_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
       prisma.project.count({ where }),
     ])
   }
@@ -96,10 +108,18 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
 
   const [taskGroups, milestonesDone] = await Promise.all([
     projectIds.length
-      ? prisma.task.groupBy({ by: ['projectId', 'status'], where: { projectId: { in: projectIds } }, _count: { _all: true } })
+      ? prisma.task.groupBy({
+          by: ['projectId', 'status'],
+          where: { projectId: { in: projectIds } },
+          _count: { _all: true },
+        })
       : [],
     projectIds.length
-      ? prisma.projectMilestone.groupBy({ by: ['projectId'], where: { projectId: { in: projectIds }, completedAt: { not: null } }, _count: { _all: true } })
+      ? prisma.projectMilestone.groupBy({
+          by: ['projectId'],
+          where: { projectId: { in: projectIds }, completedAt: { not: null } },
+          _count: { _all: true },
+        })
       : [],
   ])
 
@@ -131,25 +151,44 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
 
 export async function getProjectHandler({ request, params, set }: CtxWithId) {
   const auth = await requireAuth(request)
-  if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
+  if (!auth) {
+    set.status = 401
+    return { error: 'Unauthorized' }
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: PROJECT_INCLUDE,
   })
-  if (!project) { set.status = 404; return { error: 'Project not found' } }
+  if (!project) {
+    set.status = 404
+    return { error: 'Project not found' }
+  }
 
   const membership = await requireProjectMember(params.id, auth.userId)
   const isAdmin = isSystemAdmin(auth.role)
-  const isVisible = isAdmin || membership != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
-  if (!isVisible) { set.status = 403; return { error: 'Project not accessible' } }
+  const isVisible =
+    isAdmin || membership != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
+  if (!isVisible) {
+    set.status = 403
+    return { error: 'Project not accessible' }
+  }
 
-  const grouped = await prisma.task.groupBy({ by: ['status'], where: { projectId: params.id }, _count: { _all: true } })
+  const [grouped, milestonesDone] = await Promise.all([
+    prisma.task.groupBy({ by: ['status'], where: { projectId: params.id }, _count: { _all: true } }),
+    // milestoneStats.done is needed by the Overview card — the list handler sets
+    // it but the detail handler used to omit it, so the card always showed 0/N.
+    prisma.projectMilestone.count({ where: { projectId: params.id, completedAt: { not: null } } }),
+  ])
   const s: Record<string, number> = {}
   for (const g of grouped) s[g.status] = g._count._all
 
   return {
-    project: { ...project, taskStats: buildTaskStats(s) },
+    project: {
+      ...project,
+      taskStats: buildTaskStats(s),
+      milestoneStats: { done: milestonesDone, total: project._count.milestones },
+    },
     myRole: membership?.role ?? null,
     canWrite: isAdmin || membership != null,
   }

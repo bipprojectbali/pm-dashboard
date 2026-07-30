@@ -28,9 +28,9 @@ import {
   TbTrendingUp,
   TbUsers,
 } from 'react-icons/tb'
-import { Section, SummaryCard, Stat, TaskLine } from './retrotab/RetroSubComponents'
-import { WINDOWS, fmtDate } from './retrotab/types'
+import { Section, Stat, SummaryCard, TaskLine } from './retrotab/RetroSubComponents'
 import type { RetroExtension, RetroResult } from './retrotab/types'
+import { fmtDate, WINDOWS } from './retrotab/types'
 
 export function RetroTab({ projectId }: { projectId: string }) {
   const [days, setDays] = useState(14)
@@ -76,12 +76,21 @@ export function RetroTab({ projectId }: { projectId: string }) {
     return <Alert color="red">Failed to load retrospective.</Alert>
   }
 
+  // "No activity" must account for every in-window signal we surface as a card,
+  // not just closed/slipped. New tasks created and PR activity (merged/closed/
+  // reviews) are activity too — otherwise the banner shows next to a non-zero
+  // "New tasks" card. (stillBlocked is a current snapshot, not in-window activity,
+  // so it is intentionally excluded.)
   const empty =
     data.summary.closed === 0 &&
     data.summary.slipped === 0 &&
     data.summary.extensions === 0 &&
+    data.summary.newTasks === 0 &&
     data.github.commits === 0 &&
-    data.github.prsOpened === 0
+    data.github.prsOpened === 0 &&
+    data.github.prsMerged === 0 &&
+    data.github.prsClosed === 0 &&
+    data.github.reviews === 0
 
   return (
     <Stack gap="lg">

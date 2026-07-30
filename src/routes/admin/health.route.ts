@@ -52,11 +52,18 @@ export function adminHealthRoutes() {
           prisma.auditLog.count(),
         ])
 
+        // Keep `required: true` entries in sync with the required() calls in
+        // src/lib/env.ts — those crash-fast the app at boot if unset, so the
+        // health card must surface them (BETTER_AUTH_SECRET + MINIO_* were the gap).
         const envChecks: { key: string; set: boolean; required: boolean }[] = [
           { key: 'DATABASE_URL', set: !!Bun.env.DATABASE_URL, required: true },
           { key: 'REDIS_URL', set: !!Bun.env.REDIS_URL, required: true },
           { key: 'GOOGLE_CLIENT_ID', set: !!Bun.env.GOOGLE_CLIENT_ID, required: true },
           { key: 'GOOGLE_CLIENT_SECRET', set: !!Bun.env.GOOGLE_CLIENT_SECRET, required: true },
+          { key: 'BETTER_AUTH_SECRET', set: !!Bun.env.BETTER_AUTH_SECRET, required: true },
+          { key: 'MINIO_ENDPOINT', set: !!Bun.env.MINIO_ENDPOINT, required: true },
+          { key: 'MINIO_ACCESS_KEY', set: !!Bun.env.MINIO_ACCESS_KEY, required: true },
+          { key: 'MINIO_SECRET_KEY', set: !!Bun.env.MINIO_SECRET_KEY, required: true },
           { key: 'GITHUB_WEBHOOK_SECRET', set: !!Bun.env.GITHUB_WEBHOOK_SECRET, required: false },
           { key: 'MCP_SECRET', set: !!Bun.env.MCP_SECRET, required: false },
           { key: 'SUPER_ADMIN_EMAIL', set: !!Bun.env.SUPER_ADMIN_EMAIL, required: false },

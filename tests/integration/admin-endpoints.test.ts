@@ -109,6 +109,23 @@ describe('GET /api/admin/health response shape', () => {
     expect(dbUrlEntry.required).toBe(true)
   })
 
+  test('every required() env var in env.ts is surfaced as required in the health card', async () => {
+    // Derive the source-of-truth required list from env.ts so this test fails
+    // if a new required() env is added but not wired into the health card.
+    const envSrc = await Bun.file(new URL('../../src/lib/env.ts', import.meta.url)).text()
+    const requiredKeys = [...envSrc.matchAll(/required\('([^']+)'\)/g)].map((m) => m[1])
+    expect(requiredKeys.length).toBeGreaterThan(0)
+
+    const res = await get('/api/admin/health', superToken)
+    const body = await res.json()
+    const cardByKey = new Map(body.env.map((e: { key: string; required: boolean }) => [e.key, e.required]))
+
+    for (const key of requiredKeys) {
+      expect(cardByKey.has(key)).toBe(true) // present in the health card
+      expect(cardByKey.get(key)).toBe(true) // and flagged required
+    }
+  })
+
   test('reports at least the three seeded active sessions', async () => {
     const res = await get('/api/admin/health', superToken)
     const body = await res.json()

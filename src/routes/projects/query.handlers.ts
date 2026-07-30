@@ -1,3 +1,4 @@
+import type { Prisma } from '../../../generated/prisma'
 import { prisma } from '../../lib/db'
 import { isSystemAdmin, requireAuth, requireProjectMember } from '../../lib/route-helpers'
 
@@ -69,29 +70,26 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
 
   const archivedFilter = includeArchived ? {} : { archivedAt: null }
 
+  // `total` = full count of matching projects BEFORE the take/skip window, so
+  // the client can tell when the list is truncated (it renders a banner) instead
+  // of silently computing portfolio stats over a capped page.
+  let total: number
+
   if (scope === 'mine') {
-    projectRows = memberships
-      .map((m) => m.project)
-      .filter((p) => includeArchived || p.archivedAt === null)
-  } else if (isAdmin) {
-    projectRows = await prisma.project.findMany({
-      where: { ...archivedFilter },
-      include: PROJECT_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset,
-    })
+    const mineRows = memberships.map((m) => m.project).filter((p) => includeArchived || p.archivedAt === null)
+    total = mineRows.length
+    projectRows = mineRows.slice(offset, offset + limit)
   } else {
-    projectRows = await prisma.project.findMany({
-      where: {
-        ...archivedFilter,
-        OR: [{ visibility: { in: ['INTERNAL', 'PUBLIC'] } }, { members: { some: { userId: auth.userId } } }],
-      },
-      include: PROJECT_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset,
-    })
+    const where: Prisma.ProjectWhereInput = isAdmin
+      ? { ...archivedFilter }
+      : {
+          ...archivedFilter,
+          OR: [{ visibility: { in: ['INTERNAL', 'PUBLIC'] } }, { members: { some: { userId: auth.userId } } }],
+        }
+    ;[projectRows, total] = await Promise.all([
+      prisma.project.findMany({ where, include: PROJECT_INCLUDE, orderBy: { createdAt: 'desc' }, take: limit, skip: offset }),
+      prisma.project.count({ where }),
+    ])
   }
 
   const projectIds = projectRows.map((p) => p.id)
@@ -125,6 +123,9 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
         milestoneStats: { done: doneByProject.get(p.id) ?? 0, total: p._count.milestones },
       }
     }),
+    total,
+    limit,
+    offset,
   }
 }
 

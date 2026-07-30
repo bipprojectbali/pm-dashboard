@@ -2,9 +2,9 @@ import { ActionIcon, Avatar, Badge, Card, Group, Text, Tooltip } from '@mantine/
 import { useState } from 'react'
 import { TbAlertTriangle, TbCalendarEvent, TbFolder, TbPencil } from 'react-icons/tb'
 import { UserAvatar } from '../shared/UserAvatar'
-import { computeHealth, computeOverdue, computeTimeProgress, formatDate } from './helpers'
-import { PRIORITY_COLOR, STATUS_BG, type ProjectListItem } from './types'
+import { computeHealth, computeOverdue, computeTimeProgress, formatDate, isExtended } from './helpers'
 import { ProjectCardStats } from './ProjectCardStats'
+import { PRIORITY_COLOR, type ProjectListItem, STATUS_BG } from './types'
 
 const _STATUS_DOT: Record<string, string> = {
   ACTIVE: 'var(--mantine-color-blue-5)',
@@ -30,7 +30,7 @@ export function ProjectCard({
   const { overdue, daysOver } = computeOverdue(p)
   const timeProgress = computeTimeProgress(p)
   const health = computeHealth(p)
-  const extended = p.originalEndAt && p.endsAt && new Date(p.endsAt).getTime() !== new Date(p.originalEndAt).getTime()
+  const extended = isExtended(p)
   const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
   const compact = density === 'compact'
   const [hover, setHover] = useState(false)

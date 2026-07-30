@@ -39,7 +39,7 @@ export function useProjectsPanelState() {
     key: 'pm:projects:userFilterMode',
     defaultValue: 'avatar',
   })
-  const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | null>(null)
+  const [derivedFilter, setDerivedFilter] = useState<'overdue' | 'atRisk' | 'delayed' | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useLocalStorage<SortKey>({ key: 'pm:projects:sort', defaultValue: 'updated' })
   const [view, setView] = useLocalStorage<'grid' | 'list' | 'timeline'>({
@@ -65,7 +65,7 @@ export function useProjectsPanelState() {
 
   const projectsQ = useQuery({
     queryKey: ['projects', scope],
-    queryFn: () => api<{ projects: ProjectListItem[] }>(`/api/projects?scope=${scope}`),
+    queryFn: () => api<{ projects: ProjectListItem[]; total?: number }>(`/api/projects?scope=${scope}`),
   })
 
   const create = useMutation({
@@ -91,6 +91,10 @@ export function useProjectsPanelState() {
   })
 
   const projects = projectsQ.data?.projects ?? []
+  // When the server caps the list, `total` exceeds the rows we actually got.
+  // The panel surfaces a banner so the portfolio stats aren't read as complete.
+  const totalProjects = projectsQ.data?.total ?? projects.length
+  const isTruncated = totalProjects > projects.length
 
   const statusCounts = useMemo(() => {
     const counts: Record<ProjectStatus, number> = { DRAFT: 0, ACTIVE: 0, ON_HOLD: 0, COMPLETED: 0, CANCELLED: 0 }
@@ -99,12 +103,15 @@ export function useProjectsPanelState() {
   }, [projects])
 
   const overdueCount = useMemo(() => projects.filter((p) => computeOverdue(p).overdue).length, [projects])
+  // "At risk" and "Delayed" are distinct health levels (yellow vs red badge on
+  // the card). Keep them as separate portfolio buckets so the yellow "At risk"
+  // stat does not silently absorb red "Delayed" projects.
   const atRiskCount = useMemo(
-    () =>
-      projects.filter((p) => {
-        const h = computeHealth(p)
-        return h?.level === 'at-risk' || h?.level === 'delayed'
-      }).length,
+    () => projects.filter((p) => computeHealth(p)?.level === 'at-risk').length,
+    [projects],
+  )
+  const delayedCount = useMemo(
+    () => projects.filter((p) => computeHealth(p)?.level === 'delayed').length,
     [projects],
   )
 
@@ -119,10 +126,9 @@ export function useProjectsPanelState() {
     if (derivedFilter === 'overdue') {
       list = list.filter((p) => computeOverdue(p).overdue)
     } else if (derivedFilter === 'atRisk') {
-      list = list.filter((p) => {
-        const h = computeHealth(p)
-        return h?.level === 'at-risk' || h?.level === 'delayed'
-      })
+      list = list.filter((p) => computeHealth(p)?.level === 'at-risk')
+    } else if (derivedFilter === 'delayed') {
+      list = list.filter((p) => computeHealth(p)?.level === 'delayed')
     }
     const q = search.trim().toLowerCase()
     if (q) {
@@ -183,9 +189,12 @@ export function useProjectsPanelState() {
     projectsQ,
     create,
     projects,
+    totalProjects,
+    isTruncated,
     statusCounts,
     overdueCount,
     atRiskCount,
+    delayedCount,
     filtered,
     userOptions,
     userList,

@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Button,
   Card,
   Divider,
@@ -11,15 +12,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
-import {
-  TbAlertTriangle,
-  TbFilterX,
-  TbFolder,
-  TbPlus,
-  TbRefresh,
-  TbSearch,
-  TbX,
-} from 'react-icons/tb'
+import { TbAlertTriangle, TbFilterX, TbFolder, TbPlus, TbRefresh, TbSearch, TbX } from 'react-icons/tb'
 import { CreateProjectModal } from './projects/CreateProjectModal'
 import { PortfolioStat } from './projects/PortfolioStat'
 import { ProjectsFilterBar } from './projects/ProjectsFilterBar'
@@ -27,30 +20,53 @@ import { ProjectsGanttView } from './projects/ProjectsGanttView'
 import { ProjectsGrid } from './projects/ProjectsGrid'
 import { useProjectsPanelState } from './projects/useProjectsPanelState'
 
-export type { MemberRole, ProjectDetail, ProjectListItem, ProjectPriority, ProjectStatus, ProjectUser, ProjectVisibility } from './projects/types'
 export { ProjectsGanttView } from './projects/ProjectsGanttView'
+export type {
+  MemberRole,
+  ProjectDetail,
+  ProjectListItem,
+  ProjectPriority,
+  ProjectStatus,
+  ProjectUser,
+  ProjectVisibility,
+} from './projects/types'
 
 export function ProjectsPanel() {
   const {
     canCreateProject,
-    createOpen, setCreateOpen,
-    scope, setScope,
-    statusFilter, setStatusFilter,
-    priorityFilter, setPriorityFilter,
-    userFilter, setUserFilter,
-    userFilterMode, setUserFilterMode,
-    derivedFilter, setDerivedFilter,
-    search, setSearch,
-    sort, setSort,
-    view, setView,
-    groupByStatus, setGroupByStatus,
-    density, setDensity,
+    createOpen,
+    setCreateOpen,
+    scope,
+    setScope,
+    statusFilter,
+    setStatusFilter,
+    priorityFilter,
+    setPriorityFilter,
+    userFilter,
+    setUserFilter,
+    userFilterMode,
+    setUserFilterMode,
+    derivedFilter,
+    setDerivedFilter,
+    search,
+    setSearch,
+    sort,
+    setSort,
+    view,
+    setView,
+    groupByStatus,
+    setGroupByStatus,
+    density,
+    setDensity,
     projectsQ,
     create,
     projects,
+    totalProjects,
+    isTruncated,
     statusCounts,
     overdueCount,
     atRiskCount,
+    delayedCount,
     filtered,
     userOptions,
     userList,
@@ -65,7 +81,9 @@ export function ProjectsPanel() {
         <div style={{ flex: '1 1 280px' }}>
           <Title order={3}>Projects</Title>
           <Text c="dimmed" size="sm">
-            Projects you're a member of. Create one to start tracking tasks + AW activity.
+            {scope === 'mine'
+              ? "Projects you're a member of. Create one to start tracking tasks + AW activity."
+              : 'All projects you can see. Switch scope to "Mine" for only the ones you belong to.'}
           </Text>
         </div>
         <Group gap="xs" wrap="nowrap">
@@ -97,10 +115,21 @@ export function ProjectsPanel() {
         </Group>
       </Group>
 
+      {isTruncated && (
+        <Alert color="yellow" variant="light" icon={<TbAlertTriangle size={16} />} p="xs">
+          <Text size="xs">
+            Menampilkan {projects.length} dari {totalProjects} proyek. Statistik & filter di bawah hanya menghitung{' '}
+            {projects.length} proyek yang termuat — persempit dengan pencarian/scope untuk melihat sisanya.
+          </Text>
+        </Alert>
+      )}
+
       {projects.length > 0 && (
         <Group gap="md" wrap="wrap" align="stretch">
           <Stack gap={4} style={{ minWidth: 110 }}>
-            <Text size="10px" c="dimmed" tt="uppercase" fw={700}>Quick</Text>
+            <Text size="10px" c="dimmed" tt="uppercase" fw={700}>
+              Quick
+            </Text>
             <PortfolioStat
               label="All"
               value={projects.length}
@@ -110,12 +139,16 @@ export function ProjectsPanel() {
             />
           </Stack>
           <Divider orientation="vertical" />
-          <Stack gap={4} style={{ flex: 2, minWidth: 260 }}>
+          <Stack gap={4} style={{ flex: 3, minWidth: 420 }}>
             <Group gap={6} align="baseline">
-              <Text size="10px" c="dimmed" tt="uppercase" fw={700}>Status</Text>
-              <Text size="10px" c="dimmed">(pick one)</Text>
+              <Text size="10px" c="dimmed" tt="uppercase" fw={700}>
+                Status
+              </Text>
+              <Text size="10px" c="dimmed">
+                (pick one)
+              </Text>
             </Group>
-            <SimpleGrid cols={{ base: 3 }} spacing="xs">
+            <SimpleGrid cols={{ base: 5 }} spacing="xs">
               <PortfolioStat
                 label="Active"
                 value={statusCounts.ACTIVE}
@@ -137,15 +170,35 @@ export function ProjectsPanel() {
                 active={statusFilter === 'COMPLETED'}
                 onClick={() => setStatusFilter(statusFilter === 'COMPLETED' ? null : 'COMPLETED')}
               />
+              <PortfolioStat
+                label="Draft"
+                value={statusCounts.DRAFT}
+                color="gray"
+                active={statusFilter === 'DRAFT'}
+                muted={statusCounts.DRAFT === 0 && statusFilter !== 'DRAFT'}
+                onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? null : 'DRAFT')}
+              />
+              <PortfolioStat
+                label="Cancelled"
+                value={statusCounts.CANCELLED}
+                color="dark"
+                active={statusFilter === 'CANCELLED'}
+                muted={statusCounts.CANCELLED === 0 && statusFilter !== 'CANCELLED'}
+                onClick={() => setStatusFilter(statusFilter === 'CANCELLED' ? null : 'CANCELLED')}
+              />
             </SimpleGrid>
           </Stack>
           <Divider orientation="vertical" />
           <Stack gap={4} style={{ flex: 1.5, minWidth: 200 }}>
             <Group gap={6} align="baseline">
-              <Text size="10px" c="dimmed" tt="uppercase" fw={700}>Health</Text>
-              <Text size="10px" c="dimmed">(pick one)</Text>
+              <Text size="10px" c="dimmed" tt="uppercase" fw={700}>
+                Health
+              </Text>
+              <Text size="10px" c="dimmed">
+                (pick one)
+              </Text>
             </Group>
-            <SimpleGrid cols={{ base: 2 }} spacing="xs">
+            <SimpleGrid cols={{ base: 3 }} spacing="xs">
               <PortfolioStat
                 label="Overdue"
                 value={overdueCount}
@@ -153,7 +206,9 @@ export function ProjectsPanel() {
                 icon={<TbAlertTriangle size={14} />}
                 active={derivedFilter === 'overdue'}
                 muted={overdueCount === 0 && derivedFilter !== 'overdue'}
-                onClick={overdueCount > 0 ? () => setDerivedFilter(derivedFilter === 'overdue' ? null : 'overdue') : undefined}
+                onClick={
+                  overdueCount > 0 ? () => setDerivedFilter(derivedFilter === 'overdue' ? null : 'overdue') : undefined
+                }
               />
               <PortfolioStat
                 label="At risk"
@@ -161,7 +216,19 @@ export function ProjectsPanel() {
                 color="yellow"
                 active={derivedFilter === 'atRisk'}
                 muted={atRiskCount === 0 && derivedFilter !== 'atRisk'}
-                onClick={atRiskCount > 0 ? () => setDerivedFilter(derivedFilter === 'atRisk' ? null : 'atRisk') : undefined}
+                onClick={
+                  atRiskCount > 0 ? () => setDerivedFilter(derivedFilter === 'atRisk' ? null : 'atRisk') : undefined
+                }
+              />
+              <PortfolioStat
+                label="Delayed"
+                value={delayedCount}
+                color="red"
+                active={derivedFilter === 'delayed'}
+                muted={delayedCount === 0 && derivedFilter !== 'delayed'}
+                onClick={
+                  delayedCount > 0 ? () => setDerivedFilter(derivedFilter === 'delayed' ? null : 'delayed') : undefined
+                }
               />
             </SimpleGrid>
           </Stack>
@@ -170,17 +237,28 @@ export function ProjectsPanel() {
 
       {projects.length > 0 && (
         <ProjectsFilterBar
-          scope={scope} setScope={setScope}
-          priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter}
-          userFilter={userFilter} setUserFilter={setUserFilter}
-          userFilterMode={userFilterMode} setUserFilterMode={setUserFilterMode}
-          sort={sort} setSort={setSort}
-          density={density} setDensity={setDensity}
-          view={view} setView={setView}
-          groupByStatus={groupByStatus} setGroupByStatus={setGroupByStatus}
-          userList={userList} userOptions={userOptions}
-          hasActiveFilters={hasActiveFilters} filtered={filtered}
-          projects={projects} clearFilters={clearFilters}
+          scope={scope}
+          setScope={setScope}
+          priorityFilter={priorityFilter}
+          setPriorityFilter={setPriorityFilter}
+          userFilter={userFilter}
+          setUserFilter={setUserFilter}
+          userFilterMode={userFilterMode}
+          setUserFilterMode={setUserFilterMode}
+          sort={sort}
+          setSort={setSort}
+          density={density}
+          setDensity={setDensity}
+          view={view}
+          setView={setView}
+          groupByStatus={groupByStatus}
+          setGroupByStatus={setGroupByStatus}
+          userList={userList}
+          userOptions={userOptions}
+          hasActiveFilters={hasActiveFilters}
+          filtered={filtered}
+          projects={projects}
+          clearFilters={clearFilters}
         />
       )}
 
@@ -189,7 +267,11 @@ export function ProjectsPanel() {
           <Stack align="center" gap="sm">
             <TbFolder size={40} />
             <Text fw={500}>
-              {projects.length === 0 ? 'No projects yet' : hasActiveFilters ? 'No projects match your filters' : 'Nothing to show'}
+              {projects.length === 0
+                ? 'No projects yet'
+                : hasActiveFilters
+                  ? 'No projects match your filters'
+                  : 'Nothing to show'}
             </Text>
             <Text size="sm" c="dimmed" ta="center" maw={360}>
               {projects.length === 0
@@ -201,9 +283,13 @@ export function ProjectsPanel() {
                   : 'Pick a different view or create a new project.'}
             </Text>
             {projects.length === 0 && canCreateProject ? (
-              <Button leftSection={<TbPlus size={16} />} onClick={() => setCreateOpen(true)}>Create Project</Button>
+              <Button leftSection={<TbPlus size={16} />} onClick={() => setCreateOpen(true)}>
+                Create Project
+              </Button>
             ) : hasActiveFilters ? (
-              <Button variant="light" leftSection={<TbFilterX size={16} />} onClick={clearFilters}>Clear filters</Button>
+              <Button variant="light" leftSection={<TbFilterX size={16} />} onClick={clearFilters}>
+                Clear filters
+              </Button>
             ) : null}
           </Stack>
         </Card>

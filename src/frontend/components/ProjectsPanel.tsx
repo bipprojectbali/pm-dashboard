@@ -139,7 +139,7 @@ export function ProjectsPanel() {
             />
           </Stack>
           <Divider orientation="vertical" />
-          <Stack gap={4} style={{ flex: 2, minWidth: 260 }}>
+          <Stack gap={4} style={{ flex: 3, minWidth: 420 }}>
             <Group gap={6} align="baseline">
               <Text size="10px" c="dimmed" tt="uppercase" fw={700}>
                 Status
@@ -148,7 +148,7 @@ export function ProjectsPanel() {
                 (pick one)
               </Text>
             </Group>
-            <SimpleGrid cols={{ base: 3 }} spacing="xs">
+            <SimpleGrid cols={{ base: 5 }} spacing="xs">
               <PortfolioStat
                 label="Active"
                 value={statusCounts.ACTIVE}

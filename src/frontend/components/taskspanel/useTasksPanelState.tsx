@@ -36,6 +36,9 @@ export function useTasksPanelState({
   const activeProjectId = projectId ?? null
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // Bumped on every successful create so CreateTaskModal clears its form only
+  // then (a Cancel/close keeps the entered values on purpose).
+  const [createResetSignal, setCreateResetSignal] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
   const filters = useTaskFilters({ initialAssigneeFilter, initialSort, activeProjectId })
@@ -53,7 +56,10 @@ export function useTasksPanelState({
   const clearSelection = () => setSelectedIds(new Set())
 
   const { create, bulkCreate, deleteOne, deleteBulk } = useTaskMutations({
-    onCreateSuccess: () => setCreateOpen(false),
+    onCreateSuccess: () => {
+      setCreateOpen(false)
+      setCreateResetSignal((n) => n + 1)
+    },
     onDeleteOneSuccess: (id) =>
       setSelectedIds((prev) => {
         if (!prev.has(id)) return prev
@@ -201,5 +207,6 @@ export function useTasksPanelState({
     drawerTaskId,
     createOpen,
     setCreateOpen,
+    createResetSignal,
   }
 }

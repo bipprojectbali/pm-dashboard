@@ -45,6 +45,8 @@ export function KindBoardPanel({
   const [quick, setQuick] = useState<QuickFilter>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  // Bumped on successful create so the modal clears its form only then.
+  const [createResetSignal, setCreateResetSignal] = useState(0)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['pm', 'kind-board', kind],
@@ -61,7 +63,13 @@ export function KindBoardPanel({
   })
 
   const create = useMutation({
-    mutationFn: (body: { projectId: string; title: string; description: string; kind: string; assigneeId?: string | null }) =>
+    mutationFn: (body: {
+      projectId: string
+      title: string
+      description: string
+      kind: string
+      assigneeId?: string | null
+    }) =>
       api('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,6 +79,7 @@ export function KindBoardPanel({
       qc.invalidateQueries({ queryKey: ['pm', 'kind-board', kind] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
       setCreateOpen(false)
+      setCreateResetSignal((n) => n + 1)
     },
   })
 
@@ -221,6 +230,7 @@ export function KindBoardPanel({
         loading={create.isPending}
         error={create.error ? (create.error as Error).message : undefined}
         tagsByProject={[]}
+        resetSignal={createResetSignal}
       />
     </Stack>
   )

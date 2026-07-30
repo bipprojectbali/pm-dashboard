@@ -96,6 +96,7 @@ export function TasksPanel({
         loading={s.create.isPending || s.bulkCreate.isPending}
         error={s.create.error?.message ?? s.bulkCreate.error?.message}
         tagsByProject={s.tagsQ.data?.tags ?? []}
+        resetSignal={s.createResetSignal}
       />
 
       <Modal

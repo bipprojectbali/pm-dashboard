@@ -1,6 +1,6 @@
 import { Button, Group, Modal, SegmentedControl, Select, Stack, Text } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { TbFileImport } from 'react-icons/tb'
 import { parseTaskCsv, type RowError } from '../lib/csv'
 import { notifyError } from '../lib/notify'
@@ -26,12 +26,16 @@ export function CreateTaskModal({
   loading,
   error,
   tagsByProject,
+  resetSignal,
 }: {
   opened: boolean
   onClose: () => void
   projects: ProjectOption[]
   defaultProjectId: string | null
   defaultKind?: TaskKind
+  // Incremented by the parent after each successful create; a change clears the
+  // form. Undefined/0 means "no success yet" so the form is left untouched.
+  resetSignal?: number
   onSubmit: (body: {
     projectId: string
     title: string
@@ -149,6 +153,16 @@ export function CreateTaskModal({
     setCsvText('')
   }
 
+  // Reset the form ONLY after a successful create (parent bumps `resetSignal`).
+  // Closing the modal by Cancel/X/overlay deliberately keeps the entered values
+  // so an accidental close doesn't wipe the user's work — they can reopen and
+  // continue. A success closes the modal via the parent (opened → false) without
+  // hitting the onClose handler, which is why we key off the signal, not `opened`.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset is stable; run only when the success signal changes
+  useEffect(() => {
+    if (resetSignal !== undefined && resetSignal > 0) reset()
+  }, [resetSignal])
+
   const handlePickFile = async (file: File | null) => {
     if (!file) return
     if (!/\.(csv|txt)$/i.test(file.name)) {
@@ -181,7 +195,9 @@ export function CreateTaskModal({
     <Modal
       opened={opened}
       onClose={() => {
-        reset()
+        // Keep the entered values on a manual close (X / overlay / Cancel) so an
+        // accidental close doesn't wipe the user's work — only a successful
+        // create clears the form (via resetSignal).
         onClose()
       }}
       title="Create Task"

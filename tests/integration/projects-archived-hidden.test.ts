@@ -83,3 +83,36 @@ describe('GET /api/projects — archived visibility', () => {
     expect(body.project.id).toBe(archivedProjectId)
   })
 })
+
+// The list now returns `total` (full count before the take/skip window) so the
+// client can detect truncation and show a banner instead of computing portfolio
+// stats over a silently-capped page.
+describe('GET /api/projects — total for truncation detection', () => {
+  async function listWithMeta(token: string, qs = '') {
+    const res = await app.handle(
+      new Request(`http://localhost/api/projects${qs}`, { headers: { cookie: `session=${token}` } }),
+    )
+    return (await res.json()) as { projects: Array<{ id: string }>; total: number; limit: number }
+  }
+
+  test('total equals the number of visible (non-archived) projects, not the capped page', async () => {
+    const body = await listWithMeta(adminToken)
+    // Only the active project is visible by default (archived hidden).
+    expect(typeof body.total).toBe('number')
+    expect(body.total).toBe(body.projects.length)
+    expect(body.total).toBeGreaterThanOrEqual(1)
+  })
+
+  test('a limit smaller than the match count truncates rows but total stays full', async () => {
+    const body = await listWithMeta(adminToken, '?limit=1')
+    expect(body.projects.length).toBeLessThanOrEqual(1)
+    // total counts all matches regardless of the page limit
+    expect(body.total).toBeGreaterThanOrEqual(body.projects.length)
+  })
+
+  test('scope=mine also reports total', async () => {
+    const body = await listWithMeta(memberToken, '?scope=mine')
+    expect(typeof body.total).toBe('number')
+    expect(body.total).toBe(body.projects.length)
+  })
+})

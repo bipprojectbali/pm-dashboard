@@ -1,4 +1,4 @@
-import { PRIORITY_RANK, type HealthLevel, type ProjectListItem, type SortKey } from './types'
+import { type HealthLevel, PRIORITY_RANK, type ProjectListItem, type SortKey } from './types'
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
@@ -16,6 +16,14 @@ export function daysBetween(a: Date, b: Date): number {
 export function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// A project is "Extended" only when its deadline was pushed BACK (endsAt moved
+// later than the original). Moving it earlier (shortened) must NOT show the
+// "Extended" badge — that read as "schedule slipped" when it was the opposite.
+export function isExtended(p: ProjectListItem): boolean {
+  if (!p.originalEndAt || !p.endsAt) return false
+  return new Date(p.endsAt).getTime() > new Date(p.originalEndAt).getTime()
 }
 
 export function computeOverdue(p: ProjectListItem): { overdue: boolean; daysOver: number } {

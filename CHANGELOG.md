@@ -7,6 +7,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.11] - 2026-07-30
+
 ### Ditambahkan
 - **Konfirmasi sebelum memblokir user**: aksi "Block User" di Konsol Admin → Pengguna kini memunculkan dialog konfirmasi yang menyebut nama + email target dan memperingatkan bahwa semua sesi aktif user itu langsung diputus — sebelumnya blokir langsung dieksekusi begitu diklik, sehingga satu salah-klik bisa mengunci seseorang. Membuka blokir (Unblock) tetap instan karena tidak destruktif.
 

@@ -38,7 +38,10 @@ export function adminSessionsRoutes() {
           userRole: s.user.role,
           userBlocked: s.user.blocked,
           userImage: s.user.image ?? null,
-          isOnline: onlineIds.has(s.user.id),
+          // "Online" = user connected via WS presence AND this session still valid.
+          // presence is per-user, so an expired session of an online user must not
+          // inherit online status (else it leaks into the Sessions "Online" filter).
+          isOnline: onlineIds.has(s.user.id) && s.expiresAt >= now,
           createdAt: s.createdAt.toISOString(),
           expiresAt: s.expiresAt.toISOString(),
           isExpired: s.expiresAt < now,

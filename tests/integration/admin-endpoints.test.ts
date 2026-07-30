@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { addConnection, removeConnection } from '../../src/lib/presence'
 import { cleanupTestData, createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
+
+// Minimal ServerWebSocket stub — presence only reads ws.data.userId and calls ws.send().
+// biome-ignore lint/suspicious/noExplicitAny: test stub, not a real socket
+function fakeWs(userId: string): any {
+  return { data: { userId }, send: () => {} }
+}
 
 const app = createTestApp()
 
@@ -124,6 +131,52 @@ describe('GET /api/admin/sessions response shape', () => {
     const emails = body.sessions.map((s: { userEmail: string }) => s.userEmail)
     expect(emails).toContain('admin-admin-test@example.com')
     expect(emails).toContain('sa-admin-test@example.com')
+  })
+
+  test('isExpired flags expired vs active sessions correctly', async () => {
+    const u = await seedTestUser('sess-expiry@example.com', 'x', 'SE', 'USER')
+    await createTestSession(u.id, new Date(Date.now() + 60 * 60 * 1000)) // active (+1h)
+    await createTestSession(u.id, new Date(Date.now() - 60 * 60 * 1000)) // expired (-1h)
+
+    const res = await get('/api/admin/sessions', superToken)
+    const body = await res.json()
+    const mine = body.sessions.filter((s: { userEmail: string }) => s.userEmail === 'sess-expiry@example.com')
+    expect(mine.length).toBe(2)
+    expect(mine.filter((s: { isExpired: boolean }) => s.isExpired).length).toBe(1)
+    expect(mine.filter((s: { isExpired: boolean }) => !s.isExpired).length).toBe(1)
+  })
+
+  test('an online user’s EXPIRED session is not reported as online (bug fix)', async () => {
+    const u = await seedTestUser('sess-online@example.com', 'x', 'SO', 'USER')
+    await createTestSession(u.id, new Date(Date.now() + 60 * 60 * 1000)) // active
+    await createTestSession(u.id, new Date(Date.now() - 60 * 60 * 1000)) // expired
+
+    // Mark the user online via presence (per-user, like a real WS connection).
+    const ws = fakeWs(u.id)
+    addConnection(ws, u.id, false)
+    try {
+      const res = await get('/api/admin/sessions', superToken)
+      const body = await res.json()
+      const mine = body.sessions.filter((s: { userEmail: string }) => s.userEmail === 'sess-online@example.com')
+      const activeRow = mine.find((s: { isExpired: boolean }) => !s.isExpired)
+      const expiredRow = mine.find((s: { isExpired: boolean }) => s.isExpired)
+
+      // Active session inherits the user's online presence…
+      expect(activeRow.isOnline).toBe(true)
+      // …but the expired session must NOT — even though the same user is online.
+      expect(expiredRow.isOnline).toBe(false)
+    } finally {
+      removeConnection(ws)
+    }
+  })
+
+  test('summary counts are internally consistent with the rows', async () => {
+    const res = await get('/api/admin/sessions', superToken)
+    const body = await res.json()
+    const rows = body.sessions as { isExpired: boolean }[]
+    expect(body.summary.totalSessions).toBe(rows.length)
+    expect(body.summary.activeSessions).toBe(rows.filter((r) => !r.isExpired).length)
+    expect(body.summary.expiredSessions).toBe(rows.filter((r) => r.isExpired).length)
   })
 })
 

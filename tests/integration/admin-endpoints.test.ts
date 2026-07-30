@@ -30,6 +30,19 @@ function get(pathname: string, token?: string) {
   )
 }
 
+function put(pathname: string, body: unknown, token?: string) {
+  return app.handle(
+    new Request(`http://localhost${pathname}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { cookie: `session=${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
 const ADMIN_READ_ENDPOINTS = [
   '/api/admin/users',
   '/api/admin/logs/audit',
@@ -123,5 +136,74 @@ describe('GET /api/admin/users response shape', () => {
     const roles = new Set(body.users.map((u: { role: string }) => u.role))
     expect(roles.has('ADMIN')).toBe(true)
     expect(roles.has('SUPER_ADMIN')).toBe(true)
+  })
+})
+
+describe('PUT /api/admin/users/:id/role', () => {
+  test('403 for ADMIN (SUPER_ADMIN only)', async () => {
+    const target = await seedTestUser('role-target-1@example.com', 'x', 'RT1', 'USER')
+    const res = await put(`/api/admin/users/${target.id}/role`, { role: 'ADMIN' }, adminToken)
+    expect(res.status).toBe(403)
+  })
+
+  test('SUPER_ADMIN can set role to QC (the doc-corrected third value)', async () => {
+    const target = await seedTestUser('role-target-qc@example.com', 'x', 'RTQ', 'USER')
+    const res = await put(`/api/admin/users/${target.id}/role`, { role: 'QC' }, superToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.role).toBe('QC')
+    const persisted = await prisma.user.findUnique({ where: { id: target.id }, select: { role: true } })
+    expect(persisted?.role).toBe('QC')
+  })
+
+  test('400 on an invalid role value', async () => {
+    const target = await seedTestUser('role-target-bad@example.com', 'x', 'RTB', 'USER')
+    const res = await put(`/api/admin/users/${target.id}/role`, { role: 'WIZARD' }, superToken)
+    expect(res.status).toBe(400)
+    // role must be untouched
+    const persisted = await prisma.user.findUnique({ where: { id: target.id }, select: { role: true } })
+    expect(persisted?.role).toBe('USER')
+  })
+
+  test('400 when changing own role', async () => {
+    const sa = await prisma.user.findUnique({ where: { email: 'sa-admin-test@example.com' }, select: { id: true } })
+    const res = await put(`/api/admin/users/${sa?.id}/role`, { role: 'ADMIN' }, superToken)
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('PUT /api/admin/users/:id/block', () => {
+  test('SUPER_ADMIN blocks a user and their sessions are purged', async () => {
+    const target = await seedTestUser('block-target@example.com', 'x', 'BT', 'USER')
+    await createTestSession(target.id)
+    expect(await prisma.session.count({ where: { userId: target.id } })).toBeGreaterThan(0)
+
+    const res = await put(`/api/admin/users/${target.id}/block`, { blocked: true }, superToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.blocked).toBe(true)
+    // blocking severs every active session (the reason the UI now confirms first)
+    expect(await prisma.session.count({ where: { userId: target.id } })).toBe(0)
+  })
+
+  test('SUPER_ADMIN unblocks a user', async () => {
+    const target = await seedTestUser('unblock-target@example.com', 'x', 'UBT', 'USER')
+    await prisma.user.update({ where: { id: target.id }, data: { blocked: true } })
+    const res = await put(`/api/admin/users/${target.id}/block`, { blocked: false }, superToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.blocked).toBe(false)
+  })
+
+  test('403 for ADMIN (SUPER_ADMIN only)', async () => {
+    const target = await seedTestUser('block-forbidden@example.com', 'x', 'BF', 'USER')
+    const res = await put(`/api/admin/users/${target.id}/block`, { blocked: true }, adminToken)
+    expect(res.status).toBe(403)
+  })
+
+  test('400 when blocking self', async () => {
+    const sa = await prisma.user.findUnique({ where: { email: 'sa-admin-test@example.com' }, select: { id: true } })
+    const res = await put(`/api/admin/users/${sa?.id}/block`, { blocked: true }, superToken)
+    expect(res.status).toBe(400)
   })
 })

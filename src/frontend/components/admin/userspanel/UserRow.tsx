@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Group, Menu, Table, Text } from '@mantine/core'
+import { modals } from '@mantine/modals'
 import { TbBug, TbCircleFilled, TbDots, TbLock, TbLockOpen, TbShieldCheck, TbShieldOff } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import type { Role } from '@/frontend/hooks/useAuth'
@@ -25,6 +26,23 @@ export function UserRow({
   const badge = roleBadge[user.role] ?? roleBadge.USER
   const isTargetSuper = user.role === 'SUPER_ADMIN'
   const canActOnTarget = !isSelf && !isTargetSuper && currentRole === 'SUPER_ADMIN'
+
+  // Blocking is destructive — it invalidates every active session for the user.
+  // Gate it behind a confirm modal; unblocking is safe so it stays instant.
+  const confirmBlock = () =>
+    modals.openConfirmModal({
+      title: 'Blokir user',
+      centered: true,
+      children: (
+        <Text size="sm">
+          Blokir <b>{user.name}</b> ({user.email})? Semua sesi aktif user ini akan langsung diputus dan mereka tidak
+          bisa login sampai dibuka blokirnya.
+        </Text>
+      ),
+      labels: { confirm: 'Blokir', cancel: 'Batal' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => onToggleBlock(user.id, true),
+    })
 
   return (
     <Table.Tr opacity={user.blocked ? 0.5 : 1}>
@@ -118,7 +136,7 @@ export function UserRow({
                   Unblock User
                 </Menu.Item>
               ) : (
-                <Menu.Item leftSection={<TbLock size={14} />} color="red" onClick={() => onToggleBlock(user.id, true)}>
+                <Menu.Item leftSection={<TbLock size={14} />} color="red" onClick={confirmBlock}>
                   Block User
                 </Menu.Item>
               )}

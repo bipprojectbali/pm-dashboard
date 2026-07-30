@@ -48,7 +48,7 @@ Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canW
 - `GET /api/admin/test-coverage` — source files + test files mapping, coverage status (covered/partial/uncovered)
 - `GET /api/admin/dependencies` — NPM packages from package.json with version, type (runtime/dev), category, importing files
 - `GET /api/admin/migrations` — Prisma migration timeline with parsed SQL changes and date info
-- `GET /api/admin/sessions` — all active sessions with user info, online status, expiry, role breakdown
+- `GET /api/admin/sessions` — all sessions with user info, online status, expiry, role breakdown. Per-session `isOnline` = user connected via WS presence **and** the session is still valid (not expired) — presence is tracked per-user, so an expired session of an otherwise-online user is reported `isOnline: false` (keeps it out of the Sessions "Online" filter)
 - `GET /api/admin/agents` — list pm-watch agents with claimedBy user + event counts
 - `POST /api/admin/agents/:id/approve` — approve PENDING agent and assign to a user
 - `POST /api/admin/agents/:id/revoke` — revoke APPROVED agent (events preserved, reversible)

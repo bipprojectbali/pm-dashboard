@@ -19,9 +19,17 @@ export function useOverviewData() {
     queryFn: () => fetch('/api/projects', { credentials: 'include' }).then((r) => r.json()),
   })
 
-  const openTasksQ = useQuery<{ tasks: Array<{ id: string; kind: string }> }>({
-    queryKey: ['tasks', 'status=OPEN'],
-    queryFn: () => fetch('/api/tasks?status=OPEN', { credentials: 'include' }).then((r) => r.json()),
+  // "Task Terbuka" / "Bug Terbuka" cover every non-CLOSED status, not just OPEN.
+  // Read the server `total` (unaffected by the 200-row page cap) via openOnly so
+  // the counts stay accurate — the old ?status=OPEN under-counted IN_PROGRESS/
+  // READY_FOR_QC/REOPENED tasks.
+  const openTasksQ = useQuery<{ total: number }>({
+    queryKey: ['tasks', 'openOnly', 'count'],
+    queryFn: () => fetch('/api/tasks?openOnly=1&limit=1', { credentials: 'include' }).then((r) => r.json()),
+  })
+  const openBugsQ = useQuery<{ total: number }>({
+    queryKey: ['tasks', 'openOnly', 'bug', 'count'],
+    queryFn: () => fetch('/api/tasks?openOnly=1&kind=BUG&limit=1', { credentials: 'include' }).then((r) => r.json()),
   })
 
   const myTasksQ = useQuery<{ tasks: OverviewTask[] }>({
@@ -43,8 +51,8 @@ export function useOverviewData() {
 
   const projects = projectsQ.data?.projects ?? []
   const activeProjects = projects.filter((p) => !p.archivedAt)
-  const openTasks = openTasksQ.data?.tasks ?? []
-  const openBugs = openTasks.filter((t) => t.kind === 'BUG').length
+  const openTasksCount = openTasksQ.data?.total ?? 0
+  const openBugs = openBugsQ.data?.total ?? 0
   const myTasks = myTasksQ.data?.tasks ?? []
   const activeMine = myTasks.filter((t) => t.status !== 'CLOSED')
 
@@ -90,7 +98,7 @@ export function useOverviewData() {
     notifsQ,
     upcomingEventsQ,
     activeProjects,
-    openTasks,
+    openTasksCount,
     openBugs,
     myTasks,
     activeMine,

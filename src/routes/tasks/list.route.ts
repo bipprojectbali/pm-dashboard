@@ -23,11 +23,7 @@ export function taskListRoutes() {
       ? {}
       : {
           project: {
-            OR: [
-              { id: { in: myProjectIds } },
-              { visibility: 'INTERNAL' as const },
-              { visibility: 'PUBLIC' as const },
-            ],
+            OR: [{ id: { in: myProjectIds } }, { visibility: 'INTERNAL' as const }, { visibility: 'PUBLIC' as const }],
           },
         }
     const where: Record<string, unknown> = { deletedAt: null, ...visibilityFilter }
@@ -83,6 +79,9 @@ export function taskListRoutes() {
       where.dueAt = { lt: new Date() }
       if (!where.status) where.status = { notIn: ['CLOSED'] }
     }
+    // openOnly = every non-CLOSED status (OPEN/IN_PROGRESS/READY_FOR_QC/REOPENED).
+    // An explicit ?status= still wins (it was set above); this only fills the gap.
+    if (query.openOnly === '1' && !where.status) where.status = { notIn: ['CLOSED'] }
     if (query.unassigned === '1') where.assigneeId = null
     if (query.noDue === '1') where.dueAt = null
     if (query.blocked === '1') where.blockedBy = { some: {} }

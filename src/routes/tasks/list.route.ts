@@ -7,6 +7,7 @@ import {
   isSystemAdmin,
   requireAuth,
 } from '../../lib/route-helpers'
+import { buildDueAtCondition, buildTaskListOrderBy, parseTaskSort } from './list.helpers'
 
 export function taskListRoutes() {
   return new Elysia().get('/api/tasks', async ({ request, query, set }) => {
@@ -75,18 +76,32 @@ export function taskListRoutes() {
         { description: { contains: s, mode: 'insensitive' } },
       ]
     }
-    if (query.overdueOnly === '1') {
-      where.dueAt = { lt: new Date() }
-      if (!where.status) where.status = { notIn: ['CLOSED'] }
-    }
+    // Overdue still implies "not closed" (a CLOSED task past its due date isn't
+    // actionable). An explicit ?status= set above still wins.
+    if (query.overdueOnly === '1' && !where.status) where.status = { notIn: ['CLOSED'] }
     // openOnly = every non-CLOSED status (OPEN/IN_PROGRESS/READY_FOR_QC/REOPENED).
     // An explicit ?status= still wins (it was set above); this only fills the gap.
     if (query.openOnly === '1' && !where.status) where.status = { notIn: ['CLOSED'] }
     if (query.unassigned === '1') where.assigneeId = null
-    if (query.noDue === '1') where.dueAt = null
     if (query.blocked === '1') where.blockedBy = { some: {} }
     if (query.phaseId) {
       where.phaseId = query.phaseId === 'none' ? null : String(query.phaseId)
+    }
+    // Merge the due-date filters (overdue / range / no-due) into one condition so
+    // they compose (e.g. overdue AND within a range) instead of overwriting.
+    const due = buildDueAtCondition({
+      overdueOnly: query.overdueOnly === '1',
+      noDue: query.noDue === '1',
+      dueFrom: query.dueFrom ? String(query.dueFrom) : undefined,
+      dueTo: query.dueTo ? String(query.dueTo) : undefined,
+    })
+    if (due.apply) where.dueAt = due.value
+    // Sort: validated field + direction, applied server-side so ordering holds
+    // across paginated pages (not just the current page's rows).
+    const sort = parseTaskSort(query.sort, query.dir)
+    if ('error' in sort) {
+      set.status = 400
+      return { error: sort.error }
     }
     const limit = Math.min(Number(query.limit) || 50, 200)
     const offset = Math.max(0, Number(query.offset) || 0)
@@ -104,12 +119,11 @@ export function taskListRoutes() {
       prisma.task.findMany({
         where,
         include: taskInclude,
-        // status:asc follows the TaskStatus enum definition order (OPEN … CLOSED
-        // last), so when a caller truncates via `limit` the still-open tasks come
-        // first and CLOSED rows fall off the tail. The Admin Task Triage table
-        // relies on this to stay useful under the 200-row cap — keep CLOSED last
-        // in the enum (tests/integration/tasks-list-order.test.ts locks it).
-        orderBy: [{ status: 'asc' }, { kanbanOrder: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
+        // No explicit ?sort= → default status-asc order (OPEN … CLOSED last) so a
+        // truncating `limit` drops CLOSED before open rows; the Admin Task Triage
+        // table relies on this (tests/integration/tasks-list-order.test.ts locks
+        // it). An explicit ?sort= overrides with a stable id tiebreak.
+        orderBy: buildTaskListOrderBy(sort.field, sort.dir),
         take: limit,
         skip: offset,
       }),

@@ -1,7 +1,8 @@
 import { prisma } from '../lib/db'
+import { canCreatePhase, canModifyPhase } from '../lib/phase-access'
 import { isPhaseNameTaken, phaseNameTakenError } from '../lib/phase-name'
 import { emitInvalidate } from '../lib/presence'
-import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMember } from '../lib/route-helpers'
+import { canReadProject, getIp, requireAuth, requireProjectMember } from '../lib/route-helpers'
 
 export const PHASE_STATUS_VALUES = ['PLANNING', 'ACTIVE', 'COMPLETED'] as const
 
@@ -38,7 +39,11 @@ export async function listProjectPhasesHandler({ request, params, set }: CtxWith
   }
   const phases = await prisma.projectPhase.findMany({
     where: { projectId: params.id },
-    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
+    include: {
+      _count: { select: { tasks: { where: { deletedAt: null } } } },
+      tags: { include: { tag: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
   })
   return { phases }
@@ -48,9 +53,9 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
   const auth = await requireAuth(request)
   if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
   const membership = await requireProjectMember(params.id, auth.userId)
-  if (!canManageProject(auth, membership)) {
+  if (!canCreatePhase(auth, membership)) {
     set.status = 403
-    return { error: 'Only OWNER, PM, or system admin can create phases' }
+    return { error: 'Only project OWNER, PM, or SUPER_ADMIN can create phases' }
   }
   const body = (await request.json()) as {
     title?: string; description?: string | null; status?: string
@@ -73,6 +78,7 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
   const phase = await prisma.projectPhase.create({
     data: {
       projectId: params.id,
+      createdById: auth.userId,
       title: body.title.trim(),
       description: body.description?.trim() || null,
       status: (body.status as 'PLANNING' | 'ACTIVE' | 'COMPLETED' | undefined) ?? 'PLANNING',
@@ -83,7 +89,11 @@ export async function createPhaseHandler({ request, params, set }: CtxWithId) {
         ? { createMany: { data: body.tagIds.map((tagId) => ({ tagId })), skipDuplicates: true } }
         : undefined,
     },
-    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
+    include: {
+      _count: { select: { tasks: { where: { deletedAt: null } } } },
+      tags: { include: { tag: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
   })
   audit(auth.userId, 'PHASE_CREATED', `${params.id} ${phase.title}`, getIp(request))
   emitInvalidate('phases', { projectId: params.id })
@@ -95,13 +105,13 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
   if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
   const existing = await prisma.projectPhase.findUnique({
     where: { id: params.id },
-    select: { projectId: true, title: true },
+    select: { projectId: true, title: true, createdById: true },
   })
   if (!existing) { set.status = 404; return { error: 'Phase not found' } }
   const membership = await requireProjectMember(existing.projectId, auth.userId)
-  if (!canManageProject(auth, membership)) {
+  if (!canModifyPhase(auth, membership, existing)) {
     set.status = 403
-    return { error: 'Only OWNER, PM, or system admin can modify phases' }
+    return { error: "Only the phase's PM creator, project OWNER, or SUPER_ADMIN can modify this phase" }
   }
   const body = (await request.json()) as {
     title?: string; description?: string | null; summary?: string | null
@@ -139,7 +149,11 @@ export async function updatePhaseHandler({ request, params, set }: CtxWithId) {
   const phase = await prisma.projectPhase.update({
     where: { id: params.id },
     data,
-    include: { _count: { select: { tasks: { where: { deletedAt: null } } } }, tags: { include: { tag: true } } },
+    include: {
+      _count: { select: { tasks: { where: { deletedAt: null } } } },
+      tags: { include: { tag: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
   })
   audit(auth.userId, 'PHASE_UPDATED', `${existing.projectId}/${params.id} ${Object.keys(data).join(',')}`, getIp(request))
   emitInvalidate('phases', { projectId: existing.projectId })
@@ -151,13 +165,13 @@ export async function deletePhaseHandler({ request, params, set }: CtxWithId) {
   if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
   const existing = await prisma.projectPhase.findUnique({
     where: { id: params.id },
-    select: { projectId: true, title: true },
+    select: { projectId: true, title: true, createdById: true },
   })
   if (!existing) { set.status = 404; return { error: 'Phase not found' } }
   const membership = await requireProjectMember(existing.projectId, auth.userId)
-  if (!canManageProject(auth, membership)) {
+  if (!canModifyPhase(auth, membership, existing)) {
     set.status = 403
-    return { error: 'Only OWNER, PM, or system admin can delete phases' }
+    return { error: "Only the phase's PM creator, project OWNER, or SUPER_ADMIN can delete this phase" }
   }
   await prisma.projectPhase.delete({ where: { id: params.id } })
   audit(auth.userId, 'PHASE_DELETED', `${existing.projectId}/${params.id} ${existing.title}`, getIp(request))

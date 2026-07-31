@@ -61,7 +61,7 @@ export function TriageStatCards({ stats }: { stats: TriageStats }) {
         value={stats.overdue}
         icon={TbAlertTriangle}
         color="red"
-        tip="Task open dengan dueAt sudah lewat hari ini. Perlu prioritas segera atau di-extend deadline-nya."
+        tip="Task open yang sudah melewati waktu jatuh tempo (dueAt < sekarang). Perlu prioritas segera atau di-extend deadline-nya."
       />
       <StatCard
         label="Unassigned"

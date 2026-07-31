@@ -2,6 +2,27 @@
 // the route handler within the 150-line FILE-HEALTH limit and to make the
 // ordering + due-date logic unit-checkable.
 
+import { prisma } from '../../lib/db'
+
+// Prisma `where` fragment that scopes tasks to what a user may see: system
+// admins see everything; everyone else sees tasks in a project they're a member
+// of OR whose project visibility is INTERNAL/PUBLIC. Shared by GET /api/tasks
+// and the kind-board stats endpoint so the two can never drift.
+export async function taskVisibilityWhere(auth: {
+  userId: string
+  isAdmin: boolean
+}): Promise<Record<string, unknown>> {
+  if (auth.isAdmin) return {}
+  const myProjectIds = (
+    await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })
+  ).map((m) => m.projectId)
+  return {
+    project: {
+      OR: [{ id: { in: myProjectIds } }, { visibility: 'INTERNAL' as const }, { visibility: 'PUBLIC' as const }],
+    },
+  }
+}
+
 // Sortable columns exposed to the client. `dueAt` and `estimateHours` are
 // nullable, so they sort NULLS LAST regardless of direction (an empty due date
 // or estimate should never outrank a real value).

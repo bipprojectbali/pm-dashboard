@@ -6,14 +6,7 @@ import { TbPlus, TbRefresh } from 'react-icons/tb'
 import { TriageFilters } from '@/frontend/components/admin/tasktriagepanel/TriageFilters'
 import { TriageStatCards } from '@/frontend/components/admin/tasktriagepanel/TriageStatCards'
 import { TriageTable } from '@/frontend/components/admin/tasktriagepanel/TriageTable'
-import {
-  isOpen,
-  isOverdue,
-  isStale,
-  PAGE_SIZE,
-  type QuickFilter,
-  type TriageTask,
-} from '@/frontend/components/admin/tasktriagepanel/types'
+import { PAGE_SIZE, type QuickFilter, type TriageTask } from '@/frontend/components/admin/tasktriagepanel/types'
 import { CreateTaskModal } from '@/frontend/components/CreateTaskModal'
 import type { ProjectOption } from '@/frontend/components/createtaskmodal/types'
 import { InfoTip } from '@/frontend/components/shared/InfoTip'
@@ -48,12 +41,44 @@ export function KindBoardPanel({
   // Bumped on successful create so the modal clears its form only then.
   const [createResetSignal, setCreateResetSignal] = useState(0)
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['pm', 'kind-board', kind],
+  // Server-side query string for the table page. Every filter is sent to the
+  // backend so results (and the row count) stay correct across pages — the old
+  // client-side filtering over a 200-cap page under-counted once a board grew.
+  const STALE_DAYS = 7
+  const tableParams = useMemo(() => {
+    const p = new URLSearchParams({ kind, limit: String(PAGE_SIZE), offset: String((page - 1) * PAGE_SIZE) })
+    if (projectFilter) p.set('projectId', projectFilter)
+    if (statusFilter) p.set('status', statusFilter)
+    if (priorityFilter) p.set('priority', priorityFilter)
+    if (assigneeFilter === '__none__') p.set('unassigned', '1')
+    else if (assigneeFilter) p.set('assigneeId', assigneeFilter)
+    if (search.trim()) p.set('search', search.trim())
+    if (quick === 'overdue') p.set('overdueOnly', '1')
+    else if (quick === 'unassigned') p.set('unassigned', '1')
+    else if (quick === 'blocked') p.set('blocked', '1')
+    else if (quick === 'stale') p.set('staleDays', String(STALE_DAYS))
+    return p.toString()
+  }, [kind, page, projectFilter, statusFilter, priorityFilter, assigneeFilter, search, quick])
+
+  const tableQ = useQuery({
+    queryKey: ['pm', 'kind-board', kind, tableParams],
     queryFn: () =>
-      fetch(`/api/tasks?kind=${kind}&limit=200`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
+      fetch(`/api/tasks?${tableParams}`, { credentials: 'include' }).then((r) => r.json()) as Promise<{
         tasks: TriageTask[]
+        total: number
       }>,
+    refetchInterval: 30_000,
+  })
+
+  // Accurate, un-capped stat-card counts from the DB (visibility-scoped to this
+  // user). Kept separate from the table page so the cards never depend on which
+  // page/filter is showing — same split as the admin Task Triage panel.
+  const statsQ = useQuery({
+    queryKey: ['pm', 'kind-board', kind, 'stats'],
+    queryFn: () =>
+      fetch(`/api/tasks/kind-board-stats?kind=${kind}&staleDays=${STALE_DAYS}`, { credentials: 'include' }).then((r) =>
+        r.json(),
+      ) as Promise<{ total: number; overdue: number; unassigned: number; blocked: number; stale: number }>,
     refetchInterval: 30_000,
   })
 
@@ -83,15 +108,23 @@ export function KindBoardPanel({
     },
   })
 
-  const tasks = data?.tasks ?? []
-  const openTasks = useMemo(() => tasks.filter(isOpen), [tasks])
+  const tasks = tableQ.data?.tasks ?? []
+  const total = tableQ.data?.total ?? 0
+  const isLoading = tableQ.isLoading
+  const isFetching = tableQ.isFetching || statsQ.isFetching
+  const refetch = () => {
+    void tableQ.refetch()
+    void statsQ.refetch()
+  }
+  const stats = statsQ.data ?? { total: 0, overdue: 0, unassigned: 0, blocked: 0, stale: 0 }
+  const allProjects = projectsQ.data?.projects ?? []
 
-  const projectOptions = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const t of tasks) map.set(t.project.id, t.project.name)
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-  }, [tasks])
-
+  // Project filter options: every project the user can see (not just those on
+  // the current page), so the dropdown is complete regardless of pagination.
+  const projectOptions = useMemo(() => allProjects.map((p) => ({ value: p.id, label: p.name })), [allProjects])
+  // Assignee options are a convenience derived from the current page; the actual
+  // filtering is server-side (assigneeId / unassigned), so a name missing from
+  // this page's rows still filters correctly once selected from another page.
   const assigneeOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const t of tasks) {
@@ -100,40 +133,8 @@ export function KindBoardPanel({
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
   }, [tasks])
 
-  const stats = useMemo(
-    () => ({
-      total: openTasks.length,
-      overdue: openTasks.filter(isOverdue).length,
-      unassigned: openTasks.filter((t) => !t.assignee).length,
-      stale: openTasks.filter(isStale).length,
-      blocked: openTasks.filter((t) => t._count.blockedBy > 0).length,
-    }),
-    [openTasks],
-  )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return tasks.filter((t) => {
-      if (quick === 'overdue' && !isOverdue(t)) return false
-      if (quick === 'unassigned' && (t.assignee || !isOpen(t))) return false
-      if (quick === 'blocked' && (t._count.blockedBy === 0 || !isOpen(t))) return false
-      if (quick === 'stale' && !isStale(t)) return false
-      if (projectFilter && t.project.id !== projectFilter) return false
-      if (statusFilter && t.status !== statusFilter) return false
-      if (priorityFilter && t.priority !== priorityFilter) return false
-      if (assigneeFilter === '__none__' && t.assignee) return false
-      if (assigneeFilter && assigneeFilter !== '__none__' && t.assignee?.id !== assigneeFilter) return false
-      if (q) {
-        const hay = `${t.title} ${t.project.name} ${t.assignee?.name ?? ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [tasks, quick, projectFilter, statusFilter, priorityFilter, assigneeFilter, search])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedFiltered = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when filters change
   useEffect(() => {
@@ -156,7 +157,7 @@ export function KindBoardPanel({
   const hasFilters =
     !!search || !!projectFilter || !!statusFilter || !!priorityFilter || !!assigneeFilter || quick !== 'all'
 
-  const writableProjects = (projectsQ.data?.projects ?? []).filter((p) =>
+  const writableProjects = allProjects.filter((p) =>
     typeof p.canWrite === 'boolean' ? p.canWrite : p.myRole !== null && p.myRole !== 'VIEWER',
   )
 
@@ -205,15 +206,15 @@ export function KindBoardPanel({
         assigneeOptions={assigneeOptions}
         quick={quick}
         onQuickChange={setQuick}
-        filteredCount={filtered.length}
-        totalCount={tasks.length}
+        filteredCount={total}
+        totalCount={stats.total}
         hasFilters={hasFilters}
         onClearFilters={clearFilters}
       />
       <TriageTable
-        pagedTasks={pagedFiltered}
+        pagedTasks={tasks}
         isLoading={isLoading}
-        filteredCount={filtered.length}
+        filteredCount={total}
         page={safePage}
         onPageChange={setPage}
         onTaskClick={openTask}
@@ -225,6 +226,7 @@ export function KindBoardPanel({
         projects={writableProjects}
         defaultProjectId={writableProjects[0]?.id ?? null}
         defaultKind={kind}
+        heading={kind === 'TICKET' ? 'Create Ticket' : 'Create Idea'}
         onSubmit={(body) => create.mutate(body)}
         onBulkSubmit={() => {}}
         loading={create.isPending}

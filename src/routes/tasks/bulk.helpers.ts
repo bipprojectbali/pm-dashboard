@@ -14,10 +14,14 @@ export type RawTaskInput = {
   phaseName?: string | null
 }
 
+// All five task kinds are valid for bulk import, matching the single-create
+// form (SingleTaskForm) which already offers TASK/BUG/QC/TICKET/IDEA.
+export type BulkTaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
+
 export type NormalizedRow = {
   title: string
   description: string
-  kind: 'TASK' | 'BUG' | 'QC'
+  kind: BulkTaskKind
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   route: string | null
   assigneeEmail: string | null
@@ -38,7 +42,7 @@ export type NormalizeResult = {
   phaseNameSet: Set<string>
 }
 
-const KINDS = new Set(['TASK', 'BUG', 'QC'])
+const KINDS = new Set(['TASK', 'BUG', 'QC', 'TICKET', 'IDEA'])
 const PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
 export function normalizeBulkRows(tasks: RawTaskInput[]): NormalizeResult {
@@ -56,7 +60,7 @@ export function normalizeBulkRows(tasks: RawTaskInput[]): NormalizeResult {
     else if (title.length > 500) errors.push({ index: i, field: 'title', message: 'title > 500 char' })
     if (!description) errors.push({ index: i, field: 'description', message: 'description wajib diisi' })
     const kind = (r.kind ?? 'TASK').toUpperCase()
-    if (!KINDS.has(kind)) errors.push({ index: i, field: 'kind', message: 'kind harus TASK|BUG|QC' })
+    if (!KINDS.has(kind)) errors.push({ index: i, field: 'kind', message: 'kind harus TASK|BUG|QC|TICKET|IDEA' })
     const priority = (r.priority ?? 'MEDIUM').toUpperCase()
     if (!PRIORITIES.has(priority))
       errors.push({ index: i, field: 'priority', message: 'priority harus LOW|MEDIUM|HIGH|CRITICAL' })
@@ -72,8 +76,7 @@ export function normalizeBulkRows(tasks: RawTaskInput[]): NormalizeResult {
       if (Number.isNaN(d.getTime())) errors.push({ index: i, field: 'dueAt', message: 'dueAt invalid date' })
       else dueAt = d
     }
-    if (startsAt && dueAt && dueAt < startsAt)
-      errors.push({ index: i, field: 'dueAt', message: 'dueAt < startsAt' })
+    if (startsAt && dueAt && dueAt < startsAt) errors.push({ index: i, field: 'dueAt', message: 'dueAt < startsAt' })
     let estimateHours: number | null = null
     if (r.estimateHours !== null && r.estimateHours !== undefined && r.estimateHours !== ('' as unknown)) {
       const n = typeof r.estimateHours === 'number' ? r.estimateHours : Number(r.estimateHours)
@@ -94,7 +97,7 @@ export function normalizeBulkRows(tasks: RawTaskInput[]): NormalizeResult {
     normalized.push({
       title,
       description,
-      kind: kind as 'TASK' | 'BUG' | 'QC',
+      kind: kind as BulkTaskKind,
       priority: priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
       route: r.route?.trim() || null,
       assigneeEmail,

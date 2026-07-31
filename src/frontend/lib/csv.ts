@@ -140,7 +140,7 @@ export function parseTaskCsv(text: string): ParseResult {
     if (!description) errors.push({ index: rowIndex, field: 'description', message: 'description wajib' })
 
     const kind = kindRaw.toUpperCase()
-    if (!KINDS.has(kind)) errors.push({ index: rowIndex, field: 'kind', message: `kind harus TASK|BUG|QC` })
+    if (!KINDS.has(kind)) errors.push({ index: rowIndex, field: 'kind', message: `kind harus TASK|BUG|QC|TICKET|IDEA` })
     const priority = priorityRaw.toUpperCase()
     if (!PRIORITIES.has(priority))
       errors.push({ index: rowIndex, field: 'priority', message: 'priority harus LOW|MEDIUM|HIGH|CRITICAL' })
@@ -184,7 +184,18 @@ export function parseTaskCsv(text: string): ParseResult {
 
     const phaseTitle = phaseTitleRaw || null
 
-    rows.push({ title, description, kind, priority, startsAt, dueAt, estimateHours, assigneeEmail, tagNames, phaseTitle })
+    rows.push({
+      title,
+      description,
+      kind,
+      priority,
+      startsAt,
+      dueAt,
+      estimateHours,
+      assigneeEmail,
+      tagNames,
+      phaseTitle,
+    })
   }
   return { rows, errors, rawRows: raw }
 }

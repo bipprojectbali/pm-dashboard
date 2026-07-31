@@ -249,6 +249,7 @@ export function TasksTableView({
                           size="sm"
                           variant="subtle"
                           color="red"
+                          aria-label={`Hapus task ${t.title}`}
                           onClick={() => onDeleteOne(t)}
                           loading={deleteOnePending && deleteOneId === t.id}
                         >

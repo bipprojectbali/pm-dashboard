@@ -59,7 +59,11 @@ export function TasksPanelHeader({
         </div>
         <Group gap="xs">
           <Tooltip label={showCharts ? 'Hide dashboard' : 'Show dashboard'}>
-            <ActionIcon variant="light" onClick={() => setShowCharts((v) => !v)}>
+            <ActionIcon
+              variant="light"
+              aria-label={showCharts ? 'Hide dashboard' : 'Show dashboard'}
+              onClick={() => setShowCharts((v) => !v)}
+            >
               <TbChartBar size={16} />
             </ActionIcon>
           </Tooltip>
@@ -67,13 +71,19 @@ export function TasksPanelHeader({
             <ActionIcon
               variant={trashView ? 'filled' : 'light'}
               color={trashView ? 'red' : 'gray'}
+              aria-label={trashView ? 'Kembali ke task' : 'Lihat Trash'}
               onClick={() => setTrashView((v) => !v)}
             >
               <TbTrash size={16} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Refresh">
-            <ActionIcon variant="light" onClick={() => tasksQ.refetch()} loading={tasksQ.isFetching}>
+            <ActionIcon
+              variant="light"
+              aria-label="Refresh task list"
+              onClick={() => tasksQ.refetch()}
+              loading={tasksQ.isFetching}
+            >
               <TbRefresh size={16} />
             </ActionIcon>
           </Tooltip>

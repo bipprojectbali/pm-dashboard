@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../hooks/useAuth'
 import { downloadTasksCsv } from '../../lib/csv'
 import { DeleteReasonModal } from './DeleteReasonModal'
-import { filterAndSortTasks } from './helpers'
 import type { TaskListItem } from './types'
 import { useTaskFilters } from './useTaskFilters'
 import { buildExportRows, useTaskMutations } from './useTaskMutations'
@@ -87,6 +86,9 @@ export function useTasksPanelState({
     search: filters.search,
     priorityFilter: filters.priorityFilter,
     quickFilter: filters.quickFilter,
+    sortBy: filters.sortBy,
+    sortDir: filters.sortDir,
+    dueDateRange: filters.dueDateRange,
   })
   const { tasksQ, projects, leadProjectIds } = queries
 
@@ -96,12 +98,12 @@ export function useTasksPanelState({
     [isAdmin, currentUserId, leadProjectIds],
   )
 
+  // Filtering + sorting now happen server-side (see buildTasksQueryString), so
+  // the rows returned for this page are already the correct, ordered slice —
+  // no client-side re-filter/re-sort (which only saw the current page).
   const rawTasks = tasksQ.data?.tasks ?? []
   const total = tasksQ.data?.total ?? 0
-  const tasks = useMemo(
-    () => filterAndSortTasks(rawTasks, filters.quickFilter, filters.dueDateRange, filters.sortBy, filters.sortDir),
-    [rawTasks, filters.quickFilter, filters.dueDateRange, filters.sortBy, filters.sortDir],
-  )
+  const tasks = rawTasks
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safePage = Math.min(filters.page, totalPages)

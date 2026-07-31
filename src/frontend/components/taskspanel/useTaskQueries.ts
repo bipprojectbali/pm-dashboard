@@ -25,6 +25,9 @@ export function useTaskQueries({
   search,
   priorityFilter,
   quickFilter,
+  sortBy,
+  sortDir,
+  dueDateRange,
 }: {
   activeProjectId: string | null
   projectId?: string
@@ -42,6 +45,9 @@ export function useTaskQueries({
   search: string
   priorityFilter: string | null
   quickFilter: 'overdue' | 'openOnly' | 'blocked' | 'nodue' | null
+  sortBy: string | null
+  sortDir: 'asc' | 'desc'
+  dueDateRange: [Date | null, Date | null]
 }) {
   const projectsQ = useQuery({
     queryKey: ['projects'],
@@ -86,6 +92,9 @@ export function useTaskQueries({
     search,
     priorityFilter,
     quickFilter,
+    sortBy,
+    sortDir,
+    dueDateRange,
   })
   const tasksQ = useQuery({
     queryKey: ['tasks', query],

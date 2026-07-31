@@ -160,8 +160,12 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
 
     const openCount = tasks.filter((t) => t.status !== 'CLOSED').length
     const closedCount = tasks.length - openCount
+    // Overdue = past due right now, matching the canonical app-wide definition
+    // (backend ?overdueOnly, computeRiskReport, computeTaskTriage all use `now`,
+    // not midnight) so this card agrees with the Overdue quick filter.
+    const nowMs = Date.now()
     const overdueCount = tasks.filter(
-      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < today.getTime(),
+      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < nowMs,
     ).length
 
     return {

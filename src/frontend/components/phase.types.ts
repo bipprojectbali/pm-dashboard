@@ -15,6 +15,8 @@ export interface ProjectPhase {
   order: number
   startsAt: string | null
   endsAt: string | null
+  createdById: string | null
+  createdBy: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
   _count: { tasks: number }

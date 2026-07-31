@@ -129,6 +129,7 @@ model User {
   triggeredNotifications Notification[] @relation("NotificationActor")
   matchedGithubEvents    ProjectGithubEvent[] @relation("GithubEventMatchedUser")
   createdEvents          Event[]              @relation("EventCreatedBy")
+  createdPhases          ProjectPhase[]       @relation("PhaseCreatedBy")
 
   @@map("user")
 }
@@ -266,15 +267,21 @@ model ProjectPhase {
   order       Int         @default(0)
   startsAt    DateTime?
   endsAt      DateTime?
+  // Who created the phase. Nullable: pre-migration phases have null (no creator
+  // known), and SET NULL on user delete keeps the phase. Used by phase-access
+  // to let a PM update/delete only their own phases.
+  createdById String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("PhaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   tasks       Task[]
   tags        PhaseTag[]
 
   @@index([projectId])
   @@index([projectId, status])
+  @@index([createdById])
   @@map("project_phase")
 }
 

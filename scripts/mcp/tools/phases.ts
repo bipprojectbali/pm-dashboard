@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
 import { isPhaseNameTaken, phaseNameTakenError } from '../../../src/lib/phase-name'
 import { jsonText, type ToolModule } from './shared'
+import { resolveUserEmail } from './tasks.helpers'
 
 const PhaseStatusEnum = z.enum(['PLANNING', 'ACTIVE', 'COMPLETED'])
 
@@ -58,9 +59,14 @@ export const phasesTools: ToolModule = {
           startsAt: z.string().optional(),
           endsAt: z.string().optional(),
           order: z.number().int().optional(),
+          actorEmail: z
+            .string()
+            .email()
+            .optional()
+            .describe('Records this user as the phase creator (createdById); enables PM-creator edit rights'),
         },
       },
-      async ({ projectId, title, description, summary, status, startsAt, endsAt, order }) => {
+      async ({ projectId, title, description, summary, status, startsAt, endsAt, order, actorEmail }) => {
         if (await isPhaseNameTaken(projectId, title)) {
           return jsonText({ ok: false, error: phaseNameTakenError(title) })
         }
@@ -73,9 +79,11 @@ export const phasesTools: ToolModule = {
           })
           nextOrder = (last?.order ?? -1) + 1
         }
+        const actor = actorEmail ? await resolveUserEmail(actorEmail) : null
         const phase = await prisma.projectPhase.create({
           data: {
             projectId,
+            createdById: actor?.id ?? null,
             title,
             description: description ?? null,
             summary: summary ?? null,

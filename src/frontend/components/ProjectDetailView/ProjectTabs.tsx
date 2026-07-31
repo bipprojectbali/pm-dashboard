@@ -19,8 +19,8 @@ import type { MemberRole, ProjectDetail } from '../ProjectsPanel'
 import { RetroTab } from '../RetroTab'
 import { TasksPanel } from '../TasksPanel'
 import { OverviewTab } from './OverviewTab'
-import { computeCanManage } from './types'
 import type { ProjectDetailTab } from './types'
+import { computeCanManage } from './types'
 
 function TabCount({ value }: { value?: number }) {
   if (value === undefined) return null
@@ -53,12 +53,7 @@ export function ProjectTabs({
   const isSecondaryTab = ['extensions', 'retro', 'settings'].includes(tab)
 
   return (
-    <Tabs
-      value={tab}
-      onChange={(v) => v && onTabChange(v as ProjectDetailTab)}
-      keepMounted={false}
-      variant="pills"
-    >
+    <Tabs value={tab} onChange={(v) => v && onTabChange(v as ProjectDetailTab)} keepMounted={false} variant="pills">
       <Group gap={4} mb="md" wrap="nowrap" align="center">
         <Tabs.List style={{ gap: 4, flexWrap: 'nowrap' }}>
           <Tabs.Tab value="overview" leftSection={<TbTarget size={14} />}>
@@ -163,18 +158,13 @@ export function ProjectTabs({
         <TasksPanel projectId={project.id} canWriteOverride={canWrite} />
       </Tabs.Panel>
       <Tabs.Panel value="team" pt="md">
-        <MembersSection
-          projectId={project.id}
-          myRole={myRole}
-          systemRole={systemRole}
-          ownerId={project.ownerId}
-        />
+        <MembersSection projectId={project.id} myRole={myRole} systemRole={systemRole} ownerId={project.ownerId} />
       </Tabs.Panel>
       <Tabs.Panel value="milestones" pt="md">
         <MilestonesSection projectId={project.id} canManage={canManage} />
       </Tabs.Panel>
       <Tabs.Panel value="phases" pt="md">
-        <PhasesSection projectId={project.id} canManage={canManage} />
+        <PhasesSection projectId={project.id} myRole={myRole} systemRole={systemRole} />
       </Tabs.Panel>
       <Tabs.Panel value="extensions" pt="md">
         <ExtensionsSection

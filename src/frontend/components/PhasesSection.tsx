@@ -1,13 +1,28 @@
 import { Button, Group, Pagination, Stack, Text } from '@mantine/core'
 import { TbStack2 } from 'react-icons/tb'
+import { useSession } from '../hooks/useAuth'
 import { PhaseAddForm } from './PhaseAddForm'
+import { canCreatePhaseFE, canModifyPhaseFE } from './ProjectDetailView/types'
 import { PhasesGrid } from './phases/PhasesGrid'
 import { PhasesToolbar } from './phases/PhasesToolbar'
 import { usePhaseModals } from './phases/usePhaseModals'
 import { usePhasesData } from './phases/usePhasesData'
 import { usePhasesFilter } from './phases/usePhasesFilter'
 
-export function PhasesSection({ projectId, canManage }: { projectId: string; canManage: boolean }) {
+export function PhasesSection({
+  projectId,
+  myRole,
+  systemRole,
+}: {
+  projectId: string
+  myRole: string | null
+  systemRole: string | null
+}) {
+  const session = useSession()
+  const currentUserId = session.data?.user?.id ?? null
+  // Create gate (OWNER/PM/SUPER_ADMIN). Modify is decided PER-PHASE below,
+  // because a PM may only edit/delete phases they created themselves.
+  const canCreate = canCreatePhaseFE(myRole, systemRole)
   const { phasesQ, allPhases, availableTags, invalidate, update, remove, isTemplating, handleTemplate } =
     usePhasesData(projectId)
 
@@ -52,7 +67,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
           <Text c="dimmed" size="sm">
             Belum ada fase.
           </Text>
-          {canManage && (
+          {canCreate && (
             <Button
               variant="light"
               size="xs"
@@ -81,7 +96,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
           <PhasesGrid
             view={view}
             phases={paginatedPhases}
-            canManage={canManage}
+            canModify={(phase) => canModifyPhaseFE(phase, myRole, systemRole, currentUserId)}
             stepperActive={stepperActive - pageOffset}
             expandedSummaryIds={expandedSummaryIds}
             onToggleSummary={toggleSummary}
@@ -106,7 +121,7 @@ export function PhasesSection({ projectId, canManage }: { projectId: string; can
         </Group>
       )}
 
-      {canManage && (
+      {canCreate && (
         <PhaseAddForm
           projectId={projectId}
           availableTags={availableTags}

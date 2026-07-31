@@ -76,3 +76,23 @@ export function computeCanManage(myRole: string | null, systemRole: string | nul
   if (isSystemAdmin(systemRole)) return true
   return myRole === 'OWNER' || myRole === 'PM'
 }
+
+// Phase-specific permissions — mirror src/lib/phase-access.ts. Deliberately NOT
+// computeCanManage: phases use SUPER_ADMIN-only bypass (not all system admins)
+// and a creator-aware modify rule. Keep in sync with the backend helper.
+export function canCreatePhaseFE(myRole: string | null, systemRole: string | null | undefined): boolean {
+  if (systemRole === 'SUPER_ADMIN') return true
+  return myRole === 'OWNER' || myRole === 'PM'
+}
+
+export function canModifyPhaseFE(
+  phase: { createdById: string | null },
+  myRole: string | null,
+  systemRole: string | null | undefined,
+  currentUserId: string | null,
+): boolean {
+  if (systemRole === 'SUPER_ADMIN') return true
+  if (myRole === 'OWNER') return true
+  if (myRole === 'PM' && phase.createdById != null && phase.createdById === currentUserId) return true
+  return false
+}

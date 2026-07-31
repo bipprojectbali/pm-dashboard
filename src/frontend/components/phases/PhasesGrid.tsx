@@ -16,7 +16,7 @@ export interface PhaseCallbacks {
 export function PhasesGrid({
   view,
   phases,
-  canManage,
+  canModify,
   callbacks,
   stepperActive,
   expandedSummaryIds,
@@ -25,7 +25,9 @@ export function PhasesGrid({
 }: {
   view: PhaseView
   phases: ProjectPhase[]
-  canManage: boolean
+  // Per-phase modify permission (edit/delete/start/complete). A PM may manage
+  // only phases they created, so this is a function, not a single boolean.
+  canModify: (phase: ProjectPhase) => boolean
   callbacks: PhaseCallbacks
   stepperActive: number
   expandedSummaryIds: Set<string>
@@ -49,7 +51,7 @@ export function PhasesGrid({
           <PhaseCard
             key={phase.id}
             phase={phase}
-            canManage={canManage}
+            canManage={canModify(phase)}
             onView={() => cb.onView(phase)}
             onStart={() => cb.onStart(phase)}
             onComplete={() => cb.onComplete(phase)}
@@ -68,7 +70,7 @@ export function PhasesGrid({
           <PhaseListRow
             key={phase.id}
             phase={phase}
-            canManage={canManage}
+            canManage={canModify(phase)}
             onView={() => cb.onView(phase)}
             onStart={() => cb.onStart(phase)}
             onComplete={() => cb.onComplete(phase)}
@@ -89,7 +91,7 @@ export function PhasesGrid({
           label={
             <PhaseStepLabel
               phase={phase}
-              canManage={canManage}
+              canManage={canModify(phase)}
               onView={() => cb.onView(phase)}
               onStart={() => cb.onStart(phase)}
               onComplete={() => cb.onComplete(phase)}
@@ -100,7 +102,7 @@ export function PhasesGrid({
           description={
             <PhaseStepDescription
               phase={phase}
-              canManage={canManage}
+              canManage={canModify(phase)}
               expanded={expandedSummaryIds.has(phase.id)}
               onToggleSummary={() => onToggleSummary(phase.id)}
               onEditSummary={() => onEditSummary(phase)}

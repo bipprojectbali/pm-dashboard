@@ -7,7 +7,7 @@ import {
   isSystemAdmin,
   requireAuth,
 } from '../../lib/route-helpers'
-import { buildDueAtCondition, buildTaskListOrderBy, parseTaskSort } from './list.helpers'
+import { buildDueAtCondition, buildTaskListOrderBy, parseTaskSort, taskVisibilityWhere } from './list.helpers'
 
 export function taskListRoutes() {
   return new Elysia().get('/api/tasks', async ({ request, query, set }) => {
@@ -17,16 +17,7 @@ export function taskListRoutes() {
       return { error: 'Unauthorized' }
     }
     const isAdmin = isSystemAdmin(auth.role)
-    const myProjectIds = (
-      await prisma.projectMember.findMany({ where: { userId: auth.userId }, select: { projectId: true } })
-    ).map((m) => m.projectId)
-    const visibilityFilter = isAdmin
-      ? {}
-      : {
-          project: {
-            OR: [{ id: { in: myProjectIds } }, { visibility: 'INTERNAL' as const }, { visibility: 'PUBLIC' as const }],
-          },
-        }
+    const visibilityFilter = await taskVisibilityWhere({ userId: auth.userId, isAdmin })
     const where: Record<string, unknown> = { deletedAt: null, ...visibilityFilter }
     if (query.projectId) {
       if (!isAdmin) {
@@ -84,6 +75,16 @@ export function taskListRoutes() {
     if (query.openOnly === '1' && !where.status) where.status = { notIn: ['CLOSED'] }
     if (query.unassigned === '1') where.assigneeId = null
     if (query.blocked === '1') where.blockedBy = { some: {} }
+    // Opt-in "stale" filter: open tasks not updated in the last N days (clamped
+    // 1–30). Only applies when sent — no existing caller passes it, so the menu
+    // Task / admin surfaces are unaffected. Forces open-only unless a status was
+    // already chosen (a CLOSED task can't be "stale open work").
+    if (query.staleDays) {
+      const staleDays = Math.min(30, Math.max(1, Number(query.staleDays) || 7))
+      const staleBefore = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
+      where.updatedAt = { lt: staleBefore }
+      if (!where.status) where.status = { notIn: ['CLOSED'] }
+    }
     if (query.phaseId) {
       where.phaseId = query.phaseId === 'none' ? null : String(query.phaseId)
     }

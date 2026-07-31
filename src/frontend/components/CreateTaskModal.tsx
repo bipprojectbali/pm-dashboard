@@ -21,6 +21,7 @@ export function CreateTaskModal({
   projects,
   defaultProjectId,
   defaultKind = 'TASK',
+  heading = 'Create Task',
   onSubmit,
   onBulkSubmit,
   loading,
@@ -33,6 +34,9 @@ export function CreateTaskModal({
   projects: ProjectOption[]
   defaultProjectId: string | null
   defaultKind?: TaskKind
+  // Modal heading text (NOT the task title field). Defaults to "Create Task";
+  // the kind-scoped boards pass "Create Ticket" / "Create Idea".
+  heading?: string
   // Incremented by the parent after each successful create; a change clears the
   // form. Undefined/0 means "no success yet" so the form is left untouched.
   resetSignal?: number
@@ -200,7 +204,7 @@ export function CreateTaskModal({
         // create clears the form (via resetSignal).
         onClose()
       }}
-      title="Create Task"
+      title={heading}
       size={mode === 'bulk' ? 'xl' : 'md'}
     >
       <Stack gap="sm">

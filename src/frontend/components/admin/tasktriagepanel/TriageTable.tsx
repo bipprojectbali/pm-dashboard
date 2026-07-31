@@ -4,14 +4,14 @@ import { EmptyRow } from '@/frontend/components/shared/EmptyState'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { stickyFirstCell, stickyFirstHeader } from '@/frontend/lib/table-sticky'
 import {
-  KIND_COLOR,
-  PAGE_SIZE,
-  PRIORITY_COLOR,
-  STATUS_COLOR,
   formatAge,
   formatDate,
   isOverdue,
   isStale,
+  KIND_COLOR,
+  PAGE_SIZE,
+  PRIORITY_COLOR,
+  STATUS_COLOR,
   type TriageTask,
 } from './types'
 
@@ -40,7 +40,7 @@ export function TriageTable({ pagedTasks, isLoading, filteredCount, page, onPage
               <Table.Th style={{ width: 110 }}>Priority</Table.Th>
               <Table.Th style={{ width: 160 }}>Assignee</Table.Th>
               <Table.Th style={{ width: 130 }}>
-                <Tooltip label="Deadline task (dueAt). Merah = sudah lewat hari ini.">
+                <Tooltip label="Deadline task (dueAt). Merah = sudah melewati waktu jatuh tempo (overdue).">
                   <span style={{ cursor: 'help', textDecoration: 'underline dotted' }}>Due</span>
                 </Tooltip>
               </Table.Th>

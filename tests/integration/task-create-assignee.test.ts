@@ -103,4 +103,30 @@ describe('POST /api/tasks — assign on create', () => {
     })
     expect(notif).toBeNull()
   })
+
+  it('notification title says "an idea" when kind is IDEA', async () => {
+    const res = await createTask(ownerToken, {
+      projectId,
+      title: 'Idea assigned on create',
+      description: 'd',
+      kind: 'IDEA',
+      assigneeId,
+    })
+    expect(res.status).toBe(200)
+    const { task } = await res.json()
+    const notif = await waitForNotification({ recipientId: assigneeId, taskId: task.id })
+    expect(notif?.title).toContain('an idea')
+  })
+
+  it('notification title says "a task" for a normal TASK kind (default)', async () => {
+    const res = await createTask(ownerToken, {
+      projectId,
+      title: 'Task assigned on create',
+      description: 'd',
+      assigneeId,
+    })
+    const { task } = await res.json()
+    const notif = await waitForNotification({ recipientId: assigneeId, taskId: task.id })
+    expect(notif?.title).toContain('a task')
+  })
 })

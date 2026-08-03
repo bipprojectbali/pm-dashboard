@@ -90,46 +90,50 @@ export function SingleTaskForm({
           value={priority}
           onChange={(v) => setPriority((v as TaskPriority) || 'MEDIUM')}
         />
-        <Select
-          label="Assignee"
-          placeholder={members.length ? 'Unassigned' : 'Pilih project dulu'}
-          data={members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))}
-          value={assigneeId}
-          onChange={setAssigneeId}
-          disabled={members.length === 0}
-          clearable
-          searchable
-        />
+        {kind !== 'IDEA' && (
+          <Select
+            label="Assignee"
+            placeholder={members.length ? 'Unassigned' : 'Pilih project dulu'}
+            data={members.map((m) => ({ value: m.id, label: `${m.name} · ${m.role}` }))}
+            value={assigneeId}
+            onChange={setAssigneeId}
+            disabled={members.length === 0}
+            clearable
+            searchable
+          />
+        )}
       </Group>
-      <Group grow>
-        <DateInput
-          highlightToday
-          label="Start date"
-          placeholder="Optional"
-          value={startsAt}
-          onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
-          clearable
-        />
-        <DateInput
-          highlightToday
-          label="Due date"
-          placeholder="Optional"
-          value={dueAt}
-          onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
-          clearable
-          error={invalidRange ? 'Due must be after start' : undefined}
-        />
-        <NumberInput
-          label="Estimate (hours)"
-          placeholder="e.g. 2.5"
-          value={estimateHours}
-          onChange={setEstimateHours}
-          min={0}
-          step={0.5}
-          decimalScale={2}
-          leftSection={<TbClock size={14} />}
-        />
-      </Group>
+      {kind !== 'IDEA' && (
+        <Group grow>
+          <DateInput
+            highlightToday
+            label="Start date"
+            placeholder="Optional"
+            value={startsAt}
+            onChange={(v) => setStartsAt(v ? new Date(v as unknown as string) : null)}
+            clearable
+          />
+          <DateInput
+            highlightToday
+            label="Due date"
+            placeholder="Optional"
+            value={dueAt}
+            onChange={(v) => setDueAt(v ? new Date(v as unknown as string) : null)}
+            clearable
+            error={invalidRange ? 'Due must be after start' : undefined}
+          />
+          <NumberInput
+            label="Estimate (hours)"
+            placeholder="e.g. 2.5"
+            value={estimateHours}
+            onChange={setEstimateHours}
+            min={0}
+            step={0.5}
+            decimalScale={2}
+            leftSection={<TbClock size={14} />}
+          />
+        </Group>
+      )}
       {availableTags.length > 0 && (
         <MultiSelect
           label="Tags"

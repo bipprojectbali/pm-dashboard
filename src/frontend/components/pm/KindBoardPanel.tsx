@@ -190,7 +190,7 @@ export function KindBoardPanel({
         </Group>
       </Group>
 
-      <TriageStatCards stats={stats} />
+      <TriageStatCards stats={stats} hideOverdueBlocked={kind === 'IDEA'} />
       <TriageFilters
         search={search}
         onSearchChange={setSearch}
@@ -210,6 +210,7 @@ export function KindBoardPanel({
         totalCount={stats.total}
         hasFilters={hasFilters}
         onClearFilters={clearFilters}
+        hideOverdueBlocked={kind === 'IDEA'}
       />
       <TriageTable
         pagedTasks={tasks}

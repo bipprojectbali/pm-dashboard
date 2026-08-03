@@ -93,6 +93,7 @@ export function taskCreateRoute() {
         assigneeId: task.assigneeId,
         actorId: auth.userId,
         actorName: actor?.name ?? 'Someone',
+        taskKind: task.kind,
       }).catch(() => {})
     }
     emitInvalidate('tasks', { projectId: task.projectId })

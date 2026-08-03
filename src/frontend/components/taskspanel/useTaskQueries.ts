@@ -124,6 +124,18 @@ export function useTaskQueries({
     queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
     staleTime: 60_000,
   })
+  // Total/Open/Closed/Overdue stat cards read from this server-side aggregate
+  // (uncapped) instead of chartTasksQ's task list, which the backend hard-caps
+  // at 200 — deriving the cards from tasks.length silently under-counted once
+  // a project passed ~200 tasks.
+  const dashboardStatsQ = useQuery({
+    queryKey: ['tasks-dashboard-stats', activeProjectId],
+    queryFn: () =>
+      api<{ total: number; open: number; closed: number; overdue: number }>(
+        `/api/tasks/dashboard-stats${activeProjectId ? `?projectId=${activeProjectId}` : ''}`,
+      ),
+    staleTime: 60_000,
+  })
 
   const projects = projectsQ.data?.projects ?? []
   const writableProjects = projects.filter((p) => {
@@ -138,5 +150,16 @@ export function useTaskQueries({
     return s
   }, [projects])
 
-  return { projectsQ, tagsQ, phasesQ, members, tasksQ, chartTasksQ, projects, writableProjects, leadProjectIds }
+  return {
+    projectsQ,
+    tagsQ,
+    phasesQ,
+    members,
+    tasksQ,
+    chartTasksQ,
+    dashboardStatsQ,
+    projects,
+    writableProjects,
+    leadProjectIds,
+  }
 }

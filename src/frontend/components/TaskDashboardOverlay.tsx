@@ -1,6 +1,7 @@
-import { Card, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Alert, Card, SimpleGrid, Stack, Text } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { useMemo } from 'react'
+import { TbInfoCircle } from 'react-icons/tb'
 import { toLocalDateStr } from '../lib/dates'
 import { EChart } from './charts/EChart'
 
@@ -53,8 +54,19 @@ const STATUS_HEX: Record<TaskStatus, string> = {
   CLOSED: '#40c057',
 }
 
-export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
-  const { throughput, donut, assignees, stats } = useMemo(() => {
+export function TaskDashboardOverlay({
+  tasks,
+  stats: serverStats,
+  serverTotal,
+}: {
+  tasks: TaskListItem[]
+  // Total/Open/Closed/Overdue — accurate, server-side (GET /api/tasks/dashboard-stats),
+  // not derived from `tasks` which is capped at 200 rows. Optional so the overlay
+  // degrades to the old client-computed numbers while the query is loading.
+  stats?: { total: number; open: number; closed: number; overdue: number }
+  serverTotal?: number
+}) {
+  const { throughput, donut, assignees, stats: clientStats } = useMemo(() => {
     const days = 14
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -158,11 +170,10 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
       ],
     }
 
+    // Fallback stats (used only until the server aggregate has loaded) — same
+    // "not-CLOSED" open definition as before, computed over the capped `tasks`.
     const openCount = tasks.filter((t) => t.status !== 'CLOSED').length
     const closedCount = tasks.length - openCount
-    // Overdue = past due right now, matching the canonical app-wide definition
-    // (backend ?overdueOnly, computeRiskReport, computeTaskTriage all use `now`,
-    // not midnight) so this card agrees with the Overdue quick filter.
     const nowMs = Date.now()
     const overdueCount = tasks.filter(
       (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < nowMs,
@@ -175,6 +186,9 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
       stats: { total: tasks.length, open: openCount, closed: closedCount, overdue: overdueCount },
     }
   }, [tasks])
+
+  const stats = serverStats ?? clientStats
+  const truncated = (serverTotal ?? 0) > tasks.length
 
   return (
     <Stack gap="sm">
@@ -212,6 +226,15 @@ export function TaskDashboardOverlay({ tasks }: { tasks: TaskListItem[] }) {
           </Text>
         </Card>
       </SimpleGrid>
+      {truncated && (
+        <Alert color="yellow" variant="light" icon={<TbInfoCircle size={16} />} py="xs">
+          <Text size="xs">
+            Chart di bawah (Throughput, Status breakdown, Top assignees) dihitung dari {tasks.length} task terbaru
+            dari {serverTotal} total — kartu Total/Open/Closed/Overdue di atas tetap akurat penuh (di-agregat di
+            server).
+          </Text>
+        </Alert>
+      )}
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
         <Card withBorder padding="sm" radius="md">
           <Text size="sm" fw={500} mb={4}>

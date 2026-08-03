@@ -7,6 +7,7 @@ import {
   computeTeamLoad,
 } from '../../../src/lib/admin-overview'
 import { computeRetro, renderRetroMarkdown } from '../../../src/lib/retro'
+import { computeTaskDashboardStats } from '../../../src/lib/task-dashboard-stats'
 import { jsonText, type ToolModule } from './shared'
 
 export const overviewReadonly: ToolModule = {
@@ -85,6 +86,20 @@ export const overviewReadonly: ToolModule = {
       },
       async ({ projectId, staleDays }) =>
         jsonText(await computeTaskTriage({ projectId, staleDays })),
+    )
+
+    server.registerTool(
+      'task_dashboard_stats',
+      {
+        title: 'Task panel dashboard stats',
+        description:
+          'Total/Open/Closed/Overdue counts backing the Tasks panel dashboard overlay (both /pm global board and a project Tasks tab). Computed in-DB (not capped at 200 like the underlying task list) — includes every kind (IDEA not excluded, unlike task_triage). Filter by project.',
+        inputSchema: {
+          projectId: z.string().optional().describe('Filter to one project; omit for all'),
+        },
+      },
+      async ({ projectId }) =>
+        jsonText(await computeTaskDashboardStats({ userId: '', isAdmin: true, projectId })),
     )
 
     server.registerTool(

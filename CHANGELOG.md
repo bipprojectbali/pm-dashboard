@@ -7,6 +7,21 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-03
+
+### Ditambahkan
+- **Otorisasi fase berbasis pembuat (PM)**: sebelumnya create/update/delete fase project sama-sama digate oleh aturan OWNER/PM/admin sistem, sehingga PM manapun di sebuah project bisa mengubah/menghapus fase yang dibuat PM lain. Kini: **create** tetap OWNER/PM/SUPER_ADMIN, tapi **update/delete** hanya boleh oleh OWNER, SUPER_ADMIN, atau PM yang **membuat** fase tersebut. Fase lama (dibuat sebelum fitur ini, tanpa data pembuat) hanya bisa diubah OWNER/SUPER_ADMIN. ADMIN biasa (bukan SUPER_ADMIN) tidak mendapat bypass di sini — tetap harus jadi member project. UI menu aksi per-fase kini otomatis menyembunyikan Edit/Delete untuk fase milik PM lain.
+
+### Diperbaiki
+- **Import massal task kini menerima semua 5 jenis task**: endpoint bulk-import (dipakai form CSV) sebelumnya menolak jenis Tiket dan Ide meski form single-create dan parser CSV sudah mendukung keduanya — import CSV berisi baris Tiket/Ide gagal total dengan pesan error yang juga keliru menyebut hanya 3 jenis yang valid.
+- **Kartu statistik & pagination papan Tiket/Pengembangan kini akurat di atas 200 data**: papan Tiket dan Pengembangan (menu PM) menghitung kartu statistik dan pagination dari data yang sudah dipotong 200 baris di browser, sehingga angka meleset begitu jumlah task melebihi 200. Kini kartu dan tabel dihitung penuh di server, konsisten dengan halaman Triase Admin.
+- **Modal "Buat Task" tidak lagi menyisakan data lama**: menutup modal via tombol Batal/X tetap mempertahankan isian (disengaja, agar tidak kehilangan input tak sengaja), tapi setelah berhasil membuat task, membuka modal lagi sekarang benar-benar kosong — sebelumnya field masih menampilkan task yang baru saja dibuat.
+- **Urutan & filter tanggal jatuh tempo pada daftar Task kini benar di semua halaman**: sortir (prioritas/jatuh tempo/judul/dsb.) dan filter rentang tanggal sebelumnya hanya diterapkan pada 25 baris yang sedang tampil di browser, bukan ke seluruh data — task prioritas tinggi di halaman 2 tidak pernah naik ke atas saat diurutkan "berdasarkan prioritas". Kini sortir dan filter tanggal dihitung di server sehingga benar lintas halaman.
+- **Kartu "Task Terbuka"/"Bug Terbuka" di Ringkasan PM kini menghitung semua status non-selesai**: sebelumnya hanya menghitung status OPEN, sehingga task berstatus Sedang Dikerjakan/Siap QC/Dibuka Lagi tidak ikut terhitung — bertentangan dengan tooltip kartu yang menjanjikan semua status non-selesai.
+- **4 bug tampilan di detail project diperbaiki**: statistik milestone di tab Overview selalu menampilkan 0 dari total; badge "Extended" muncul pada perubahan deadline apa pun (termasuk yang dipercepat), bukan hanya saat mundur; banner "Tidak ada aktivitas" di tab Retro mengabaikan kartu Task Baru; label status pada legenda donut chart menampilkan garis bawah ganda ("READY FOR_QC").
+- **Tombol filter status project kini muat 5 status dalam satu baris**: penambahan status Draft + Dibatalkan sebelumnya membuat baris tombol filter turun ke baris kedua.
+- **5 inkonsistensi menu Proyek (PM) diperbaiki**: badge "Extended" muncul di setiap perubahan deadline (bukan hanya saat dimundurkan); status "Berisiko" dan "Terlambat" sebelumnya tergabung jadi satu kategori; filter status Draft dan Dibatalkan belum tersedia; subjudul daftar tidak mengikuti scope aktif; daftar project diam-diam dibatasi 200 baris tanpa indikator saat data terpotong.
+
 ## [0.8.11] - 2026-07-30
 
 ### Ditambahkan

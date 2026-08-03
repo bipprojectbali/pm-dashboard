@@ -37,7 +37,11 @@ export function TasksPanel({
       />
 
       {s.showCharts && (s.chartTasksQ.data?.tasks ?? s.rawTasks).length > 0 && (
-        <TaskDashboardOverlay tasks={s.chartTasksQ.data?.tasks ?? s.rawTasks} />
+        <TaskDashboardOverlay
+          tasks={s.chartTasksQ.data?.tasks ?? s.rawTasks}
+          stats={s.dashboardStatsQ.data}
+          serverTotal={s.dashboardStatsQ.data?.total}
+        />
       )}
 
       {s.activeProjectId && (

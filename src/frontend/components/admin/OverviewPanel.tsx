@@ -63,6 +63,13 @@ export function OverviewPanel() {
     queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 5 * 60_000,
   })
+  // Accurate today/week counts for UpcomingEventsCard's badges — not derived
+  // from eventsQ's capped list.
+  const eventBadgeStatsQ = useQuery<{ todayCount: number; next7dCount: number }>({
+    queryKey: ['events', 'badge-stats'],
+    queryFn: () => fetch('/api/events/badge-stats', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
+  })
 
   const loading = usersQ.isLoading || projectsQ.isLoading || tasksQ.isLoading || auditQ.isLoading
   const fetching =
@@ -155,6 +162,12 @@ export function OverviewPanel() {
         events={eventsQ.data?.events ?? []}
         isLoading={eventsQ.isLoading}
         navigate={navigate}
+        todayCount={eventBadgeStatsQ.data?.todayCount}
+        weekCount={
+          eventBadgeStatsQ.data
+            ? Math.max(0, eventBadgeStatsQ.data.next7dCount - eventBadgeStatsQ.data.todayCount)
+            : undefined
+        }
       />
 
       {risksQ.isLoading ? (

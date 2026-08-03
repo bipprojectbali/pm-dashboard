@@ -90,8 +90,10 @@ Riwayat pengiriman laporan harian disimpan di PostgreSQL (bukan Redis). Accessib
 
 Team-wide events/reminders. All authenticated users can read and create. Only creator or admin can edit/delete.
 
-- `GET /api/events` — list events ordered by startsAt asc. Filters: `upcoming=true` (only future events), `limit` (default 50, max 200), `offset`. Returns `{ count, events }` with `createdBy` and `project` joined.
-- `POST /api/events` — create event. Body: `title` (required), `startsAt` (required ISO 8601), `endsAt?`, `description?`, `location?`, `projectId?` (optional link to a project).
+- `GET /api/events` — list events ordered by startsAt asc. Filters: `upcoming=true` (only future events), `limit` (default 50, max 200), `offset`, `tagId`. Returns `{ count, events }` with `createdBy` and `project` joined. `count` is the **true total** matching the filter (`prisma.event.count`), not capped by `limit` — use it (not `events.length`) to know how many rows exist beyond the current page.
+- `GET /api/events/badge-stats` — accurate `{ todayCount, tomorrowCount, next7dCount, total }` upcoming-event counts, computed in-DB (not capped like a `GET /api/events?limit=` fetch). Backs the `/pm` sidebar Events badge and the "Events Mendatang" cards on the PM/Admin overview panels — those UIs used to derive these numbers by filtering a `limit=100` list client-side, which silently under-counted once more than 100 upcoming events existed. Lib: `src/lib/event-badge-stats.ts` (`computeEventBadgeStats`).
+- `GET /api/events/:id` — fetch a single event (no project-visibility check — any authenticated user can fetch by id).
+- `POST /api/events` — create event. Body: `title` (required), `startsAt` (required ISO 8601), `endsAt?`, `description?`, `location?`, `projectId?` (optional link to a project), `tagIds?`.
 - `PATCH /api/events/:id` — partial update (creator or ADMIN/SUPER_ADMIN). Accepts same fields as POST. `endsAt: null` to clear.
 - `DELETE /api/events/:id` — permanent delete (creator or ADMIN/SUPER_ADMIN).
 

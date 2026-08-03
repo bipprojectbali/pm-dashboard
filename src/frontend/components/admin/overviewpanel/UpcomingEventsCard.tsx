@@ -7,10 +7,18 @@ export function UpcomingEventsCard({
   events,
   isLoading,
   navigate,
+  todayCount,
+  weekCount,
 }: {
   events: UpcomingEvent[]
   isLoading: boolean
   navigate: ReturnType<typeof useNavigate>
+  // Accurate counts from the server aggregate (GET /api/events/badge-stats) —
+  // NOT derived from `events`, which is capped at 100 rows and would
+  // silently under-report the badge numbers past that. Falls back to
+  // client-side filtering of `events` only while the aggregate is loading.
+  todayCount?: number
+  weekCount?: number
 }) {
   if (!events.length && isLoading) return null
 
@@ -22,7 +30,9 @@ export function UpcomingEventsCard({
     return k > todayKey && k <= weekKey
   })
   const shown = [...todayEvents, ...weekEvents].slice(0, 6)
-  if (shown.length === 0) return null
+  const todayBadge = todayCount ?? todayEvents.length
+  const weekBadge = weekCount ?? weekEvents.length
+  if (shown.length === 0 && todayBadge === 0 && weekBadge === 0) return null
 
   return (
     <Card withBorder radius="md" p="md">
@@ -30,14 +40,14 @@ export function UpcomingEventsCard({
         <Group gap="xs">
           <TbCalendarEvent size={16} />
           <Title order={5}>Events Mendatang</Title>
-          {todayEvents.length > 0 && (
+          {todayBadge > 0 && (
             <Badge size="xs" color="red" variant="filled">
-              {todayEvents.length} hari ini
+              {todayBadge} hari ini
             </Badge>
           )}
-          {weekEvents.length > 0 && (
+          {weekBadge > 0 && (
             <Badge size="xs" color="blue" variant="light">
-              {weekEvents.length} minggu ini
+              {weekBadge} minggu ini
             </Badge>
           )}
         </Group>

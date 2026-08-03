@@ -101,6 +101,61 @@ describe('GET /api/events', () => {
       expect(dates[i]).toBeGreaterThanOrEqual(dates[i - 1])
     }
   })
+
+  test('count reflects the true total beyond `limit`, not the page size', async () => {
+    await prisma.event.deleteMany()
+    // 5 events, but request limit=2 — `count` must still be 5, not 2.
+    await prisma.event.createMany({
+      data: Array.from({ length: 5 }, (_, i) => ({
+        title: `Bulk Event ${i}`,
+        startsAt: new Date(Date.now() + (i + 1) * 60 * 60 * 1000),
+        createdById: userId,
+      })),
+    })
+
+    const res = await app.handle(
+      new Request('http://localhost/api/events?limit=2', {
+        headers: { cookie: `session=${token}` },
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.events.length).toBe(2)
+    expect(body.count).toBe(5)
+  })
+})
+
+describe('GET /api/events/badge-stats', () => {
+  test('counts stay accurate beyond the 100-row list cap', async () => {
+    await prisma.event.deleteMany()
+    // 110 events today, 1 tomorrow — well past the old client-side 100-row cap
+    // that GET /api/events?limit=100 used to be filtered over.
+    const now = Date.now()
+    await prisma.event.createMany({
+      data: [
+        ...Array.from({ length: 110 }, (_, i) => ({
+          title: `Today ${i}`,
+          startsAt: new Date(now + (i + 1) * 60 * 1000), // a few minutes apart, all today
+          createdById: userId,
+        })),
+        { title: 'Tomorrow', startsAt: new Date(now + 26 * 60 * 60 * 1000), createdById: userId },
+      ],
+    })
+
+    const res = await app.handle(
+      new Request('http://localhost/api/events/badge-stats', { headers: { cookie: `session=${token}` } }),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { todayCount: number; tomorrowCount: number; total: number }
+    expect(body.todayCount).toBe(110)
+    expect(body.tomorrowCount).toBe(1)
+    expect(body.total).toBe(111)
+  })
+
+  test('unauthenticated → 401', async () => {
+    const res = await app.handle(new Request('http://localhost/api/events/badge-stats'))
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('PATCH /api/events/:id', () => {

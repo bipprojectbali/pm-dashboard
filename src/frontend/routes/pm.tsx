@@ -148,10 +148,11 @@ function PmPage() {
       onConfirm: () => logout.mutate(),
     })
 
-  // Badge queries — same cache keys as OverviewPanel so no extra network requests
-  const eventsQ = useQuery<{ events: Array<{ startsAt: string }> }>({
-    queryKey: ['events', 'badge'],
-    queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
+  // Server-side aggregate (not derived from a capped event list) so the badge
+  // stays correct beyond the old 100-row client cap.
+  const eventBadgeStatsQ = useQuery<{ todayCount: number; tomorrowCount: number }>({
+    queryKey: ['events', 'badge-stats'],
+    queryFn: () => fetch('/api/events/badge-stats', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 5 * 60_000,
   })
   const projectsBadgeQ = useQuery<{ projects: Array<{ archivedAt: string | null }> }>({
@@ -165,12 +166,7 @@ function PmPage() {
     refetchInterval: 60_000,
   })
 
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const tomorrowStr = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
-  const eventBadgeCount = (eventsQ.data?.events ?? []).filter((e) => {
-    const d = e.startsAt.slice(0, 10)
-    return d === todayStr || d === tomorrowStr
-  }).length
+  const eventBadgeCount = (eventBadgeStatsQ.data?.todayCount ?? 0) + (eventBadgeStatsQ.data?.tomorrowCount ?? 0)
   const activeProjectsBadge = (projectsBadgeQ.data?.projects ?? []).filter((p) => !p.archivedAt).length
   const myActiveTasks = (tasksBadgeQ.data?.tasks ?? []).filter((t) => t.status !== 'CLOSED')
   const tasksBadge = myActiveTasks.length

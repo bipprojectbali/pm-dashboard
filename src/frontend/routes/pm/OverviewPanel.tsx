@@ -88,6 +88,8 @@ export function OverviewPanel({
     notifs,
     eventsToday,
     eventsThisWeek,
+    eventsTodayCount,
+    eventsThisWeekCount,
     now,
   } = useOverviewData()
 
@@ -298,12 +300,12 @@ export function OverviewPanel({
             subtitle="Jadwal tim hari ini dan 7 hari ke depan."
             icon={TbCalendarEvent}
             color="orange"
-            count={eventsToday.length + eventsThisWeek.length}
+            count={eventsTodayCount + eventsThisWeekCount}
             loading={upcomingEventsQ.isLoading}
             emptyMessage="Tidak ada event mendatang. Kosong!"
             tip="Event tim yang akan datang dalam 7 hari ke depan. Merah = hari ini."
             action={
-              eventsToday.length + eventsThisWeek.length > 0 ? (
+              eventsTodayCount + eventsThisWeekCount > 0 ? (
                 <Button variant="subtle" size="xs" onClick={() => navigate({ to: '/pm', search: { tab: 'events' } })}>
                   Semua events
                 </Button>

@@ -48,6 +48,13 @@ export function useOverviewData() {
     queryFn: () => fetch('/api/events?upcoming=true&limit=100', { credentials: 'include' }).then((r) => r.json()),
     refetchInterval: 5 * 60_000,
   })
+  // Accurate today/next-7-day counts (not derived from the capped list above,
+  // which under-reports past 100 upcoming events).
+  const eventBadgeStatsQ = useQuery<{ todayCount: number; next7dCount: number }>({
+    queryKey: ['events', 'badge-stats'],
+    queryFn: () => fetch('/api/events/badge-stats', { credentials: 'include' }).then((r) => r.json()),
+    refetchInterval: 5 * 60_000,
+  })
 
   const projects = projectsQ.data?.projects ?? []
   const activeProjects = projects.filter((p) => !p.archivedAt)
@@ -87,11 +94,19 @@ export function useOverviewData() {
   const upcomingEvents = upcomingEventsQ.data?.events ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
   const weekKey = new Date(Date.now() + 7 * dayMs).toISOString().slice(0, 10)
+  // Item lists for rendering — safe from the capped fetch since events are
+  // ordered by startsAt asc and only the first few are ever shown.
   const eventsToday = upcomingEvents.filter((e) => e.startsAt.slice(0, 10) === todayKey)
   const eventsThisWeek = upcomingEvents.filter((e) => {
     const k = e.startsAt.slice(0, 10)
     return k > todayKey && k <= weekKey
   })
+  // Accurate counts for the badge number — read from the server aggregate, not
+  // the arrays above (which under-report past the 100-row cap).
+  const eventsTodayCount = eventBadgeStatsQ.data?.todayCount ?? eventsToday.length
+  const eventsThisWeekCount = eventBadgeStatsQ.data
+    ? Math.max(0, eventBadgeStatsQ.data.next7dCount - eventBadgeStatsQ.data.todayCount)
+    : eventsThisWeek.length
 
   return {
     myTasksQ,
@@ -112,6 +127,8 @@ export function useOverviewData() {
     upcomingEvents,
     eventsToday,
     eventsThisWeek,
+    eventsTodayCount,
+    eventsThisWeekCount,
     now,
     dayMs,
   }

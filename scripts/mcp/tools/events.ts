@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
+import { computeEventBadgeStats } from '../../../src/lib/event-badge-stats'
 import { jsonText, type ToolModule } from './shared'
 
 const eventInclude = {
@@ -23,14 +24,30 @@ export const eventsReadonly: ToolModule = {
       },
       async ({ upcoming, limit = 50 }) => {
         const where = upcoming ? { startsAt: { gte: new Date() } } : {}
-        const events = await prisma.event.findMany({
-          where,
-          orderBy: { startsAt: 'asc' },
-          take: limit,
-          include: eventInclude,
-        })
-        return jsonText({ count: events.length, events })
+        const [events, count] = await Promise.all([
+          prisma.event.findMany({
+            where,
+            orderBy: { startsAt: 'asc' },
+            take: limit,
+            include: eventInclude,
+          }),
+          prisma.event.count({ where }),
+        ])
+        // `count` is the true total matching `where` (not capped by `limit`) —
+        // mirrors GET /api/events, which had the same events.length bug.
+        return jsonText({ count, events })
       },
+    )
+
+    server.registerTool(
+      'event_badge_stats',
+      {
+        title: 'Upcoming event badge counts',
+        description:
+          'Today/tomorrow/next-7-day/total upcoming event counts, computed in-DB (not capped like event_list). Backs the /pm sidebar badge and the "Events Mendatang" overview cards.',
+        inputSchema: {},
+      },
+      async () => jsonText(await computeEventBadgeStats()),
     )
   },
 }

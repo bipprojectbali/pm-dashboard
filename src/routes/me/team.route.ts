@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 import { prisma } from '../../lib/db'
 import { requireAuth } from '../../lib/route-helpers'
+import { WORKLOAD_KIND_FILTER } from '../../lib/task-metrics'
 
 export function meTeamRoutes() {
   return new Elysia()
@@ -70,6 +71,7 @@ export function meTeamRoutes() {
         prisma.task.groupBy({
           by: ['assigneeId'],
           where: {
+            ...WORKLOAD_KIND_FILTER,
             projectId: { in: projectIds },
             assigneeId: { in: teammateIds },
             status: { not: 'CLOSED' },
@@ -79,6 +81,7 @@ export function meTeamRoutes() {
         prisma.task.groupBy({
           by: ['assigneeId'],
           where: {
+            ...WORKLOAD_KIND_FILTER,
             projectId: { in: projectIds },
             assigneeId: { in: teammateIds },
             status: { not: 'CLOSED' },

@@ -10,6 +10,7 @@ export async function notifyTaskAssigned(args: {
   assigneeId: string
   actorId: string
   actorName: string
+  taskKind?: string
 }): Promise<void> {
   await createNotification({
     recipientId: args.assigneeId,
@@ -17,7 +18,7 @@ export async function notifyTaskAssigned(args: {
     kind: 'TASK_ASSIGNED',
     taskId: args.taskId,
     projectId: args.projectId,
-    title: `${args.actorName} assigned you a task`,
+    title: `${args.actorName} assigned you ${args.taskKind === 'IDEA' ? 'an idea' : 'a task'}`,
     body: args.taskTitle,
   })
 }

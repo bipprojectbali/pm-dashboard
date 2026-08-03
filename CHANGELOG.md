@@ -7,6 +7,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ## [Unreleased]
 
+### Diperbaiki
+- **Form "Catat Ide" & papan Pengembangan tak lagi tampilkan field kerja komitmen**: modal Create Idea sebelumnya menampilkan Assignee, Tanggal Mulai, Tenggat, dan Estimasi Jam persis seperti form Task biasa — padahal field ini tidak pernah masuk ke metrik apa pun untuk Ide (Ide sengaja dikecualikan dari semua agregat beban kerja), sehingga bisa menyesatkan pengguna mengira sebuah ide "punya deadline" atau "sedang dikerjakan". Keempat field kini disembunyikan saat Kind = IDEA (Judul/Deskripsi/Prioritas/Tags/Fase tetap ada) dan langsung muncul kembali begitu Kind diganti ke jenis lain. Papan Pengembangan juga tidak lagi menampilkan kartu statistik dan quick-filter "Overdue"/"Blocked" (konsep yang tak berlaku untuk sebuah ide) — papan Tiket tidak terpengaruh, tetap menampilkan kelima kartu/filter seperti biasa.
+- **Notifikasi assign kini membedakan Ide dari Task**: menugaskan sebuah Ide ke seseorang sebelumnya mengirim notifikasi "assigned you a task" — bahasa yang sama seperti pekerjaan komitmen sungguhan, berpotensi menimbulkan urgensi palsu terhadap sesuatu yang seharusnya cuma catatan backlog. Notifikasi kini berbunyi "assigned you an idea" khusus untuk task berjenis IDEA.
+
 ## [0.9.0] - 2026-08-03
 
 ### Ditambahkan

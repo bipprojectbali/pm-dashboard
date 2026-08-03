@@ -46,9 +46,15 @@ function StatCard({
   )
 }
 
-export function TriageStatCards({ stats }: { stats: TriageStats }) {
+export function TriageStatCards({
+  stats,
+  hideOverdueBlocked = false,
+}: {
+  stats: TriageStats
+  hideOverdueBlocked?: boolean
+}) {
   return (
-    <SimpleGrid cols={{ base: 2, md: 5 }} spacing="md">
+    <SimpleGrid cols={{ base: 2, md: hideOverdueBlocked ? 3 : 5 }} spacing="md">
       <StatCard
         label="Open"
         value={stats.total}
@@ -56,13 +62,15 @@ export function TriageStatCards({ stats }: { stats: TriageStats }) {
         color="blue"
         tip="Task dengan status selain CLOSED. Total beban kerja yang masih harus dikerjakan."
       />
-      <StatCard
-        label="Overdue"
-        value={stats.overdue}
-        icon={TbAlertTriangle}
-        color="red"
-        tip="Task open yang sudah melewati waktu jatuh tempo (dueAt < sekarang). Perlu prioritas segera atau di-extend deadline-nya."
-      />
+      {!hideOverdueBlocked && (
+        <StatCard
+          label="Overdue"
+          value={stats.overdue}
+          icon={TbAlertTriangle}
+          color="red"
+          tip="Task open yang sudah melewati waktu jatuh tempo (dueAt < sekarang). Perlu prioritas segera atau di-extend deadline-nya."
+        />
+      )}
       <StatCard
         label="Unassigned"
         value={stats.unassigned}
@@ -70,13 +78,15 @@ export function TriageStatCards({ stats }: { stats: TriageStats }) {
         color="orange"
         tip="Task open tanpa assignee. Risiko: tidak ada yang merasa bertanggung jawab, kemungkinan besar akan stale."
       />
-      <StatCard
-        label="Blocked"
-        value={stats.blocked}
-        icon={TbBan}
-        color="grape"
-        tip="Task open dengan TaskDependency (blockedBy > 0). Harus menunggu task lain selesai dulu sebelum bisa dikerjakan."
-      />
+      {!hideOverdueBlocked && (
+        <StatCard
+          label="Blocked"
+          value={stats.blocked}
+          icon={TbBan}
+          color="grape"
+          tip="Task open dengan TaskDependency (blockedBy > 0). Harus menunggu task lain selesai dulu sebelum bisa dikerjakan."
+        />
+      )}
       <StatCard
         label={`Stale >${STALE_DAYS}d`}
         value={stats.stale}

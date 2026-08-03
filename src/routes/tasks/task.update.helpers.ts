@@ -141,6 +141,7 @@ export async function applyTaskUpdateSideEffects(params: {
       assigneeId: body.assigneeId,
       actorId: auth.userId,
       actorName,
+      taskKind: task.kind,
     }).catch(() => {})
   }
   if (statusTransition) {

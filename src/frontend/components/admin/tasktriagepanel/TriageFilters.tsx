@@ -22,6 +22,7 @@ type Props = {
   totalCount: number
   hasFilters: boolean
   onClearFilters: () => void
+  hideOverdueBlocked?: boolean
 }
 
 export function TriageFilters({
@@ -33,7 +34,15 @@ export function TriageFilters({
   quick, onQuickChange,
   filteredCount, totalCount,
   hasFilters, onClearFilters,
+  hideOverdueBlocked = false,
 }: Props) {
+  const quickData = [
+    { label: 'All', value: 'all' },
+    ...(hideOverdueBlocked ? [] : [{ label: 'Overdue', value: 'overdue' }]),
+    { label: 'Unassigned', value: 'unassigned' },
+    ...(hideOverdueBlocked ? [] : [{ label: 'Blocked', value: 'blocked' }]),
+    { label: `Stale >${STALE_DAYS}d`, value: 'stale' },
+  ]
   return (
     <Card withBorder padding="sm" radius="md">
       <Stack gap="xs">
@@ -103,13 +112,7 @@ export function TriageFilters({
             size="xs"
             value={quick}
             onChange={(v) => onQuickChange(v as QuickFilter)}
-            data={[
-              { label: 'All', value: 'all' },
-              { label: 'Overdue', value: 'overdue' },
-              { label: 'Unassigned', value: 'unassigned' },
-              { label: 'Blocked', value: 'blocked' },
-              { label: `Stale >${STALE_DAYS}d`, value: 'stale' },
-            ]}
+            data={quickData}
           />
           {hasFilters && (
             <Text

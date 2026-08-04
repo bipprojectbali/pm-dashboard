@@ -137,12 +137,16 @@ export function useProjectsPanelState() {
     return sortProjects(list, sort)
   }, [projects, statusFilter, priorityFilter, roleFilter, ownerFilter, userFilter, derivedFilter, search, sort])
 
+  // Blocked users are excluded from these person-filter surfaces (dropdown +
+  // avatar strip) — they're active-member pickers, not historical records, and
+  // a blocked user can no longer log in or do work. Membership rows themselves
+  // are untouched; unblocking makes them reappear here automatically.
   const userOptions = useMemo(() => {
     const seen = new Map<string, string>()
     for (const p of projects) {
-      if (!seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
+      if (!p.owner.blocked && !seen.has(p.ownerId)) seen.set(p.ownerId, p.owner.name || p.owner.email || p.ownerId)
       for (const m of p.members) {
-        if (!seen.has(m.userId)) seen.set(m.userId, m.user.name || m.user.email || m.userId)
+        if (!m.user.blocked && !seen.has(m.userId)) seen.set(m.userId, m.user.name || m.user.email || m.userId)
       }
     }
     return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
@@ -151,10 +155,10 @@ export function useProjectsPanelState() {
   const userList = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; image?: string | null }>()
     for (const p of projects) {
-      if (!seen.has(p.ownerId))
+      if (!p.owner.blocked && !seen.has(p.ownerId))
         seen.set(p.ownerId, { id: p.ownerId, name: p.owner.name || p.owner.email || p.ownerId, image: p.owner.image })
       for (const m of p.members) {
-        if (!seen.has(m.userId))
+        if (!m.user.blocked && !seen.has(m.userId))
           seen.set(m.userId, { id: m.userId, name: m.user.name || m.user.email || m.userId, image: m.user.image })
       }
     }

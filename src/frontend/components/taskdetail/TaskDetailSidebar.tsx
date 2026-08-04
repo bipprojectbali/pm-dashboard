@@ -48,6 +48,12 @@ export function TaskDetailSidebar({
   creatingTag: boolean
 }) {
   const transitions = allowedTransitions(task.status, task.kind)
+  // Blocked users can't log in, so exclude them from reassignment — except the
+  // task's *current* assignee, which stays selectable so the Select doesn't
+  // silently drop the existing value when that person gets blocked mid-task.
+  const assigneeOptions = projectMembers
+    .filter((m) => !m.user.blocked || m.user.id === task.assignee?.id)
+    .map((m) => ({ value: m.user.id, label: `${m.user.name} · ${m.role}` }))
 
   return (
     <Stack gap="md" p="md" style={{ minWidth: 0 }}>
@@ -143,10 +149,7 @@ export function TaskDetailSidebar({
             size="xs"
             placeholder="Tidak ada"
             clearable
-            data={projectMembers.map((m) => ({
-              value: m.user.id,
-              label: `${m.user.name} · ${m.role}`,
-            }))}
+            data={assigneeOptions}
             value={task.assignee?.id ?? null}
             onChange={(v) => onUpdate({ assigneeId: v })}
             leftSection={

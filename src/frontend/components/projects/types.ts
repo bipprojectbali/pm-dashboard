@@ -10,6 +10,7 @@ export interface ProjectUser {
   name: string
   email: string
   image?: string | null
+  blocked?: boolean
 }
 
 export interface TaskStats {

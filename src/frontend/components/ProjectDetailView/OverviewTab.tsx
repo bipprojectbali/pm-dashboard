@@ -203,9 +203,16 @@ export function OverviewTab({ project, onOpenTasks }: { project: ProjectDetail; 
                       </Text>
                     </Stack>
                   </Group>
-                  <Badge color={ROLE_COLOR[m.role] ?? 'gray'} variant="light" size="sm">
-                    {m.role}
-                  </Badge>
+                  <Group gap={4} wrap="nowrap">
+                    {m.user.blocked && (
+                      <Badge color="red" variant="light" size="sm">
+                        Blocked
+                      </Badge>
+                    )}
+                    <Badge color={ROLE_COLOR[m.role] ?? 'gray'} variant="light" size="sm">
+                      {m.role}
+                    </Badge>
+                  </Group>
                 </Group>
               ))}
             </Stack>

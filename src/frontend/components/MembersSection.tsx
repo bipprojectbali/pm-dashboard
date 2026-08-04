@@ -195,7 +195,10 @@ export function MembersSection({
                   <Text size="xs" c="dimmed" truncate>{m.user.email}</Text>
                 </Stack>
               </Group>
-              <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">{m.role}</Badge>
+              <Group gap={4} wrap="nowrap">
+                {m.user.blocked && <Badge color="red" variant="light" size="sm">Blocked</Badge>}
+                <Badge color={ROLE_COLOR[m.role]} variant="light" size="sm">{m.role}</Badge>
+              </Group>
             </Group>
           ))}
           {canRemove && deletableMembers.length > 1 && (
@@ -221,6 +224,7 @@ export function MembersSection({
                 </Stack>
               </Group>
               <Group gap="xs" wrap="nowrap">
+                {m.user.blocked && <Badge color="red" variant="light" size="sm">Blocked</Badge>}
                 {canManage ? (
                   <Select size="xs" data={roleOptions} value={m.role} onChange={(v) => v && changeRole.mutate({ userId: m.userId, role: v as MemberRole })} w={110} allowDeselect={false} />
                 ) : (

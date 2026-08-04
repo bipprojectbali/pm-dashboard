@@ -7,9 +7,9 @@ type CtxWithQuery = Ctx & { query: Record<string, string> }
 type CtxWithId = Ctx & { params: { id: string } }
 
 const PROJECT_INCLUDE = {
-  owner: { select: { id: true, name: true, email: true, image: true } },
+  owner: { select: { id: true, name: true, email: true, image: true, blocked: true } },
   members: {
-    include: { user: { select: { id: true, name: true, email: true, role: true, image: true } } },
+    include: { user: { select: { id: true, name: true, email: true, role: true, image: true, blocked: true } } },
     orderBy: { joinedAt: 'asc' as const },
   },
   // tasks count must exclude trashed rows — the soft-delete extension only

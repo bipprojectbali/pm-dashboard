@@ -9,11 +9,16 @@ export function TasksPanelHeader({
   onBackToProjects,
   activeProjectId,
   canWriteOverride,
+  hasDashboardData,
 }: {
   s: TasksPanelState
   onBackToProjects?: () => void
   activeProjectId?: string | null
   canWriteOverride?: boolean
+  // Dashboard overlay only renders when the project has tasks — without this,
+  // the toggle looks broken (label flips but nothing appears) once a project
+  // has zero tasks.
+  hasDashboardData?: boolean
 }) {
   const { activeProject, writableProjects, showCharts, setShowCharts, trashView, setTrashView, tasksQ, setCreateOpen } =
     s
@@ -58,10 +63,19 @@ export function TasksPanelHeader({
           </Text>
         </div>
         <Group gap="xs">
-          <Tooltip label={showCharts ? 'Hide dashboard' : 'Show dashboard'}>
+          <Tooltip
+            label={
+              hasDashboardData === false
+                ? 'Tidak ada task untuk ditampilkan'
+                : showCharts
+                  ? 'Hide dashboard'
+                  : 'Show dashboard'
+            }
+          >
             <ActionIcon
               variant="light"
               aria-label={showCharts ? 'Hide dashboard' : 'Show dashboard'}
+              disabled={hasDashboardData === false}
               onClick={() => setShowCharts((v) => !v)}
             >
               <TbChartBar size={16} />

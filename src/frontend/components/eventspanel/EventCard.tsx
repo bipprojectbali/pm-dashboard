@@ -1,7 +1,8 @@
 import { ActionIcon, Badge, Card, Group, Stack, Text, ThemeIcon, Tooltip } from '@mantine/core'
 import { TbCalendarEvent, TbClock, TbEdit, TbMapPin, TbTrash } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
-import { countdown, formatDateRange } from './helpers'
+import { countdown } from '@/frontend/lib/dates'
+import { formatDateRange } from './helpers'
 import type { TeamEvent } from './types'
 
 type Props = {

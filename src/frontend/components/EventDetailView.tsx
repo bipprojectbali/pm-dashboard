@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { TbArrowLeft, TbCalendarEvent, TbClock, TbEdit, TbMapPin, TbTag, TbTrash, TbUser } from 'react-icons/tb'
 import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
 import { useSession } from '@/frontend/hooks/useAuth'
+import { countdown } from '@/frontend/lib/dates'
 
 type EventUser = { id: string; name: string; email: string; image?: string | null }
 type EventProject = { id: string; name: string }
@@ -44,16 +45,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(err.error || `HTTP ${res.status}`)
   }
   return res.json()
-}
-
-function countdown(startsAt: string): { label: string; color: string } {
-  const diffMs = new Date(startsAt).getTime() - Date.now()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffMs < 0) return { label: 'Selesai', color: 'gray' }
-  if (diffDays === 0) return { label: 'Hari ini', color: 'red' }
-  if (diffDays === 1) return { label: 'Besok', color: 'orange' }
-  if (diffDays <= 7) return { label: `${diffDays} hari lagi`, color: 'yellow' }
-  return { label: `${diffDays} hari lagi`, color: 'blue' }
 }
 
 function formatFull(iso: string): string {

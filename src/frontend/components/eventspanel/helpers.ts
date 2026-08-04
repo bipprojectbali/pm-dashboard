@@ -9,16 +9,6 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export function countdown(startsAt: string): { label: string; color: string } {
-  const diffMs = new Date(startsAt).getTime() - Date.now()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffMs < 0) return { label: 'Selesai', color: 'gray' }
-  if (diffDays === 0) return { label: 'Hari ini', color: 'red' }
-  if (diffDays === 1) return { label: 'Besok', color: 'orange' }
-  if (diffDays <= 7) return { label: `${diffDays} hari lagi`, color: 'yellow' }
-  return { label: `${diffDays} hari lagi`, color: 'blue' }
-}
-
 export function formatDateRange(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt)
   const dateStr = start.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })

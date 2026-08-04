@@ -26,6 +26,8 @@ export function TasksPanel({
   initialSort?: { by: string; dir: 'asc' | 'desc' }
 }) {
   const s = useTasksPanelState({ projectId, onProjectChange, canWriteOverride, initialAssigneeFilter, initialSort })
+  const dashboardTasks = s.chartTasksQ.data?.tasks ?? s.rawTasks
+  const hasDashboardData = dashboardTasks.length > 0
 
   return (
     <Stack gap="md">
@@ -34,11 +36,12 @@ export function TasksPanel({
         onBackToProjects={onBackToProjects}
         activeProjectId={s.activeProjectId}
         canWriteOverride={canWriteOverride}
+        hasDashboardData={hasDashboardData}
       />
 
-      {s.showCharts && (s.chartTasksQ.data?.tasks ?? s.rawTasks).length > 0 && (
+      {s.showCharts && hasDashboardData && (
         <TaskDashboardOverlay
-          tasks={s.chartTasksQ.data?.tasks ?? s.rawTasks}
+          tasks={dashboardTasks}
           stats={s.dashboardStatsQ.data}
           serverTotal={s.dashboardStatsQ.data?.total}
         />

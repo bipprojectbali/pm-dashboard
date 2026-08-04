@@ -102,17 +102,23 @@ export function CreateTaskModal({
   const membersQ = useQuery({
     queryKey: ['project-members', projectId, 'modal'],
     queryFn: () =>
-      api<{ project: { members: Array<{ role: string; user: { id: string; name: string; image: string | null } }> } }>(
-        `/api/projects/${projectId}`,
-      ),
+      api<{
+        project: {
+          members: Array<{ role: string; user: { id: string; name: string; image: string | null; blocked?: boolean } }>
+        }
+      }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
   })
-  const members: ProjectMemberOption[] = (membersQ.data?.project.members ?? []).map((m) => ({
-    id: m.user.id,
-    name: m.user.name,
-    role: m.role as ProjectMemberOption['role'],
-    image: m.user.image,
-  }))
+  // Blocked users can't log in, so they're never assignable — even if they're
+  // still a project member record (block doesn't remove membership).
+  const members: ProjectMemberOption[] = (membersQ.data?.project.members ?? [])
+    .filter((m) => !m.user.blocked)
+    .map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+      role: m.role as ProjectMemberOption['role'],
+      image: m.user.image,
+    }))
 
   const parsed = useMemo(() => (csvText.trim() ? parseTaskCsv(csvText) : null), [csvText])
   const errorsByRow = useMemo(() => {

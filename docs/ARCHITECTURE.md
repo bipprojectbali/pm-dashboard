@@ -67,7 +67,7 @@ Session-based auth with HttpOnly cookies stored in DB.
 - Session: `GET /api/auth/session` — looks up session by cookie token, returns user (including role, blocked & `hasPassword`) or 401, auto-deletes expired. `hasPassword` = `user.password !== ''` (the hash itself is never returned) — lets the client show "Buat Password" for Google-only accounts vs "Ubah Password" for accounts that already have one.
 - Logout: `POST /api/auth/logout` — deletes session from DB, clears cookie
 - Password set/change: `PUT /api/me/password` — a Google-only account (`password === ''`) sets its **first** password without proving a current one (audited `PASSWORD_CREATED`); an account that already has a password must pass `currentPassword` verification (audited `PASSWORD_CHANGED`). Both require `newPassword` ≥ 8 chars.
-- Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`
+- Blocked users: login returns 403, existing sessions are invalidated on block, frontend redirects to `/blocked`. Blocking never touches `ProjectMember` rows — membership persists so an unblock restores full visibility with no data loss. `GET /api/projects` / `GET /api/projects/:id` expose `blocked` on `owner`/`members[].user` (`PROJECT_INCLUDE` in `src/routes/projects/query.handlers.ts`) so the frontend can exclude blocked users from active-member pickers (Projects "Anggota" strip, task assignee selects) while keeping them visible — badged "Blocked" — in admin member-management views (`MembersSection`, project Overview Team card). See `@docs/API.md` § Projects + Tasks.
 
 ## Agent surfaces (token-authed)
 

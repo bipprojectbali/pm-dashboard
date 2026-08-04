@@ -9,6 +9,7 @@ export interface TaskUser {
   email: string
   role: string
   image?: string | null
+  blocked?: boolean
 }
 
 export interface TaskComment {

@@ -3,8 +3,9 @@ import { cleanupTestData, createTestApp, createTestSession, prisma, seedTestUser
 
 // Phase authorization (src/lib/phase-access.ts):
 //   create: project OWNER / PM, or SUPER_ADMIN
-//   modify (update+delete): OWNER, SUPER_ADMIN, or the PM who created that phase
-//   old phases (createdById=null): OWNER + SUPER_ADMIN only
+//   modify (update+delete): OWNER, SUPER_ADMIN, or a PM (any PM for legacy
+//   phases with createdById=null; only the creator PM for phases with a
+//   recorded creator)
 //   plain ADMIN gets NO system bypass — only via project membership
 const app = createTestApp()
 
@@ -122,15 +123,14 @@ describe('phase modify authorization (update + delete)', () => {
     expect((await patchPhase(tokens.superadmin, phaseByPmA, { description: 'bySA' })).status).toBe(200)
   })
 
-  test('legacy phase (createdById=null): PM cannot modify, OWNER can', async () => {
-    expect((await patchPhase(tokens.pmA, oldPhase, { description: 'z' })).status).toBe(403)
-    expect((await deletePhase(tokens.pmB, oldPhase)).status).toBe(403)
-    expect((await patchPhase(tokens.owner, oldPhase, { description: 'ownerOk' })).status).toBe(200)
+  test('legacy phase (createdById=null): any PM can modify, treated as project-owned', async () => {
+    expect((await patchPhase(tokens.pmA, oldPhase, { description: 'z' })).status).toBe(200)
+    expect((await patchPhase(tokens.pmB, oldPhase, { description: 'zz' })).status).toBe(200)
   })
 
-  test('OWNER deletes their own then PM-A deletes their phase', async () => {
+  test('OWNER deletes their own then PM-A deletes their phase, PM-B deletes the legacy phase', async () => {
     expect((await deletePhase(tokens.pmA, phaseByPmA)).status).toBe(200)
-    expect((await deletePhase(tokens.owner, oldPhase)).status).toBe(200)
+    expect((await deletePhase(tokens.pmB, oldPhase)).status).toBe(200)
   })
 
   test('non-member MEMBER-level cannot modify → 403', async () => {

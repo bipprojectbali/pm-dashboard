@@ -93,6 +93,6 @@ export function canModifyPhaseFE(
 ): boolean {
   if (systemRole === 'SUPER_ADMIN') return true
   if (myRole === 'OWNER') return true
-  if (myRole === 'PM' && phase.createdById != null && phase.createdById === currentUserId) return true
+  if (myRole === 'PM' && (phase.createdById == null || phase.createdById === currentUserId)) return true
   return false
 }

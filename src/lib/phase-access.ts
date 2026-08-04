@@ -3,13 +3,14 @@
 // creator-aware rule requested by the product owner:
 //
 //   Create : project OWNER / PM, or SUPER_ADMIN.
-//   Modify : project OWNER, SUPER_ADMIN, or the PM who created THAT phase.
-//            (update + delete share this.)
+//   Modify : project OWNER, SUPER_ADMIN, or a PM (update + delete share this).
+//            A PM may modify any phase with no recorded creator (legacy rows,
+//            createdById = null) — treated as project-owned. For phases with a
+//            recorded creator, a PM may only modify the one they created.
 //
 // Note: a plain ADMIN (non-SUPER_ADMIN) gets NO system bypass here — they only
 // pass via their own project membership. This is intentional and differs from
-// isSystemAdmin. Old phases with createdById = null are creator-unknown, so only
-// OWNER + SUPER_ADMIN can modify them.
+// isSystemAdmin.
 import type { ProjectRole } from './project-access'
 
 type Auth = { userId: string; role: string }
@@ -23,6 +24,6 @@ export function canCreatePhase(auth: Auth, membership: Membership): boolean {
 export function canModifyPhase(auth: Auth, membership: Membership, phase: { createdById: string | null }): boolean {
   if (auth.role === 'SUPER_ADMIN') return true
   if (membership?.role === 'OWNER') return true
-  if (membership?.role === 'PM' && phase.createdById != null && phase.createdById === auth.userId) return true
+  if (membership?.role === 'PM' && (phase.createdById == null || phase.createdById === auth.userId)) return true
   return false
 }

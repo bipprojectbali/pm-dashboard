@@ -5,6 +5,11 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Diperbaiki
+- **Chart Throughput/Status breakdown/Top assignees di dashboard Task kini akurat di atas 200 task**: ketiga chart di dashboard menu Task (menyertai kartu Total/Open/Closed/Overdue yang sudah akurat sejak 0.9.2) sebelumnya dihitung di browser dari daftar task yang **diam-diam dibatasi 200 baris** oleh server — begitu sebuah proyek melewati ~200 task, ketiga chart cuma merefleksikan 200 task terbaru meski banner sudah memperingatkan hal ini (kasus nyata: proyek dengan 673 task, chart Status breakdown & Top assignees hanya menghitung 200 di antaranya). Ketiganya kini dihitung langsung di server (endpoint baru `GET /api/tasks/dashboard-charts`, agregasi in-DB tanpa batas baris) sehingga akurat berapa pun jumlah task-nya — banner peringatan pun tidak lagi diperlukan karena tidak ada lagi data yang terpotong. MCP tool baru `task_dashboard_charts`.
+
 ## [0.9.2] - 2026-08-04
 
 ### Diperbaiki

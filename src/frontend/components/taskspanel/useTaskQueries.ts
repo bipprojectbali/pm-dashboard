@@ -104,36 +104,27 @@ export function useTaskQueries({
       ),
     enabled: view !== 'kanban',
   })
-  const chartQuery = buildTasksQueryString({
-    projectId: activeProjectId,
-    status: null,
-    kind: null,
-    assigneeFilter: null,
-    currentUserId,
-    tagFilter: null,
-    phaseFilter: null,
-    view: 'table',
-    page: 1,
-    pageSize: 500,
-    search: '',
-    priorityFilter: null,
-    quickFilter: null,
-  })
-  const chartTasksQ = useQuery({
-    queryKey: ['tasks-chart', chartQuery],
-    queryFn: () => api<{ tasks: TaskListItem[] }>(`/api/tasks?${chartQuery}`),
-    staleTime: 60_000,
-  })
-  // Total/Open/Closed/Overdue stat cards read from this server-side aggregate
-  // (uncapped) instead of chartTasksQ's task list, which the backend hard-caps
-  // at 200 — deriving the cards from tasks.length silently under-counted once
-  // a project passed ~200 tasks.
+  // Total/Open/Closed/Overdue stat cards + the Throughput/Status
+  // breakdown/Top assignees charts both read from server-side aggregates
+  // (uncapped) instead of a `/api/tasks` list, which the backend hard-caps at
+  // 200 — deriving them from a capped fetch silently under-counted once a
+  // project passed ~200 tasks.
   const dashboardStatsQ = useQuery({
     queryKey: ['tasks-dashboard-stats', activeProjectId],
     queryFn: () =>
       api<{ total: number; open: number; closed: number; overdue: number }>(
         `/api/tasks/dashboard-stats${activeProjectId ? `?projectId=${activeProjectId}` : ''}`,
       ),
+    staleTime: 60_000,
+  })
+  const dashboardChartsQ = useQuery({
+    queryKey: ['tasks-dashboard-charts', activeProjectId],
+    queryFn: () =>
+      api<{
+        throughput: Array<{ date: string; created: number; closed: number }>
+        statusBreakdown: Record<string, number>
+        topAssignees: Array<{ id: string; name: string; count: number }>
+      }>(`/api/tasks/dashboard-charts${activeProjectId ? `?projectId=${activeProjectId}` : ''}`),
     staleTime: 60_000,
   })
 
@@ -156,8 +147,8 @@ export function useTaskQueries({
     phasesQ,
     members,
     tasksQ,
-    chartTasksQ,
     dashboardStatsQ,
+    dashboardChartsQ,
     projects,
     writableProjects,
     leadProjectIds,

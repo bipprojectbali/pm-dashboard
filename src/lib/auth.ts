@@ -1,8 +1,8 @@
 import { betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
+import { authAfterHook, authDatabaseHooks, authSecondaryStorage } from './auth.hooks'
 import { prisma } from './db'
 import { env } from './env'
-import { authAfterHook, authDatabaseHooks, authSecondaryStorage } from './auth.hooks'
 
 // Existing users have bcrypt hashes in User.password (via Bun.password.hash).
 // Better Auth stores credential passwords in Account.password.
@@ -69,6 +69,11 @@ export const auth = betterAuth({
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       // Sync Google profile picture to User.image on every sign-in.
       overrideUserInfoOnSignIn: true,
+      // Google's account chooser is skipped when the browser has exactly one
+      // active Google session — it silently reuses that account instead of
+      // asking, even across unrelated apps/projects sharing the browser.
+      // Force the chooser every time so users can pick deliberately.
+      prompt: 'select_account',
     },
   },
 

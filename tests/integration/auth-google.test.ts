@@ -33,4 +33,22 @@ describe('Google OAuth — Better Auth integration', () => {
     expect(res.status).toBeGreaterThanOrEqual(400)
     expect(res.status).toBeLessThan(500)
   })
+
+  // Google skips its account chooser when the browser has exactly one active
+  // Google session — it silently reuses that account across unrelated apps
+  // sharing the browser instead of asking. `prompt: 'select_account'` in
+  // src/lib/auth.ts forces the chooser every time.
+  test('Google authorization URL always requests the account chooser', async () => {
+    const res = await app.handle(
+      new Request('http://localhost/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'google', disableRedirect: true }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { url: string }
+    const authUrl = new URL(body.url)
+    expect(authUrl.searchParams.get('prompt')).toBe('select_account')
+  })
 })

@@ -5,12 +5,6 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
-## [0.9.1] - 2026-08-04
-
-### Diperbaiki
-- **Badge countdown event "Hari ini"/"Besok"/"Selesai" kini pakai batas hari kalender**: label countdown pada kartu event sebelumnya dihitung dari selisih waktu rolling (`now` vs `startsAt` dalam milidetik), bukan batas hari kalender — sebuah event besok pagi bisa terbaca "Hari ini" begitu sisa waktunya di bawah 24 jam penuh, padahal secara kalender jelas masih besok. Kini pakai batas tengah malam-ke-tengah malam lokal (konsisten dengan `computeEventBadgeStats` di server), fungsi `countdown()` yang sebelumnya terduplikasi di 3 tempat dikonsolidasi ke `src/frontend/lib/dates.ts`.
-- **PM boleh modifikasi fase lama tanpa pembuat tercatat**: fase yang dibuat sebelum fitur otorisasi berbasis pembuat (tanpa `createdById`) sebelumnya hanya bisa diubah OWNER/SUPER_ADMIN — PM manapun di project tersebut kini juga boleh mengubah/menghapus fase lama ini (diperlakukan sebagai milik project, bukan milik individu tertentu). Aturan untuk fase baru (yang punya pembuat tercatat) tidak berubah: PM hanya boleh modifikasi fase miliknya sendiri.
-
 ## [0.9.2] - 2026-08-04
 
 ### Diperbaiki
@@ -20,6 +14,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 - **Kartu "Beban Tim" di menu Tim tidak lagi terpengaruh Ide**: perhitungan task terbuka/telat per anggota di menu Manajer Proyek → Tim sebelumnya ikut menghitung task berjenis Ide (IDEA) — padahal Ide sengaja dikecualikan dari semua metrik beban kerja di seluruh aplikasi (Ringkasan Admin, Triase, Analitik). Akibatnya seseorang bisa tampak "kelebihan beban" hanya karena ada catatan ide yang belum tentu dikerjakan. Sekarang task Ide tidak lagi dihitung sebagai beban kerja di menu Tim, konsisten dengan bagian lain aplikasi.
 - **Kartu statistik Total/Open/Closed/Overdue di menu Task kini akurat di atas 200 task**: dashboard kartu di menu Task (baik papan Task global maupun tab Tasks di detail proyek) sebelumnya dihitung dari daftar task yang **diam-diam dibatasi 200 baris** oleh server — begitu sebuah proyek melewati ~200 task, kartu "Closed" mulai meleset jauh dari angka sebenarnya (satu kasus nyata: kartu menunjukkan 190 Closed & 200 Total padahal sesungguhnya 661 Closed & 671 Total). Kartu kini dihitung langsung di server (endpoint baru `GET /api/tasks/dashboard-stats`, tidak terpotong) sehingga akurat berapa pun jumlah task-nya; chart di bawahnya (Throughput/Status breakdown/Top assignees) tetap dari 200 task terbaru dan kini menampilkan **banner** saat datanya terpotong, bukan diam-diam menyembunyikan selisihnya. MCP tool baru `task_dashboard_stats`.
 - **Badge & kartu "Events Mendatang" kini akurat di atas 100 event**: badge sidebar Events, kartu "Events Mendatang" di Ringkasan PM, dan kartu serupa di Ringkasan Admin sebelumnya dihitung dengan memfilter daftar event yang **diam-diam dibatasi 100 baris** — begitu jumlah event upcoming melebihi 100, ketiganya diam-diam meleset (kasus terverifikasi: badge menunjukkan 100 padahal sebenarnya 110 event hari itu). Angka `count` pada `GET /api/events` juga selama ini bukan total asli, melainkan cuma jumlah baris pada halaman yang diminta. Kini semua angka tersebut dihitung langsung di server (endpoint baru `GET /api/events/badge-stats`, `count` di `GET /api/events` diperbaiki jadi total asli) sehingga akurat berapa pun jumlah event-nya. MCP tool baru `event_badge_stats`, `event_list` juga ikut diperbaiki.
+
+## [0.9.1] - 2026-08-04
+
+### Diperbaiki
+- **Badge countdown event "Hari ini"/"Besok"/"Selesai" kini pakai batas hari kalender**: label countdown pada kartu event sebelumnya dihitung dari selisih waktu rolling (`now` vs `startsAt` dalam milidetik), bukan batas hari kalender — sebuah event besok pagi bisa terbaca "Hari ini" begitu sisa waktunya di bawah 24 jam penuh, padahal secara kalender jelas masih besok. Kini pakai batas tengah malam-ke-tengah malam lokal (konsisten dengan `computeEventBadgeStats` di server), fungsi `countdown()` yang sebelumnya terduplikasi di 3 tempat dikonsolidasi ke `src/frontend/lib/dates.ts`.
+- **PM boleh modifikasi fase lama tanpa pembuat tercatat**: fase yang dibuat sebelum fitur otorisasi berbasis pembuat (tanpa `createdById`) sebelumnya hanya bisa diubah OWNER/SUPER_ADMIN — PM manapun di project tersebut kini juga boleh mengubah/menghapus fase lama ini (diperlakukan sebagai milik project, bukan milik individu tertentu). Aturan untuk fase baru (yang punya pembuat tercatat) tidak berubah: PM hanya boleh modifikasi fase miliknya sendiri.
 
 ## [0.9.0] - 2026-08-03
 

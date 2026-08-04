@@ -5,7 +5,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.9.3] - 2026-08-04
 
 ### Diperbaiki
 - **Ubah status task lewat drag di mode Kanban kini menyimpan tanggal selesai, riwayat, dan notifikasi dengan benar**: sebelumnya menggeser kartu task ke kolom lain di mode Kanban memanggil endpoint terpisah (`POST /api/tasks/reorder`) yang hanya mengubah kolom `status` mentah-mentah — tidak seperti semua cara ubah status lain (sidebar detail task, API agent, MCP), endpoint ini **tidak** mengisi `closedAt` saat task masuk kolom Closed maupun mengosongkannya saat dibuka lagi (Reopened). Akibatnya task yang di-close lewat drag Kanban tidak pernah muncul di seri "Closed" pada chart Throughput dan jam aktual (`actualHours`)-nya tidak pernah terhitung. Endpoint ini juga tidak menulis riwayat perubahan status (timeline aktivitas task) dan tidak mengirim notifikasi ke assignee/reporter — berbeda dari semua cara ubah status lainnya. Ketiganya kini konsisten: `closedAt` terisi/terkosongkan dengan benar, riwayat status tercatat, dan notifikasi terkirim — tapi hanya untuk drag yang benar-benar memindahkan kolom (geser urutan di kolom yang sama tidak menyentuh apa pun ini).

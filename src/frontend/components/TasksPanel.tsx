@@ -26,8 +26,9 @@ export function TasksPanel({
   initialSort?: { by: string; dir: 'asc' | 'desc' }
 }) {
   const s = useTasksPanelState({ projectId, onProjectChange, canWriteOverride, initialAssigneeFilter, initialSort })
-  const dashboardTasks = s.chartTasksQ.data?.tasks ?? s.rawTasks
-  const hasDashboardData = dashboardTasks.length > 0
+  // "Show dashboard" toggle is disabled once we know for certain there are no
+  // tasks (server-side total, not a capped list) — undefined while loading.
+  const hasDashboardData = s.dashboardStatsQ.data ? s.dashboardStatsQ.data.total > 0 : undefined
 
   return (
     <Stack gap="md">
@@ -40,11 +41,7 @@ export function TasksPanel({
       />
 
       {s.showCharts && hasDashboardData && (
-        <TaskDashboardOverlay
-          tasks={dashboardTasks}
-          stats={s.dashboardStatsQ.data}
-          serverTotal={s.dashboardStatsQ.data?.total}
-        />
+        <TaskDashboardOverlay charts={s.dashboardChartsQ.data} stats={s.dashboardStatsQ.data} />
       )}
 
       {s.activeProjectId && (

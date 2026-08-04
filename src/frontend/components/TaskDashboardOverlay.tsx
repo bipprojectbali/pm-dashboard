@@ -1,49 +1,14 @@
-import { Alert, Card, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Card, SimpleGrid, Stack, Text } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { TbInfoCircle } from 'react-icons/tb'
-import { toLocalDateStr } from '../lib/dates'
 import { EChart } from './charts/EChart'
 
 type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 
-interface TaskUser {
-  id: string
-  name: string
-  email: string
-  role: string
-}
-
-interface TaskTag {
-  tagId: string
-  tag: { id: string; name: string; color: string; projectId: string }
-}
-
-type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-type TaskKind = 'TASK' | 'BUG' | 'QC' | 'TICKET' | 'IDEA'
-
-interface TaskListItem {
-  id: string
-  projectId: string
-  kind: TaskKind
-  title: string
-  description: string
-  status: TaskStatus
-  priority: TaskPriority
-  route: string | null
-  reporter: TaskUser
-  assignee: TaskUser | null
-  startsAt: string | null
-  dueAt: string | null
-  estimateHours: number | null
-  actualHours: number | null
-  progressPercent: number | null
-  createdAt: string
-  updatedAt: string
-  closedAt: string | null
-  project: { id: string; name: string }
-  tags: TaskTag[]
-  _count: { comments: number; evidence: number; blockedBy: number; blocks: number }
+interface DashboardCharts {
+  throughput: Array<{ date: string; created: number; closed: number }>
+  statusBreakdown: Record<string, number>
+  topAssignees: Array<{ id: string; name: string; count: number }>
 }
 
 const STATUS_HEX: Record<TaskStatus, string> = {
@@ -55,55 +20,23 @@ const STATUS_HEX: Record<TaskStatus, string> = {
 }
 
 export function TaskDashboardOverlay({
-  tasks,
-  stats: serverStats,
-  serverTotal,
+  charts,
+  stats,
 }: {
-  tasks: TaskListItem[]
-  // Total/Open/Closed/Overdue — accurate, server-side (GET /api/tasks/dashboard-stats),
-  // not derived from `tasks` which is capped at 200 rows. Optional so the overlay
-  // degrades to the old client-computed numbers while the query is loading.
+  // Throughput/Status breakdown/Top assignees — accurate, server-side
+  // (GET /api/tasks/dashboard-charts), computed in-DB so they're never capped
+  // by the `/api/tasks` 200-row limit.
+  charts?: DashboardCharts
+  // Total/Open/Closed/Overdue — accurate, server-side (GET /api/tasks/dashboard-stats).
   stats?: { total: number; open: number; closed: number; overdue: number }
-  serverTotal?: number
 }) {
-  const { throughput, donut, assignees, stats: clientStats } = useMemo(() => {
-    const days = 14
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const buckets: { date: string; created: number; closed: number }[] = []
-    const keyToIdx = new Map<string, number>()
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = toLocalDateStr(d)
-      keyToIdx.set(key, buckets.length)
-      buckets.push({ date: key, created: 0, closed: 0 })
-    }
-    const byStatus = new Map<TaskStatus, number>()
-    const byAssignee = new Map<string, { name: string; count: number }>()
-
-    for (const t of tasks) {
-      byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1)
-      const ck = toLocalDateStr(new Date(t.createdAt))
-      const ci = keyToIdx.get(ck)
-      if (ci !== undefined) buckets[ci].created += 1
-      if (t.closedAt) {
-        const xk = toLocalDateStr(new Date(t.closedAt))
-        const xi = keyToIdx.get(xk)
-        if (xi !== undefined) buckets[xi].closed += 1
-      }
-      if (t.status !== 'CLOSED' && t.assignee) {
-        const existing = byAssignee.get(t.assignee.id)
-        if (existing) existing.count += 1
-        else byAssignee.set(t.assignee.id, { name: t.assignee.name, count: 1 })
-      }
-    }
-
+  const { throughput, donut, assignees } = useMemo(() => {
+    const rows = charts?.throughput ?? []
     const throughputOpt: EChartsOption = {
       tooltip: { trigger: 'axis' },
       legend: { data: ['Created', 'Closed'], top: 0, right: 8 },
       grid: { left: 36, right: 16, top: 36, bottom: 28 },
-      xAxis: { type: 'category', data: buckets.map((b) => b.date.slice(5)), boundaryGap: false },
+      xAxis: { type: 'category', data: rows.map((b) => b.date.slice(5)), boundaryGap: false },
       yAxis: { type: 'value', minInterval: 1 },
       series: [
         {
@@ -114,7 +47,7 @@ export function TaskDashboardOverlay({
           symbolSize: 6,
           areaStyle: { opacity: 0.15 },
           itemStyle: { color: '#228be6' },
-          data: buckets.map((b) => b.created),
+          data: rows.map((b) => b.created),
         },
         {
           name: 'Closed',
@@ -124,11 +57,12 @@ export function TaskDashboardOverlay({
           symbolSize: 6,
           areaStyle: { opacity: 0.15 },
           itemStyle: { color: '#40c057' },
-          data: buckets.map((b) => b.closed),
+          data: rows.map((b) => b.closed),
         },
       ],
     }
 
+    const statusEntries = Object.entries(charts?.statusBreakdown ?? {}) as [TaskStatus, number][]
     const donutOpt: EChartsOption = {
       tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
       legend: { bottom: 0, left: 'center', itemGap: 8 },
@@ -140,7 +74,7 @@ export function TaskDashboardOverlay({
           avoidLabelOverlap: true,
           label: { show: false },
           labelLine: { show: false },
-          data: (Array.from(byStatus.entries()) as [TaskStatus, number][]).map(([s, v]) => ({
+          data: statusEntries.map(([s, v]) => ({
             name: s.replace(/_/g, ' '),
             value: v,
             itemStyle: { color: STATUS_HEX[s] },
@@ -149,11 +83,9 @@ export function TaskDashboardOverlay({
       ],
     }
 
-    const topAssignees = Array.from(byAssignee.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8)
-      .reverse()
-
+    // Server already returns top-8 desc; reverse so the bar chart's Y axis
+    // reads largest-on-top.
+    const topAssignees = [...(charts?.topAssignees ?? [])].reverse()
     const assigneesOpt: EChartsOption = {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
       grid: { left: 90, right: 16, top: 12, bottom: 24 },
@@ -170,25 +102,10 @@ export function TaskDashboardOverlay({
       ],
     }
 
-    // Fallback stats (used only until the server aggregate has loaded) — same
-    // "not-CLOSED" open definition as before, computed over the capped `tasks`.
-    const openCount = tasks.filter((t) => t.status !== 'CLOSED').length
-    const closedCount = tasks.length - openCount
-    const nowMs = Date.now()
-    const overdueCount = tasks.filter(
-      (t) => t.status !== 'CLOSED' && t.dueAt && new Date(t.dueAt).getTime() < nowMs,
-    ).length
+    return { throughput: throughputOpt, donut: donutOpt, assignees: assigneesOpt }
+  }, [charts])
 
-    return {
-      throughput: throughputOpt,
-      donut: donutOpt,
-      assignees: assigneesOpt,
-      stats: { total: tasks.length, open: openCount, closed: closedCount, overdue: overdueCount },
-    }
-  }, [tasks])
-
-  const stats = serverStats ?? clientStats
-  const truncated = (serverTotal ?? 0) > tasks.length
+  const cardStats = stats ?? { total: 0, open: 0, closed: 0, overdue: 0 }
 
   return (
     <Stack gap="sm">
@@ -198,7 +115,7 @@ export function TaskDashboardOverlay({
             Total
           </Text>
           <Text fw={700} size="xl">
-            {stats.total}
+            {cardStats.total}
           </Text>
         </Card>
         <Card withBorder padding="sm" radius="md">
@@ -206,7 +123,7 @@ export function TaskDashboardOverlay({
             Open
           </Text>
           <Text fw={700} size="xl" c="blue">
-            {stats.open}
+            {cardStats.open}
           </Text>
         </Card>
         <Card withBorder padding="sm" radius="md">
@@ -214,27 +131,18 @@ export function TaskDashboardOverlay({
             Closed
           </Text>
           <Text fw={700} size="xl" c="green">
-            {stats.closed}
+            {cardStats.closed}
           </Text>
         </Card>
         <Card withBorder padding="sm" radius="md">
           <Text size="xs" c="dimmed">
             Overdue
           </Text>
-          <Text fw={700} size="xl" c={stats.overdue > 0 ? 'red' : undefined}>
-            {stats.overdue}
+          <Text fw={700} size="xl" c={cardStats.overdue > 0 ? 'red' : undefined}>
+            {cardStats.overdue}
           </Text>
         </Card>
       </SimpleGrid>
-      {truncated && (
-        <Alert color="yellow" variant="light" icon={<TbInfoCircle size={16} />} py="xs">
-          <Text size="xs">
-            Chart di bawah (Throughput, Status breakdown, Top assignees) dihitung dari {tasks.length} task terbaru
-            dari {serverTotal} total — kartu Total/Open/Closed/Overdue di atas tetap akurat penuh (di-agregat di
-            server).
-          </Text>
-        </Alert>
-      )}
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
         <Card withBorder padding="sm" radius="md">
           <Text size="sm" fw={500} mb={4}>

@@ -7,6 +7,7 @@ import {
   computeTeamLoad,
 } from '../../../src/lib/admin-overview'
 import { computeRetro, renderRetroMarkdown } from '../../../src/lib/retro'
+import { computeTaskDashboardCharts } from '../../../src/lib/task-dashboard-charts'
 import { computeTaskDashboardStats } from '../../../src/lib/task-dashboard-stats'
 import { jsonText, type ToolModule } from './shared'
 
@@ -100,6 +101,21 @@ export const overviewReadonly: ToolModule = {
       },
       async ({ projectId }) =>
         jsonText(await computeTaskDashboardStats({ userId: '', isAdmin: true, projectId })),
+    )
+
+    server.registerTool(
+      'task_dashboard_charts',
+      {
+        title: 'Task panel dashboard charts',
+        description:
+          'Throughput (created/closed per day), status breakdown, and top-8 assignees (open tasks) backing the Tasks panel dashboard overlay charts. Computed in-DB (not capped at 200 like the underlying task list); includes every kind (IDEA not excluded), matching task_dashboard_stats. Filter by project; trendDays clamps 1-90 (default 14).',
+        inputSchema: {
+          projectId: z.string().optional().describe('Filter to one project; omit for all'),
+          trendDays: z.number().int().min(1).max(90).optional(),
+        },
+      },
+      async ({ projectId, trendDays }) =>
+        jsonText(await computeTaskDashboardCharts({ userId: '', isAdmin: true, projectId, trendDays })),
     )
 
     server.registerTool(

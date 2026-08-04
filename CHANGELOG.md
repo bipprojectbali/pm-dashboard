@@ -5,6 +5,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [0.9.1] - 2026-08-04
+
+### Diperbaiki
+- **Badge countdown event "Hari ini"/"Besok"/"Selesai" kini pakai batas hari kalender**: label countdown pada kartu event sebelumnya dihitung dari selisih waktu rolling (`now` vs `startsAt` dalam milidetik), bukan batas hari kalender — sebuah event besok pagi bisa terbaca "Hari ini" begitu sisa waktunya di bawah 24 jam penuh, padahal secara kalender jelas masih besok. Kini pakai batas tengah malam-ke-tengah malam lokal (konsisten dengan `computeEventBadgeStats` di server), fungsi `countdown()` yang sebelumnya terduplikasi di 3 tempat dikonsolidasi ke `src/frontend/lib/dates.ts`.
+- **PM boleh modifikasi fase lama tanpa pembuat tercatat**: fase yang dibuat sebelum fitur otorisasi berbasis pembuat (tanpa `createdById`) sebelumnya hanya bisa diubah OWNER/SUPER_ADMIN — PM manapun di project tersebut kini juga boleh mengubah/menghapus fase lama ini (diperlakukan sebagai milik project, bukan milik individu tertentu). Aturan untuk fase baru (yang punya pembuat tercatat) tidak berubah: PM hanya boleh modifikasi fase miliknya sendiri.
+
 ## [Unreleased]
 
 ### Diperbaiki

@@ -1,9 +1,9 @@
 import { Badge, Card, SimpleGrid, Table, Text } from '@mantine/core'
 import { TbBrandGithub, TbHistory } from 'react-icons/tb'
 import { RiskStat, SectionHeader } from './shared'
-import type { ReportPayload } from './types'
+import type { AuditHighlightData, GithubActivityData, ReportFooterData } from './types'
 
-export function GithubActivitySection({ data }: { data: ReportPayload }) {
+export function GithubActivitySection({ data }: { data: { github: GithubActivityData } }) {
   const g = data.github
   const total = g.commits + g.prsOpened + g.prsMerged + g.reviews
   return (
@@ -58,7 +58,7 @@ export function GithubActivitySection({ data }: { data: ReportPayload }) {
   )
 }
 
-export function AuditHighlightsSection({ data }: { data: ReportPayload }) {
+export function AuditHighlightsSection({ data }: { data: { audit: AuditHighlightData[] } }) {
   return (
     <Card withBorder padding="md" radius="md" className="page-section">
       <SectionHeader
@@ -111,7 +111,7 @@ export function AuditHighlightsSection({ data }: { data: ReportPayload }) {
   )
 }
 
-export function FooterSection({ data }: { data: ReportPayload }) {
+export function FooterSection({ data }: { data: ReportFooterData }) {
   return (
     <div style={{ textAlign: 'center', padding: '16px 0' }}>
       <Text size="xs" c="dimmed">

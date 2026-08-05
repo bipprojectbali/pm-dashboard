@@ -5,6 +5,7 @@ import {
   computeRiskReport,
   computeTaskTriage,
   computeTeamLoad,
+  computeUserReport,
 } from '../../../src/lib/admin-overview'
 import { computeRetro, renderRetroMarkdown } from '../../../src/lib/retro'
 import { computeTaskDashboardCharts } from '../../../src/lib/task-dashboard-charts'
@@ -87,6 +88,24 @@ export const overviewReadonly: ToolModule = {
       },
       async ({ projectId, staleDays }) =>
         jsonText(await computeTaskTriage({ projectId, staleDays })),
+    )
+
+    server.registerTool(
+      'user_report',
+      {
+        title: 'Per-user report',
+        description:
+          'Drill-down snapshot for one user: task total/open/closed/overdue/blocked, byStatus/byPriority/byKind breakdowns, effort (actualHours vs estimateHours + over/under/on variance counts), github7d activity, top-5 overdueTasks, and taskTrend (created vs closed, trendDays default 14 max 90). Same shape family as team_load/analytics but scoped to one assigneeId. Returns null-ish 404 error if userId not found.',
+        inputSchema: {
+          userId: z.string().describe('User id to report on'),
+          trendDays: z.number().int().min(1).max(90).optional(),
+        },
+      },
+      async ({ userId, trendDays }) => {
+        const result = await computeUserReport({ userId, trendDays })
+        if (!result) return jsonText({ error: 'User not found' })
+        return jsonText(result)
+      },
     )
 
     server.registerTool(

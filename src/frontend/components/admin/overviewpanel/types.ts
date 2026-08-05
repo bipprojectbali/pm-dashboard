@@ -2,8 +2,11 @@ import type { Role } from '@/frontend/hooks/useAuth'
 
 export interface AdminUser {
   id: string
+  name: string
+  email: string
   role: Role
   blocked: boolean
+  image?: string | null
 }
 
 export interface ProjectRow {

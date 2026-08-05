@@ -8,6 +8,7 @@ import { adminLogsRoutes } from './admin/logs.route'
 import { adminOverviewRoutes } from './admin/overview.route'
 import { adminPresenceRoutes } from './admin/presence.route'
 import { adminReportRoutes } from './admin/report.route'
+import { adminReportUserRoutes } from './admin/report-user.route'
 import { adminSelfProjectRoutes } from './admin/self-project.route'
 import { adminSessionsRoutes } from './admin/sessions.route'
 import { adminSyncRoutes } from './admin/sync.route'
@@ -27,5 +28,6 @@ export function adminRoutes() {
     .use(adminOverviewRoutes())
     .use(adminSelfProjectRoutes())
     .use(adminReportRoutes())
+    .use(adminReportUserRoutes())
     .use(adminSyncRoutes())
 }

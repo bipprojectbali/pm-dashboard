@@ -191,3 +191,56 @@ describe('GET /api/admin/overview/analytics', () => {
     expect(body.taskTrend.length).toBe(90)
   })
 })
+
+describe('GET /api/admin/overview/user-report', () => {
+  test('401 without cookie', async () => {
+    const res = await get('/api/admin/overview/user-report?userId=x')
+    expect(res.status).toBe(401)
+  })
+
+  test('403 for USER', async () => {
+    const res = await get('/api/admin/overview/user-report?userId=x', userToken)
+    expect(res.status).toBe(403)
+  })
+
+  test('400 when userId missing', async () => {
+    const res = await get('/api/admin/overview/user-report', adminToken)
+    expect(res.status).toBe(400)
+  })
+
+  test('404 for unknown userId', async () => {
+    const res = await get('/api/admin/overview/user-report?userId=00000000-0000-0000-0000-000000000000', adminToken)
+    expect(res.status).toBe(404)
+  })
+
+  test('returns per-user breakdown for the assignee with the overdue task', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin-cockpit@example.com' } })
+    const res = await get(`/api/admin/overview/user-report?userId=${admin.id}&trendDays=14`, adminToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.id).toBe(admin.id)
+    expect(body.total).toBeGreaterThanOrEqual(1)
+    expect(body.overdue).toBeGreaterThanOrEqual(1)
+    expect(body.byStatus).toBeDefined()
+    expect(body.byPriority).toBeDefined()
+    expect(body.byKind).toBeDefined()
+    expect(body.effort).toBeDefined()
+    expect(Array.isArray(body.overdueTasks)).toBe(true)
+    expect(body.overdueTasks.length).toBeGreaterThanOrEqual(1)
+    expect(Array.isArray(body.taskTrend)).toBe(true)
+    expect(body.taskTrend.length).toBe(14)
+  })
+
+  test('returns zeroed breakdown for a user with no tasks', async () => {
+    const noTaskUser = await seedTestUser('no-task-cockpit@example.com', 'x', 'N', 'USER')
+    const res = await get(`/api/admin/overview/user-report?userId=${noTaskUser.id}`, adminToken)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.total).toBe(0)
+    expect(body.open).toBe(0)
+    expect(body.closed).toBe(0)
+    expect(body.overdue).toBe(0)
+    expect(body.blocked).toBe(0)
+    expect(body.overdueTasks.length).toBe(0)
+  })
+})

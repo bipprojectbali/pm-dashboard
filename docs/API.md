@@ -79,6 +79,13 @@ Admin Chat AI dengan live-context + RAG knowledge base. Lihat `@docs/CHAT-AI.md`
 - `GET /api/admin/chat/sync/status` — `{ totalDocuments, lastSync, breakdown }`.
 - `POST /api/admin/chat/sync` — trigger full sync + orphan prune. Return `{ ok, synced, pruned, failedEmbeddings, duration }`.
 
+## Portfolio Report
+
+Printable/PDF report page (`/admin/report`). Both endpoints ADMIN + SUPER_ADMIN only; see `@docs/FEATURES.md` § Portfolio Report for the full section breakdown.
+
+- `GET /api/admin/report?since&until` — system-wide portfolio report over a period (ISO dates; default = start of current month → now). 400 on invalid/inverted range.
+- `GET /api/admin/report/user?userId&since&until` — same report scoped to one user (`userId` required, 400 if missing, 404 if unknown user). Reuses `computeUserReport`.
+
 ## Report History
 
 Riwayat pengiriman laporan harian disimpan di PostgreSQL (bukan Redis). Accessible oleh ADMIN + SUPER_ADMIN; delete hanya SUPER_ADMIN.

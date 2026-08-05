@@ -3,6 +3,38 @@ export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANC
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
 export type Grade = 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
 
+export interface GithubActivityData {
+  commits: number
+  prsOpened: number
+  prsMerged: number
+  reviews: number
+  byProject: Array<{
+    projectId: string
+    projectName: string
+    repo: string | null
+    commits: number
+    prsOpened: number
+    prsMerged: number
+    prsClosed: number
+    reviews: number
+  }>
+}
+
+export interface AuditHighlightData {
+  id: string
+  action: string
+  detail: string | null
+  ip: string | null
+  createdAt: string
+  userEmail: string | null
+  userName: string | null
+}
+
+export interface ReportFooterData {
+  generatedAt: string
+  generatedBy: { email: string }
+}
+
 export interface ReportPayload {
   window: { since: string; until: string; days: number }
   generatedAt: string
@@ -78,33 +110,32 @@ export interface ReportPayload {
   }
   priorityGroups: Array<{ priority: Priority; count: number }>
   taskSnapshot: { closedInPeriod: number; createdInPeriod: number; avgHealthScore: number | null }
-  github: {
-    commits: number
-    prsOpened: number
-    prsMerged: number
-    reviews: number
-    byProject: Array<{
-      projectId: string
-      projectName: string
-      repo: string | null
-      commits: number
-      prsOpened: number
-      prsMerged: number
-      prsClosed: number
-      reviews: number
-    }>
-  }
-  audit: Array<{
-    id: string
-    action: string
-    detail: string | null
-    ip: string | null
-    createdAt: string
-    userEmail: string | null
-    userName: string | null
-  }>
+  github: GithubActivityData
+  audit: AuditHighlightData[]
+}
+
+export interface UserReportPayload {
+  window: { since: string; until: string; days: number }
+  generatedAt: string
+  generatedBy: { email: string }
+  user: { id: string; name: string; email: string; role: string; image: string | null; blocked: boolean }
+  total: number
+  open: number
+  closed: number
+  overdue: number
+  blocked: number
+  byStatus: Record<string, number>
+  byPriority: Record<string, number>
+  byKind: Record<string, number>
+  effort: { actualHours: number; estimateHours: number; over: number; under: number; on: number }
+  overdueTasks: Array<{ id: string; title: string; priority: string; status: string; dueAt: string | null }>
+  taskTrend: Array<{ date: string; created: number; closed: number }>
+  taskSnapshot: { closedInPeriod: number; createdInPeriod: number }
+  github: GithubActivityData
+  audit: AuditHighlightData[]
 }
 
 export interface ReportSearch {
   preset?: string
+  userId?: string
 }

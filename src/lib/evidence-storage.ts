@@ -73,14 +73,35 @@ export function evidenceKey(taskId: string, storedName: string): string {
   return `evidence/${taskId}/${storedName}`
 }
 
+export function avatarKey(userId: string, storedName: string): string {
+  return `avatars/${userId}/${storedName}`
+}
+
+async function putObject(
+  key: string,
+  data: Blob | ArrayBuffer | Uint8Array | string,
+  contentType?: string,
+): Promise<void> {
+  await ensureBucket()
+  await client.write(key, data, contentType ? { type: contentType } : undefined)
+}
+
 export async function putEvidence(
   taskId: string,
   storedName: string,
   data: Blob | ArrayBuffer | Uint8Array | string,
   contentType?: string,
 ): Promise<void> {
-  await ensureBucket()
-  await client.write(evidenceKey(taskId, storedName), data, contentType ? { type: contentType } : undefined)
+  await putObject(evidenceKey(taskId, storedName), data, contentType)
+}
+
+export async function putAvatar(
+  userId: string,
+  storedName: string,
+  data: Blob | ArrayBuffer | Uint8Array | string,
+  contentType?: string,
+): Promise<void> {
+  await putObject(avatarKey(userId, storedName), data, contentType)
 }
 
 // Lazy reference — caller checks .exists() then streams via `new Response(s3file)`.
@@ -88,7 +109,15 @@ export function getEvidence(taskId: string, storedName: string): S3File {
   return client.file(evidenceKey(taskId, storedName))
 }
 
+export function getAvatar(userId: string, storedName: string): S3File {
+  return client.file(avatarKey(userId, storedName))
+}
+
 // Best-effort delete — never throw (evidence row removal must still succeed).
 export async function removeEvidence(taskId: string, storedName: string): Promise<void> {
   await client.delete(evidenceKey(taskId, storedName)).catch(() => {})
+}
+
+export async function removeAvatar(userId: string, storedName: string): Promise<void> {
+  await client.delete(avatarKey(userId, storedName)).catch(() => {})
 }

@@ -5,7 +5,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.10.0] - 2026-08-05
 
 ### Ditambahkan
 - **Drill-down per-user di Ringkasan Admin & Laporan Lengkap**: kedua halaman kini punya picker user (nama saja, diurutkan abjad, user yang di-block dikecualikan) dengan opsi default "Semua User". Memilih seorang user menampilkan snapshot task/effort/aktivitas GitHub-nya secara khusus, menggantikan sementara tampilan agregat portfolio. Memilih user di Ringkasan Admin lalu klik "Laporan Lengkap" kini membawa pilihan tersebut ke Laporan Lengkap (sebelumnya selalu kembali ke laporan portfolio). Endpoint baru `GET /api/admin/overview/user-report` dan `GET /api/admin/report/user`, MCP tool baru `user_report`.

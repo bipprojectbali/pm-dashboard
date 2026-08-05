@@ -68,6 +68,14 @@ export function useProjectsPanelState() {
     queryFn: () => api<{ projects: ProjectListItem[]; total?: number }>(`/api/projects?scope=${scope}`),
   })
 
+  const usersQ = useQuery({
+    queryKey: ['users'],
+    queryFn: () =>
+      api<{ users: Array<{ id: string; name: string | null; email: string; image: string | null }> }>(
+        '/api/users',
+      ),
+  })
+
   const create = useMutation({
     mutationFn: (body: {
       name: string
@@ -141,6 +149,13 @@ export function useProjectsPanelState() {
   // avatar strip) — they're active-member pickers, not historical records, and
   // a blocked user can no longer log in or do work. Membership rows themselves
   // are untouched; unblocking makes them reappear here automatically.
+  //
+  // Users with no project membership at all are appended after everyone with
+  // a project (their own alphabetical group), sourced from `/api/users` (which
+  // already excludes blocked users) since they have no project row to derive
+  // from otherwise.
+  const allUsers = usersQ.data?.users ?? []
+
   const userOptions = useMemo(() => {
     const seen = new Map<string, string>()
     for (const p of projects) {
@@ -149,8 +164,14 @@ export function useProjectsPanelState() {
         if (!m.user.blocked && !seen.has(m.userId)) seen.set(m.userId, m.user.name || m.user.email || m.userId)
       }
     }
-    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
-  }, [projects])
+    const withProject = Array.from(seen, ([value, label]) => ({ value, label, hasProject: true }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    const withoutProject = allUsers
+      .filter((u) => !seen.has(u.id))
+      .map((u) => ({ value: u.id, label: u.name || u.email || u.id, hasProject: false }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    return [...withProject, ...withoutProject]
+  }, [projects, allUsers])
 
   const userList = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; image?: string | null }>()
@@ -162,8 +183,14 @@ export function useProjectsPanelState() {
           seen.set(m.userId, { id: m.userId, name: m.user.name || m.user.email || m.userId, image: m.user.image })
       }
     }
-    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [projects])
+    const withProject = Array.from(seen.values(), (u) => ({ ...u, hasProject: true }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const withoutProject = allUsers
+      .filter((u) => !seen.has(u.id))
+      .map((u) => ({ id: u.id, name: u.name || u.email || u.id, image: u.image, hasProject: false }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return [...withProject, ...withoutProject]
+  }, [projects, allUsers])
 
   const hasActiveFilters = !!(statusFilter || priorityFilter || roleFilter || ownerFilter || userFilter || derivedFilter || search.trim())
   const clearFilters = () => {
@@ -191,6 +218,7 @@ export function useProjectsPanelState() {
     groupByStatus, setGroupByStatus,
     density, setDensity,
     projectsQ,
+    usersQ,
     create,
     projects,
     totalProjects,

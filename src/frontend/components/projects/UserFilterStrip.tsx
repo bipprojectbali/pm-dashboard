@@ -12,7 +12,7 @@ export function UserFilterStrip({
   onChange,
   onSwitchMode,
 }: {
-  users: Array<{ id: string; name: string; image?: string | null }>
+  users: Array<{ id: string; name: string; image?: string | null; hasProject?: boolean }>
   value: string | null
   onChange: (id: string | null) => void
   onSwitchMode: () => void
@@ -21,6 +21,8 @@ export function UserFilterStrip({
   const visible = users.slice(0, MAX_AVATAR_VISIBLE)
   const overflowUsers = users.slice(MAX_AVATAR_VISIBLE)
   const activeUser = value ? users.find((u) => u.id === value) : null
+  const avatarLabel = (u: { name: string; hasProject?: boolean }) =>
+    u.hasProject === false ? `${u.name} · belum ada proyek` : u.name
 
   return (
     <Group justify="space-between" align="center" wrap="nowrap" gap="md">
@@ -60,7 +62,7 @@ export function UserFilterStrip({
           const isActive = value === u.id
           const isDimmed = !!value && !isActive
           return (
-            <Tooltip key={u.id} label={u.name} withArrow>
+            <Tooltip key={u.id} label={avatarLabel(u)} withArrow>
               <UnstyledButton
                 onClick={() => onChange(isActive ? null : u.id)}
                 style={{ transition: 'transform 0.1s', transform: isActive ? 'scale(1.12)' : 'scale(1)' }}
@@ -111,7 +113,7 @@ export function UserFilterStrip({
                   {overflowUsers.map((u) => {
                     const isActive = value === u.id
                     return (
-                      <Tooltip key={u.id} label={u.name} withArrow>
+                      <Tooltip key={u.id} label={avatarLabel(u)} withArrow>
                         <UnstyledButton
                           onClick={() => {
                             onChange(isActive ? null : u.id)

@@ -32,6 +32,12 @@ Token-only surface (no session) for coding agents / CLI. Auth `Authorization: Be
 
 Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canWrite`), `src/lib/agent-rate-limit.ts` (`checkAgentRateLimit` — Redis fixed-window 100/60s), `src/lib/task-enums.ts` (`isValidStatus/Kind/Priority` — shared validators), `src/routes/agent/shared.ts` (`deny`, `parseJson`, `LIST_INCLUDE`/`DETAIL_INCLUDE`, `enrich`, `ownedTask`, `resolveChecklistWrite`). Enforcement mirrors the MCP token-scoped server. `reporterId`/`authorId` fall back to project owner when the token's creator was deleted. A local CLI wrapper (`scripts/agent-cli.ts`, `bun run agent <cmd>`) reads `.env.agent` and drives this surface. Route modules: `tasks.route.ts` (reads), `writes.route.ts` (create + soft-delete), `task.update.route.ts` (PATCH), `comments.route.ts` (POST + PATCH + DELETE), `task.claim.route.ts`, `evidence.route.ts`, `dependencies.route.ts`, `checklist.route.ts`, `project.route.ts`, `index.ts` (barrel + rate limiter middleware).
 
+## Profile (self-service, `/api/me/*`)
+
+Session-authed endpoint for a user to edit their own display name from Settings → Profil. Not to be confused with the token-only `/api/agent/*` surface — this requires a logged-in session cookie.
+
+- `PUT /api/me/profile` — body `{ name }` (required). Trims whitespace, rejects empty or >100 chars → 400. Updates `User.name`, audited `PROFILE_UPDATED`. Returns `{ user: { name } }`.
+
 ## Admin API (SUPER_ADMIN only)
 
 - `GET /api/admin/users` — list users with role, blocked status, createdAt. Optional query: `search` (substring over name/email, case-insensitive), `role` (USER|QC|ADMIN|SUPER_ADMIN; 400 on invalid). Pagination is opt-in: **without `limit`** returns the full roster as `{ users }` (legacy shape — used by OverviewPanel/AuditLogsPanel); **with `limit`** returns `{ users, total, limit, offset }` (`limit` clamped 1–200, `offset` default 0).

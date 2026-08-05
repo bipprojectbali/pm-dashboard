@@ -18,6 +18,7 @@ export const actionBadge: Record<string, { color: string; label: string }> = {
   SESSIONS_REVOKED: { color: 'red', label: 'Sessions Revoked' },
   PASSWORD_CREATED: { color: 'teal', label: 'Password Created' },
   PASSWORD_CHANGED: { color: 'teal', label: 'Password Changed' },
+  PROFILE_UPDATED: { color: 'cyan', label: 'Profile Updated' },
 
   // User management
   ROLE_CHANGED: { color: 'violet', label: 'Role Changed' },

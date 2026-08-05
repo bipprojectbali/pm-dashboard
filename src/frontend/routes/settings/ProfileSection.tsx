@@ -2,7 +2,7 @@ import { Badge, Group, Paper, SimpleGrid, Stack, Text, ThemeIcon, Tooltip } from
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { TbAlertTriangle, TbBriefcase, TbInfoCircle, TbUser } from 'react-icons/tb'
-import { UserAvatar } from '@/frontend/components/shared/UserAvatar'
+import { ProfileEditCard } from './ProfileEditCard'
 import { type ProjectLite, priorityColor, projectStatusColor, roleBadgeColor, type TaskLite } from './types'
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -55,15 +55,10 @@ export function ProfileSection({
     <Stack gap="lg">
       <Paper withBorder p="xl" radius="md">
         <Stack align="center" gap="md">
-          <UserAvatar name={user?.name} image={user?.image} size={80} color="blue" />
-          <div style={{ textAlign: 'center' }}>
-            <Text fw={600} size="lg">
-              {user?.name}
-            </Text>
-            <Text c="dimmed" size="sm">
-              {user?.email}
-            </Text>
-          </div>
+          <ProfileEditCard name={user?.name} image={user?.image} />
+          <Text c="dimmed" size="sm">
+            {user?.email}
+          </Text>
           <Badge color={roleBadgeColor[user?.role ?? 'USER']} variant="light" size="lg">
             {user?.role}
           </Badge>

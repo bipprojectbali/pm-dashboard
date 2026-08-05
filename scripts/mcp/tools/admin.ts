@@ -118,6 +118,31 @@ export const adminTools: ToolModule = {
     )
 
     server.registerTool(
+      'admin_update_user_profile',
+      {
+        title: 'Update user display name',
+        description:
+          "Update a user's display name (mirrors the self-service PUT /api/me/profile a user drives from Settings).",
+        inputSchema: {
+          userId: z.string(),
+          name: z.string().trim().min(1).max(100),
+        },
+      },
+      async ({ userId, name }) => {
+        const user = await prisma.user.findUnique({ where: { id: userId } })
+        if (!user) return jsonText({ error: 'User not found' })
+        const updated = await prisma.user.update({
+          where: { id: userId },
+          data: { name },
+          select: { id: true, email: true, name: true },
+        })
+        await audit(userId, 'MCP_PROFILE_UPDATED', `${user.name} -> ${name}`)
+        appLog('info', `MCP: profile name updated for ${user.email}`)
+        return jsonText({ ok: true, user: updated })
+      },
+    )
+
+    server.registerTool(
       'admin_reset_password',
       {
         title: 'Reset password',

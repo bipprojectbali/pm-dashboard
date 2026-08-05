@@ -7,6 +7,7 @@ import {
   Group,
   Loader,
   SegmentedControl,
+  Select,
   Stack,
   Text,
   ThemeIcon,
@@ -15,20 +16,35 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { TbAlertTriangle, TbArrowLeft, TbFileReport, TbPrinter, TbRefresh } from 'react-icons/tb'
+import { TbAlertTriangle, TbArrowLeft, TbFileReport, TbPrinter, TbRefresh, TbUser } from 'react-icons/tb'
+import { BreakdownDonuts } from '@/frontend/components/admin/userreportpanel/BreakdownDonuts'
+import { EffortCard } from '@/frontend/components/admin/userreportpanel/EffortCard'
+import { OverdueList } from '@/frontend/components/admin/userreportpanel/OverdueList'
+import { TrendChart } from '@/frontend/components/admin/userreportpanel/TrendChart'
 import { toLocalDateStr } from '@/frontend/lib/dates'
-import { GithubActivitySection, AuditHighlightsSection, FooterSection } from './admin_report/ActivitySections'
+import { AuditHighlightsSection, FooterSection, GithubActivitySection } from './admin_report/ActivitySections'
 import { DistributionSection, TimelineSection, VelocityTrendSection } from './admin_report/ChartSections'
 import { CoverSection, ExecutiveSummary } from './admin_report/CoverExecutive'
 import { PRESETS, resolveRange } from './admin_report/constants'
 import { HealthGridSection, RiskRadarSection } from './admin_report/ProjectSections'
 import { PdfOverlay } from './admin_report/shared'
 import { TeamLoadSection } from './admin_report/TeamEffortSections'
-import type { ReportPayload, ReportSearch } from './admin_report/types'
+import type { ReportPayload, ReportSearch, UserReportPayload } from './admin_report/types'
+import { UserCoverSection, UserExecutiveSummary } from './admin_report/UserReportSections'
+
+interface AdminUserOption {
+  id: string
+  name: string
+  email: string
+  blocked: boolean
+}
+
+const ALL_USERS_VALUE = '__all__'
 
 export const Route = createFileRoute('/admin_/report')({
   validateSearch: (search: Record<string, unknown>): ReportSearch => ({
     preset: search.preset != null ? String(search.preset) : undefined,
+    userId: search.userId != null ? String(search.userId) : undefined,
   }),
   beforeLoad: async ({ context }) => {
     try {
@@ -67,10 +83,28 @@ function ReportContent({ data }: { data: ReportPayload }) {
   )
 }
 
+function UserReportContent({ data }: { data: UserReportPayload }) {
+  const navigate = useNavigate()
+  return (
+    <Stack gap="xl">
+      <UserCoverSection data={data} />
+      <UserExecutiveSummary data={data} />
+      <EffortCard effort={data.effort} className="page-section" />
+      <BreakdownDonuts byStatus={data.byStatus} byPriority={data.byPriority} className="page-section" renderer="svg" />
+      <TrendChart trend={data.taskTrend} className="page-section" renderer="svg" />
+      <OverdueList tasks={data.overdueTasks} navigate={navigate} className="page-section" />
+      <GithubActivitySection data={data} />
+      <AuditHighlightsSection data={data} />
+      <FooterSection data={data} />
+    </Stack>
+  )
+}
+
 function ReportPage() {
   const navigate = useNavigate()
   const search = Route.useSearch()
   const [preset, setPreset] = useState<string>(search.preset ?? 'month')
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(search.userId ?? ALL_USERS_VALUE)
   const [pdfState, setPdfState] = useState<{
     busy: boolean
     progress?: { done: number; total: number }
@@ -79,12 +113,45 @@ function ReportPage() {
 
   const { since, until } = useMemo(() => resolveRange(preset), [preset])
 
+  const usersQ = useQuery({
+    queryKey: ['admin', 'report', 'users'],
+    queryFn: () =>
+      fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()) as Promise<{
+        users: AdminUserOption[]
+      }>,
+  })
+  const userOptions = useMemo(
+    () => [
+      { value: ALL_USERS_VALUE, label: 'Semua User' },
+      ...(usersQ.data?.users ?? [])
+        .filter((u) => !u.blocked)
+        .map((u) => ({ value: u.id, label: u.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    ],
+    [usersQ.data],
+  )
+
+  const isUserMode = !!selectedUserId && selectedUserId !== ALL_USERS_VALUE
+
   const q = useQuery({
     queryKey: ['admin', 'report', preset],
     queryFn: () =>
       fetch(`/api/admin/report?since=${since.toISOString()}&until=${until.toISOString()}`, {
         credentials: 'include',
       }).then((r) => r.json()) as Promise<ReportPayload>,
+    enabled: !isUserMode,
+  })
+
+  const userQ = useQuery({
+    queryKey: ['admin', 'report', 'user', selectedUserId, preset],
+    queryFn: () =>
+      fetch(
+        `/api/admin/report/user?userId=${selectedUserId}&since=${since.toISOString()}&until=${until.toISOString()}`,
+        {
+          credentials: 'include',
+        },
+      ).then((r) => r.json()) as Promise<UserReportPayload>,
+    enabled: isUserMode,
   })
 
   const handlePrint = async () => {
@@ -94,7 +161,10 @@ function ReportPage() {
     setPdfState({ busy: true, progress: { done: 0, total: 0 } })
     try {
       const { generateReportPdf } = await import('@/frontend/lib/report-pdf')
-      const filename = `portfolio-report-${preset}-${toLocalDateStr(new Date())}.pdf`
+      const filename =
+        isUserMode && userQ.data
+          ? `user-report-${userQ.data.user.email.split('@')[0]}-${preset}-${toLocalDateStr(new Date())}.pdf`
+          : `portfolio-report-${preset}-${toLocalDateStr(new Date())}.pdf`
       await generateReportPdf(root, filename, (done, total) => setPdfState({ busy: true, progress: { done, total } }))
       setPdfState({ busy: false })
     } catch (err) {
@@ -123,12 +193,25 @@ function ReportPage() {
               <ThemeIcon variant="light" color="violet" size="md" radius="md">
                 <TbFileReport size={18} />
               </ThemeIcon>
-              <Text fw={600}>Laporan Portfolio</Text>
+              <Text fw={600}>{isUserMode ? 'Laporan Per User' : 'Laporan Portfolio'}</Text>
             </Group>
             <Group gap="sm">
+              <Select
+                leftSection={<TbUser size={14} />}
+                data={userOptions}
+                value={selectedUserId}
+                onChange={(v) => setSelectedUserId(v ?? ALL_USERS_VALUE)}
+                searchable
+                size="xs"
+                w={220}
+              />
               <SegmentedControl size="xs" value={preset} onChange={setPreset} data={PRESETS} />
               <Tooltip label="Refresh">
-                <ActionIcon variant="subtle" onClick={() => q.refetch()} loading={q.isFetching}>
+                <ActionIcon
+                  variant="subtle"
+                  onClick={() => (isUserMode ? userQ.refetch() : q.refetch())}
+                  loading={isUserMode ? userQ.isFetching : q.isFetching}
+                >
                   <TbRefresh size={16} />
                 </ActionIcon>
               </Tooltip>
@@ -140,7 +223,7 @@ function ReportPage() {
                   color="violet"
                   onClick={handlePrint}
                   loading={pdfState.busy}
-                  disabled={!q.data || pdfState.busy}
+                  disabled={(isUserMode ? !userQ.data : !q.data) || pdfState.busy}
                 >
                   Simpan PDF
                 </Button>
@@ -151,7 +234,19 @@ function ReportPage() {
       </div>
 
       <Container size="xl" py="lg">
-        {q.isLoading ? (
+        {isUserMode ? (
+          userQ.isLoading ? (
+            <Center py="xl">
+              <Loader />
+            </Center>
+          ) : userQ.isError || !userQ.data ? (
+            <Alert color="red" icon={<TbAlertTriangle size={16} />}>
+              Gagal memuat laporan. Coba refresh.
+            </Alert>
+          ) : (
+            <UserReportContent data={userQ.data} />
+          )
+        ) : q.isLoading ? (
           <Center py="xl">
             <Loader />
           </Center>

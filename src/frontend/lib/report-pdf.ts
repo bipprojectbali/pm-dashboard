@@ -2,6 +2,9 @@
 // and packs one section per A4 page into a jsPDF document. Acts like a
 // screenshot — the page's live theme (dark or light) is preserved as-is.
 
+const TRANSPARENT_PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
 export async function generateReportPdf(
   rootEl: HTMLElement,
   filename: string,
@@ -46,6 +49,11 @@ export async function generateReportPdf(
         if (!(node instanceof HTMLElement)) return true
         return node.getAttribute('data-html2canvas-ignore') !== 'true'
       },
+      // Cross-origin images (e.g. Google profile photos) can't be fetched and
+      // inlined as base64 due to CORS — fall back to a blank pixel instead of
+      // throwing the raw error Event.
+      imagePlaceholder: TRANSPARENT_PIXEL,
+      onImageErrorHandler: () => TRANSPARENT_PIXEL,
     })
 
     const dim = await loadImageSize(dataUrl)

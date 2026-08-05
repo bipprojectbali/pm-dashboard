@@ -51,8 +51,8 @@ export function ProjectsFilterBar({
   setView: (v: 'grid' | 'list' | 'timeline') => void
   groupByStatus: boolean
   setGroupByStatus: (v: boolean) => void
-  userList: Array<{ id: string; name: string; image?: string | null }>
-  userOptions: Array<{ value: string; label: string }>
+  userList: Array<{ id: string; name: string; image?: string | null; hasProject?: boolean }>
+  userOptions: Array<{ value: string; label: string; hasProject?: boolean }>
   hasActiveFilters: boolean
   filtered: ProjectListItem[]
   projects: ProjectListItem[]
@@ -89,7 +89,9 @@ export function ProjectsFilterBar({
                 placeholder="Any user"
                 value={userFilter}
                 onChange={setUserFilter}
-                data={userOptions}
+                data={userOptions.map((u) =>
+                  u.hasProject === false ? { value: u.value, label: `${u.label} (belum ada proyek)` } : u,
+                )}
                 leftSection={<TbUsers size={12} />}
                 searchable
                 clearable

@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { cleanupTestData, createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
 
-// Covers PUT /api/me/profile (name edit) and POST/DELETE /api/me/avatar
-// (profile picture upload/removal via MinIO, same storage path as task evidence).
-const MINIO_READY = !!process.env.MINIO_ENDPOINT
+// Covers PUT /api/me/profile: persistence of the display name, trimming,
+// and validation (empty/too-long name rejected).
 const app = createTestApp()
 
 let token = ''
@@ -67,85 +66,5 @@ describe('PUT /api/me/profile', () => {
       }),
     )
     expect(res.status).toBe(401)
-  })
-})
-
-describe.if(MINIO_READY)('POST/DELETE /api/me/avatar', () => {
-  test('uploads an image and sets user.image', async () => {
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-    const form = new FormData()
-    form.append('file', new File([png], 'avatar.png', { type: 'image/png' }))
-    const res = await app.handle(
-      new Request('http://localhost/api/me/avatar', {
-        method: 'POST',
-        headers: { cookie: `session=${token}` },
-        body: form,
-      }),
-    )
-    expect(res.status).toBe(200)
-    const { user } = await res.json()
-    expect(user.image).toContain('/api/me/avatar/')
-
-    const row = await prisma.user.findUnique({ where: { email: userEmail }, select: { image: true } })
-    expect(row?.image).toBe(user.image)
-  })
-
-  test('non-image file → 400', async () => {
-    const form = new FormData()
-    form.append('file', new File([new Uint8Array([1, 2, 3])], 'doc.txt', { type: 'text/plain' }))
-    const res = await app.handle(
-      new Request('http://localhost/api/me/avatar', {
-        method: 'POST',
-        headers: { cookie: `session=${token}` },
-        body: form,
-      }),
-    )
-    expect(res.status).toBe(400)
-  })
-
-  test('empty file → 400', async () => {
-    const form = new FormData()
-    form.append('file', new File([], 'empty.png', { type: 'image/png' }))
-    const res = await app.handle(
-      new Request('http://localhost/api/me/avatar', {
-        method: 'POST',
-        headers: { cookie: `session=${token}` },
-        body: form,
-      }),
-    )
-    expect(res.status).toBe(400)
-  })
-
-  test('unauthenticated upload → 401', async () => {
-    const form = new FormData()
-    form.append('file', new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }))
-    const res = await app.handle(new Request('http://localhost/api/me/avatar', { method: 'POST', body: form }))
-    expect(res.status).toBe(401)
-  })
-
-  test('clears the avatar back to null', async () => {
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
-    const form = new FormData()
-    form.append('file', new File([png], 'avatar2.png', { type: 'image/png' }))
-    await app.handle(
-      new Request('http://localhost/api/me/avatar', {
-        method: 'POST',
-        headers: { cookie: `session=${token}` },
-        body: form,
-      }),
-    )
-
-    const delRes = await app.handle(
-      new Request('http://localhost/api/me/avatar', {
-        method: 'DELETE',
-        headers: { cookie: `session=${token}` },
-      }),
-    )
-    expect(delRes.status).toBe(200)
-    const { user } = await delRes.json()
-    expect(user.image).toBeNull()
-
-    const row = await prisma.user.findUnique({ where: { email: userEmail }, select: { image: true } })
-    expect(row?.image).toBeNull()
   })
 })

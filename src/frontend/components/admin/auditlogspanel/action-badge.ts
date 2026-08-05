@@ -19,8 +19,6 @@ export const actionBadge: Record<string, { color: string; label: string }> = {
   PASSWORD_CREATED: { color: 'teal', label: 'Password Created' },
   PASSWORD_CHANGED: { color: 'teal', label: 'Password Changed' },
   PROFILE_UPDATED: { color: 'cyan', label: 'Profile Updated' },
-  AVATAR_UPDATED: { color: 'cyan', label: 'Avatar Updated' },
-  AVATAR_REMOVED: { color: 'red', label: 'Avatar Removed' },
 
   // User management
   ROLE_CHANGED: { color: 'violet', label: 'Role Changed' },

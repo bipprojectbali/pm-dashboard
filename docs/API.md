@@ -34,12 +34,9 @@ Helpers: `src/lib/agent-auth.ts` (`resolveAgentAuth`, `resolveReporterId`, `canW
 
 ## Profile (self-service, `/api/me/*`)
 
-Session-authed endpoints for a user to edit their own display name and profile picture from Settings → Profil. Not to be confused with the token-only `/api/agent/*` surface — these require a logged-in session cookie.
+Session-authed endpoint for a user to edit their own display name from Settings → Profil. Not to be confused with the token-only `/api/agent/*` surface — this requires a logged-in session cookie.
 
 - `PUT /api/me/profile` — body `{ name }` (required). Trims whitespace, rejects empty or >100 chars → 400. Updates `User.name`, audited `PROFILE_UPDATED`. Returns `{ user: { name } }`.
-- `POST /api/me/avatar` — multipart upload, field name `file`. Same size/empty-file validation as task evidence uploads (`env.UPLOAD_MAX_BYTES`, 413 on oversized, 400 on empty), plus an image-only mime check (400 if not `image/*` — unlike evidence uploads, which accept any file type). Stored in the same MinIO bucket as evidence via `putAvatar`/`avatarKey` (`src/lib/evidence-storage.ts`), audited `AVATAR_UPDATED`. Returns `{ user: { image } }` with `image` set to `/api/me/avatar/<file>`.
-- `GET /api/me/avatar/:file` — auth-gated proxy, always serves the **caller's own** stored avatar (the file name comes from the URL but the user id is taken from the session, not a query param — no cross-user access).
-- `DELETE /api/me/avatar` — clears `User.image` back to `null` (reverts to initials avatar), best-effort removes the stored object, audited `AVATAR_REMOVED`.
 
 ## Admin API (SUPER_ADMIN only)
 

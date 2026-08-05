@@ -24,7 +24,7 @@ Requires `MCP_SECRET`. Scope is gated by `NODE_ENV` inside `createMcpServer()`: 
 
 ## Tools by module
 
-- **Admin** (admin): `admin_set_user_role`, `admin_block_user`, `admin_unblock_user`, `admin_revoke_sessions`, `admin_create_user`, `admin_reset_password`, `admin_update_user_profile` (`{ userId, name }` — update a user's display name, mirrors the self-service `PUT /api/me/profile`; avatar upload is intentionally not exposed over MCP — needs binary multipart, use the HTTP UI instead) — user/session management mirroring the `/api/admin/users/*` endpoints
+- **Admin** (admin): `admin_set_user_role`, `admin_block_user`, `admin_unblock_user`, `admin_revoke_sessions`, `admin_create_user`, `admin_reset_password`, `admin_update_user_profile` (`{ userId, name }` — update a user's display name, mirrors the self-service `PUT /api/me/profile`) — user/session management mirroring the `/api/admin/users/*` endpoints
 - **DB** (readonly): `db_list_users`, `db_get_user`, `db_list_sessions`, `db_list_audit_logs`, `db_count_by_table` — direct read-only DB inspection
 - **Dev** (admin): `dev_typecheck`, `dev_lint`, `dev_test`, `dev_db_migrate`, `dev_db_seed`, `dev_db_generate` — run project tooling (Bun) from MCP; gated to non-prod scope
 - **Code** (readonly): `code_read_file`, `code_grep`, `code_stat` — source inspection

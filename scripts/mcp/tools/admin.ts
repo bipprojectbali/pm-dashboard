@@ -122,7 +122,7 @@ export const adminTools: ToolModule = {
       {
         title: 'Update user display name',
         description:
-          "Update a user's display name (mirrors the self-service PUT /api/me/profile a user drives from Settings). Avatar upload is intentionally not exposed here — it needs binary multipart, impractical over MCP; use the HTTP UI to change a profile picture.",
+          "Update a user's display name (mirrors the self-service PUT /api/me/profile a user drives from Settings).",
         inputSchema: {
           userId: z.string(),
           name: z.string().trim().min(1).max(100),

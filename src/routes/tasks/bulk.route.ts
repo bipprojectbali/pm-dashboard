@@ -28,18 +28,27 @@ export function taskBulkRoutes() {
         return { error: 'updates array required' }
       }
       const updates = body.updates as Array<{ id: string; kanbanOrder: number; status?: string }>
-      const firstTask = await prisma.task.findUnique({
-        where: { id: updates[0].id, deletedAt: null },
+      // Authorize EVERY project the batch touches, not just the first task's:
+      // the write loop below updates every id, so authorizing one project let a
+      // caller append tasks from projects they have no access to and move them
+      // (kanbanOrder + status) for free. One query resolves all of them.
+      const reorderIds = [...new Set(updates.map((u) => u.id))]
+      const reorderTasks = await prisma.task.findMany({
+        where: { id: { in: reorderIds }, deletedAt: null },
         select: { projectId: true },
       })
-      if (!firstTask) {
+      if (reorderTasks.length !== reorderIds.length) {
         set.status = 404
         return { error: 'Task not found' }
       }
-      const reorderMembership = await requireProjectMember(firstTask.projectId, auth.userId)
       if (!isSystemAdmin(auth.role)) {
         const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
-        if (!reorderMembership || !meetsMinProjectRole(reorderMembership.role, minWriteRoles)) {
+        const reorderProjectIds = [...new Set(reorderTasks.map((t) => t.projectId))]
+        const reorderMemberships = await Promise.all(
+          reorderProjectIds.map((pid) => requireProjectMember(pid, auth.userId)),
+        )
+        // All-or-nothing: dropping just the unauthorized rows would hide the attempt.
+        if (reorderMemberships.some((m) => !m || !meetsMinProjectRole(m.role, minWriteRoles))) {
           set.status = 403
           return { error: 'Not a writable project member' }
         }

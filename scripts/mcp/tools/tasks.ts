@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
+import { getPermissionRule, meetsMinProjectRole } from '../../../src/lib/permission-config'
+import { isSystemAdmin, requireProjectMember } from '../../../src/lib/project-access'
 import { jsonText, type ToolModule } from './shared'
 import { resolveUserEmail } from './tasks.helpers'
 import { registerTaskWriteTools } from './tasks.write'
@@ -71,6 +73,54 @@ export const tasksReadonly: ToolModule = {
         })
         if (!task) return jsonText({ error: 'Task not found' })
         return jsonText({ task })
+      },
+    )
+
+    server.registerTool(
+      'task_reorder_authz_check',
+      {
+        title: 'Cek otorisasi batch reorder',
+        description:
+          'Inspeksi gate POST /api/tasks/reorder: untuk sekumpulan taskId, laporkan project mana saja yang akan tersentuh batch itu dan apakah user tertentu boleh menulis di SEMUA project tersebut (requireProjectMember + permissions.task.write.minProjectRole, system admin bypass). Read-only: tidak menulis apa pun. Role memperhitungkan overdue lock (project terkunci melaporkan anggotanya sebagai VIEWER).',
+        inputSchema: {
+          taskIds: z.array(z.string()).min(1).describe('Daftar taskId seperti pada body updates[].id'),
+          userEmail: z.string().email().describe('User yang diuji sebagai caller'),
+        },
+      },
+      async ({ taskIds, userEmail }) => {
+        const user = await resolveUserEmail(userEmail)
+        if (!user) return jsonText({ error: `User not found: ${userEmail}` })
+        const ids = [...new Set(taskIds)]
+        const tasks = await prisma.task.findMany({
+          where: { id: { in: ids }, deletedAt: null },
+          select: { id: true, projectId: true, project: { select: { name: true } } },
+        })
+        const missing = ids.filter((id) => !tasks.some((t) => t.id === id))
+        const minWriteRoles = await getPermissionRule('permissions.task.write.minProjectRole')
+        const admin = isSystemAdmin(user.role)
+        const byProject = new Map(tasks.map((t) => [t.projectId, t.project.name]))
+        const projects = await Promise.all(
+          [...byProject.entries()].map(async ([projectId, name]) => {
+            const m = await requireProjectMember(projectId, user.id)
+            return {
+              projectId,
+              name,
+              taskCount: tasks.filter((t) => t.projectId === projectId).length,
+              effectiveRole: m?.role ?? null,
+              writable: admin || (m != null && meetsMinProjectRole(m.role, minWriteRoles)),
+            }
+          }),
+        )
+        return jsonText({
+          userEmail,
+          systemAdmin: admin,
+          minWriteRoles,
+          missingTaskIds: missing,
+          projectCount: projects.length,
+          projects,
+          // Sama seperti handler: id hilang → 404, satu project tak writable → 403 untuk seluruh batch.
+          expectedStatus: missing.length ? 404 : projects.every((p) => p.writable) ? 200 : 403,
+        })
       },
     )
   },

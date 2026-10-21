@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/db'
+import { documentResponseHeaders } from '../../lib/document-preview'
 import { buildStoredName, getDocument, putDocument, removeDocument } from '../../lib/document-storage'
 import { env } from '../../lib/env'
 import { emitInvalidate } from '../../lib/presence'
@@ -121,7 +122,7 @@ export async function serveProjectDocumentHandler({ request, params, set }: CtxW
   // cosmetic.
   const doc = await prisma.projectDocument.findFirst({
     where: { id: params.docId, projectId: params.id, deletedAt: null },
-    select: { storedName: true, mimeType: true },
+    select: { storedName: true, mimeType: true, originalName: true },
   })
   if (!doc) {
     set.status = 404
@@ -133,7 +134,12 @@ export async function serveProjectDocumentHandler({ request, params, set }: CtxW
   // to, this feature was never on disk.
   try {
     const bytes = await getDocument(params.id, doc.storedName).bytes()
-    return new Response(bytes, { headers: { 'Content-Type': doc.mimeType } })
+    // The stored mimeType is NOT trusted as a rendering instruction: this route
+    // is same-origin, so anything the browser renders here runs with the
+    // viewer's session, and uploading is only gated on "member, not VIEWER".
+    // documentResponseHeaders decides inline vs attachment from an allowlist
+    // and always sends nosniff. See src/lib/document-preview.ts.
+    return new Response(bytes, { headers: documentResponseHeaders(doc.mimeType, doc.originalName) })
   } catch (e) {
     const code = (e as { code?: string }).code
     if (code === 'NoSuchKey' || code === 'ERR_S3_INVALID_PATH') {

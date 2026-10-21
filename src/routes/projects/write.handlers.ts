@@ -3,6 +3,7 @@ import { prisma } from '../../lib/db'
 import { normalizeGithubRepo } from '../../lib/github'
 import { getPermissionRule } from '../../lib/permission-config'
 import { emitInvalidate } from '../../lib/presence'
+import { withLockBypass } from '../../lib/prisma-project-lock'
 import {
   canManageProject,
   getIp,
@@ -137,7 +138,14 @@ export async function updateProjectHandler({ request, params, set }: CtxWithId) 
     }
   }
   try {
-    const project = await prisma.project.update({ where: { id: params.id }, data })
+    // Bypass sanctioned: this handler already decided what a locked project
+    // accepts — OWNER/PM get the disposition statuses above and nothing else,
+    // a system admin keeps full edit rights. The data-layer guard is actor
+    // blind, so without this the disposition that ends the lock would be
+    // refused by the lock itself.
+    const project = await withLockBypass(() =>
+      prisma.project.update({ where: { id: params.id }, data }),
+    )
     audit(auth.userId, 'PROJECT_UPDATED', `${project.id} ${Object.keys(data).join(',')}`, getIp(request))
     emitInvalidate('projects', { projectId: project.id })
     return { project }

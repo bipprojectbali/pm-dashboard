@@ -34,10 +34,12 @@ export async function requireProjectMemberRaw(
 }
 
 // Effective membership role. A locked project reports every member as VIEWER,
-// which every existing write gate already rejects — that is what enforces the
-// lock, so no separate guard exists. Reads only test membership for null, so
-// they are unaffected. System admins bypass the role check in their callers and
-// stay able to act.
+// so every write gate that consults this function rejects — the first of two
+// layers. The backstop is `src/lib/prisma-project-lock.ts`, which refuses
+// project-scoped writes in the Prisma client itself, covering the routes that
+// gate on something other than membership (reporter identity, a global role, a
+// token scope). Reads only test membership for null, so they are unaffected.
+// System admins bypass the role check in their callers and stay able to act.
 export async function requireProjectMember(projectId: string, userId: string): Promise<{ role: ProjectRole } | null> {
   const m = await prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },

@@ -1,4 +1,5 @@
 import { prisma } from './db'
+import { recordLockActor } from './prisma-project-lock'
 import { verifyProjectToken } from './project-access-tokens'
 import { resolveLockState } from './project-lock'
 
@@ -6,7 +7,7 @@ import { resolveLockState } from './project-lock'
 // auth (requireAuth): the project + scope come entirely from the pmt_ token, so
 // an agent never passes projectId and can never touch another project.
 export type AgentAuth =
-  | { ok: true; projectId: string; scope: 'READ' | 'WRITE'; userId: string | null }
+  | { ok: true; projectId: string; scope: 'READ' | 'WRITE'; userId: string | null; tokenId: string }
   | { ok: false; status: 401 | 403; error: string }
 
 function readBearer(request: Request): string | null {
@@ -17,6 +18,9 @@ function readBearer(request: Request): string | null {
 }
 
 export async function resolveAgentAuth(request: Request): Promise<AgentAuth> {
+  // A project token is never a system admin, whoever created it. Recorded
+  // explicitly so this surface can never pick up an admin actor.
+  recordLockActor(false)
   const raw = readBearer(request)
   if (!raw?.startsWith('pmt_')) return { ok: false, status: 401, error: 'Unauthorized' }
 
@@ -41,6 +45,7 @@ export async function resolveAgentAuth(request: Request): Promise<AgentAuth> {
     projectId: result.projectId,
     scope: lock.locked ? 'READ' : result.scope,
     userId: result.userId,
+    tokenId: result.tokenId,
   }
 }
 

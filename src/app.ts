@@ -4,6 +4,7 @@ import { Elysia } from 'elysia'
 import pkg from '../package.json' with { type: 'json' }
 import { appLog } from './lib/applog'
 import { broadcastToAdmins } from './lib/presence'
+import { beginLockActorScope, isProjectLockedError, LOCKED_WRITE_MESSAGE } from './lib/prisma-project-lock'
 import { adminRoutes } from './routes/admin.route'
 import { agentRoutes } from './routes/agent'
 import { authRoutes } from './routes/auth.route'
@@ -34,6 +35,21 @@ export function createApp() {
       }
       const url = new URL(request.url)
       const message = error instanceof Error ? error.message : String(error)
+      // A write refused by the overdue-lock guard is a permission answer, not a
+      // crash: same 403 + { locked: true } shape the route-level lock paths use,
+      // so the lock screen reacts identically whichever layer caught it.
+      if (isProjectLockedError(error)) {
+        appLog('warn', `${request.method} ${url.pathname} — ${message}`)
+        return new Response(
+          JSON.stringify({
+            error: LOCKED_WRITE_MESSAGE,
+            locked: true,
+            projectId: error.context.projectId,
+            status: 403,
+          }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
       appLog('error', `${request.method} ${url.pathname} — ${message}`)
       console.error('[Server Error]', error)
       return new Response(JSON.stringify({ error: 'Internal Server Error', status: 500 }), {
@@ -44,6 +60,11 @@ export function createApp() {
 
     .onRequest(({ request }) => {
       ;(request as any).__startTime = performance.now()
+      // Earliest per-request hook, and nothing is awaited before it: opens the
+      // overdue-lock actor scope as a non-admin so a request that never
+      // authenticates cannot inherit an admin actor and the guard fails closed.
+      // requireAuth / resolveAgentAuth fill it in.
+      beginLockActorScope()
     })
     .onAfterResponse(({ request, set }) => {
       const url = new URL(request.url)

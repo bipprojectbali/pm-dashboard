@@ -1,5 +1,6 @@
-import { prisma } from '../src/lib/db'
 import { createApp } from '../src/app'
+import { prisma } from '../src/lib/db'
+import { withLockBypass } from '../src/lib/prisma-project-lock'
 
 // Guard: tolak jika DATABASE_URL tidak mengarah ke DB test
 // Jalankan test dengan: bun run test (sudah pakai --env-file .env.test)
@@ -89,6 +90,13 @@ export async function seedTestTask(
 
 /** Clean up test data */
 export async function cleanupTestData() {
+  // Teardown is not a project write: a suite that left an overdue-locked
+  // project behind would otherwise have its cleanup refused by the write guard
+  // and poison every later suite.
+  return withLockBypass(() => wipeAll())
+}
+
+async function wipeAll() {
   await prisma.reportHistory.deleteMany()
   await prisma.event.deleteMany()
   await prisma.taskDependency.deleteMany()

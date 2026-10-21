@@ -64,6 +64,19 @@ Menautkan event ke sebuah project adalah aksi tulis pada project itu, bukan seka
 
 MCP: `task_reorder_authz_check` (readonly) — dari daftar taskId, laporkan project yang tersentuh, role efektif user, dan status yang diharapkan (200/403/404).
 
+## Integritas batch reorder task
+
+Satu drag di board Kanban adalah **satu** gesture user yang menulis ke banyak baris, jadi batch-nya atomic dan divalidasi utuh sebelum menulis. Keduanya tinggal di `applyReorderBatch` (`src/routes/tasks/reorder.helpers.ts`); route `bulk.route.ts` hanya memanggilnya setelah gate otorisasi di atas lolos.
+
+- **Atomic.** Seluruh `task.update` **plus** baris `TaskStatusChange`-nya masuk satu `prisma.$transaction` (bentuk array, pola yang sama dipakai `POST /api/tasks/bulk`). Sebelumnya `Promise.all` dari update independen — bukan transaksi — sehingga gagal di tengah batch menyisakan board separuh ter-reorder: `kanbanOrder` bertabrakan/berlubang dan sebagian task berpindah status sementara saudaranya tidak, padahal user melihat request gagal. Riwayat status ikut masuk transaksi supaya state task dan jejaknya tidak pernah berbeda.
+- **Notifikasi di luar transaksi, setelah commit.** Sengaja dua arah: memanggilnya di dalam transaksi akan mengumumkan perubahan status yang bisa di-rollback sesudahnya, sementara `notifyTaskStatusChanged` melakukan I/O jaringan (Telegram) yang tidak boleh menahan transaksi DB tetap terbuka. Dispatch-nya di-await (supaya baris notifikasi sudah ada saat response balik) tapi tiap kegagalan ditelan — Telegram mati tidak boleh menggagalkan drag.
+- **Validasi status pakai state machine yang sama.** Tiap baris yang membawa `status` dilewatkan ke `getAllowedTaskTransitions` (`src/lib/task-lifecycle.ts`) — persis yang dipakai `PATCH /api/tasks/:id` — jadi tidak ada sumber kebenaran kedua soal transisi legal. Sebelumnya `buildReorderUpdateData` menulis string `status` apa pun dari klien, sehingga menjatuhkan kartu di kolom yang salah bisa melewati gate QC sebuah kind. Transisi ilegal → **400** dengan pesan Indonesia yang menyebut task dan transisi yang ditolak.
+- **All-or-nothing, termasuk untuk baris ilegal.** Satu baris ilegal membatalkan seluruh batch, tidak hanya baris itu: `kanbanOrder` yang dihitung frontend mengasumsikan semua baris mendarat, dan menerapkan sebagian justru menghasilkan board separuh berubah yang transaksi di atas ada untuk mencegah.
+- **Baris no-op.** `status` yang sama dengan status sekarang (atau baris tanpa `status`, yaitu reorder murni dalam satu kolom) dihitung bukan transisi: state machine tidak punya edge X → X, tapi klien yang mengirim ulang status sekarang bukan sedang meminta perpindahan ilegal. Baris seperti ini lolos tanpa menulis `TaskStatusChange` maupun notifikasi.
+- Catatan soal guard lain di jalur ini: `src/lib/prisma-soft-delete.ts` hanya menyuntik `deletedAt: null` ke operasi **baca** model Task, jadi transaksi ini tidak melewatinya. Overdue lock sendiri ditegakkan dua lapis dan keduanya kena jalur reorder: di route lewat `requireProjectMember` (anggota project terkunci dilaporkan `VIEWER`, jadi gate otorisasi di atas menolak sebelum `applyReorderBatch` dipanggil), dan di lapisan data lewat `src/lib/prisma-project-lock.ts` — `task` dan `taskStatusChange` ada di `GUARDED_MODELS`, jadi tiap tulis di dalam `prisma.$transaction` di atas tetap diperiksa walau suatu saat gate route-nya luput.
+
+MCP: `task_reorder_transition_check` (readonly) — dari daftar `{ id, status }`, laporkan status & kind task sekarang, transisi yang diizinkan, baris ilegal pertama, dan status yang diharapkan (200/400/404). Tidak menulis apa pun.
+
 ## Aturan penambahan fitur (WAJIB)
 
 Setiap fitur baru — endpoint API, route frontend, lib helper, integrasi, behavior cron, dsb. — harus selalu disertai **dua hal** sebelum dianggap selesai:

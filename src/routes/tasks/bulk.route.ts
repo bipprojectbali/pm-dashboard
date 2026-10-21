@@ -6,7 +6,7 @@ import { emitInvalidate } from '../../lib/presence'
 import { getIp, isSystemAdmin, requireAuth, requireProjectMember, writeAuditLog } from '../../lib/route-helpers'
 import type { RawTaskInput } from './bulk.helpers'
 import { normalizeBulkRows, resolveBulkRefs } from './bulk.helpers'
-import { applyReorderStatusSideEffects, buildReorderUpdateData } from './reorder.helpers'
+import { applyReorderBatch } from './reorder.helpers'
 
 export function taskBulkRoutes() {
   return new Elysia()
@@ -53,36 +53,14 @@ export function taskBulkRoutes() {
           return { error: 'Not a writable project member' }
         }
       }
-      // Only updates that carry a `status` change need the pre-update row
-      // (to know fromStatus + notify recipients) — a pure kanbanOrder reorder
-      // skips this entirely.
-      const statusUpdates = updates.filter((u) => u.status)
-      const beforeById = new Map(
-        statusUpdates.length
-          ? (await prisma.task.findMany({ where: { id: { in: statusUpdates.map((u) => u.id) } } })).map((t) => [
-              t.id,
-              t,
-            ])
-          : [],
-      )
-      const actor = statusUpdates.length
-        ? await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } })
-        : null
-      await Promise.all(
-        updates.map((u) => prisma.task.update({ where: { id: u.id }, data: buildReorderUpdateData(u) })),
-      )
-      await Promise.all(
-        statusUpdates.map((u) => {
-          const before = beforeById.get(u.id)
-          if (!before) return Promise.resolve()
-          return applyReorderStatusSideEffects({
-            update: u,
-            before,
-            actorId: auth.userId,
-            actorName: actor?.name ?? 'Someone',
-          })
-        }),
-      )
+      // Status validation + the atomic write + post-commit notifications all
+      // live in applyReorderBatch; an illegal transition rejects the whole
+      // batch (400) before anything is written.
+      const result = await applyReorderBatch({ updates, actorId: auth.userId })
+      if ('error' in result) {
+        set.status = 400
+        return { error: result.error }
+      }
       return { ok: true }
     })
 

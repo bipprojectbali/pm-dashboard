@@ -14,13 +14,27 @@ const REDIS_KEY = 'app:logs'
 const MAX_ENTRIES = 500
 const ID_KEY = 'app:logs:next_id'
 
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
+
+/**
+ * Mask email-shaped substrings so the log buffer never holds an address.
+ * Domain is kept (operationally useful, not personal); local part keeps only
+ * its first character. Applied at the sink so no caller can reintroduce it.
+ */
+export function redactLogText(text: string): string {
+  return text.replace(EMAIL_RE, (match) => {
+    const at = match.lastIndexOf('@')
+    return `${match[0]}***${match.slice(at)}`
+  })
+}
+
 export async function appLog(level: LogLevel, message: string, detail?: string) {
   const id = await redis.incr(ID_KEY)
   const entry: AppLogEntry = {
     id,
     level,
-    message,
-    detail,
+    message: redactLogText(message),
+    detail: detail === undefined ? undefined : redactLogText(detail),
     timestamp: new Date().toISOString(),
   }
   await redis.lpush(REDIS_KEY, JSON.stringify(entry))

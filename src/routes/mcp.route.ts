@@ -44,7 +44,7 @@ async function handleMcp(request: Request, parsedBody?: unknown): Promise<Respon
     enableJsonResponse: true,
   })
   await server.connect(transport)
-  await appLog('info', `MCP token ${raw.slice(0, 12)}… project=${ctx.projectId} scope=${ctx.scope}`)
+  await appLog('info', `MCP token tokenId=${ctx.tokenId} project=${ctx.projectId} scope=${ctx.scope}`)
   return transport.handleRequest(request, {
     parsedBody,
     authInfo: { token: raw, clientId: ctx.tokenId, scopes: [ctx.scope], extra: ctx },

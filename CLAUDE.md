@@ -79,6 +79,18 @@ Satu drag di board Kanban adalah **satu** gesture user yang menulis ke banyak ba
 
 MCP: `task_reorder_transition_check` (readonly) — dari daftar `{ id, status }`, laporkan status & kind task sekarang, transisi yang diizinkan, baris ilegal pertama, dan status yang diharapkan (200/400/404). Tidak menulis apa pun.
 
+## Redaksi PII di app log
+
+`appLog(level, message, detail?)` (`src/lib/applog.ts`) adalah **satu-satunya** sink untuk setiap baris log aplikasi, dan isinya bukan sekadar stdout: entri didorong ke list Redis `app:logs` (cap 500) yang dibaca ulang oleh admin UI. Jadi apa pun yang masuk ke sana tersimpan dan terbaca kembali — alamat email di message bukan jejak sesaat, tapi data pribadi yang menetap.
+
+`redactLogText(text)` memasker tiap substring berbentuk email di **`message` maupun `detail`** sebelum entri ditulis: local part disisakan satu karakter pertama, sisanya `***`, domain dipertahankan — `budi@wibudev.com` → `b***@wibudev.com`. Domain sengaja dibiarkan utuh karena operasional berguna (membedakan akun internal dari luar saat menelusuri insiden) dan bukan data pribadi; local part tidak pernah ditampilkan utuh, termasuk `+tag`-nya.
+
+- **Kenapa di sink, bukan di tiap call site.** Saat guard ini dibuat ada **17** call site yang menginterpolasi email ke `appLog` (`auth.email`, `user.email`, `userEmail`, dan `email` di jalur login). Menambal satu per satu berarti diff lebih besar daripada masalahnya *dan* membiarkan call site ke-18 yang ditulis bulan depan bocor lagi — arah kegagalannya salah: lupa memasker = kebocoran senyap. Di sink, arahnya terbalik: tiap caller sekarang dan nanti otomatis tercakup, dan tidak ada yang bisa memperkenalkan ulang kebocoran tanpa sengaja. Identitas pelaku tetap terekam dengan benar di tempat lain — `audit()` / `writeAuditLog()` di jalur yang sama sudah mencatat `auth.userId`, jadi baris log tidak kehilangan apa pun yang dibutuhkan untuk menelusuri siapa.
+- **Pola yang benar untuk identitas di log:** sebut `userId=<id>`, bukan email. Jalur trash task, logout, dan `admin/sync` sudah memakai pola ini.
+- **Kredensial opaque tidak punya bentuk yang bisa dicocokkan, jadi tidak boleh pernah sampai ke `appLog`.** Regex hanya bisa menangkap pola; potongan token (`raw.slice(0, 12)`), session id, atau API key tidak punya bentuk yang bisa dideteksi tanpa menebak, dan menebak justru melahirkan rasa aman yang palsu. Guard sink **tidak** melindungi kredensial — pencegahannya di call site, dengan tidak menuliskannya sejak awal. `src/routes/mcp.route.ts` karena itu mencatat `tokenId=${ctx.tokenId}` (id baris database, bukan rahasia) alih-alih prefix token mentah. Test `tests/unit/applog-redaction.test.ts` mengunci keterbatasan ini secara eksplisit supaya guard sink tidak disalahpahami sebagai perlindungan kredensial.
+
+MCP: `logs_redact_preview` (readonly, di module `logsReadonly` pada `scripts/mcp/tools/logs.ts`) — beri sebuah string, dapatkan bentuk yang akan tersimpan plus flag `changed`, supaya behavior redaksi bisa diperiksa dari dev maupun stg tanpa login UI.
+
 ## Aturan penambahan fitur (WAJIB)
 
 Setiap fitur baru — endpoint API, route frontend, lib helper, integrasi, behavior cron, dsb. — harus selalu disertai **dua hal** sebelum dianggap selesai:

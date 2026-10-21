@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { clearAppLogs, getAppLogs } from '../../../src/lib/applog'
+import { clearAppLogs, getAppLogs, redactLogText } from '../../../src/lib/applog'
 import { prisma } from '../../../src/lib/db'
 import { jsonText, type ToolModule } from './shared'
 
@@ -26,6 +26,22 @@ export const logsReadonly: ToolModule = {
           logs = logs.filter((l) => l.message.toLowerCase().includes(s))
         }
         return jsonText({ count: logs.length, logs })
+      },
+    )
+
+    server.registerTool(
+      'logs_redact_preview',
+      {
+        title: 'App log redaction preview',
+        description:
+          'Run the appLog sink redaction over a string and show what would be stored. Email-shaped substrings are masked; opaque credentials are not (they have no matchable shape and must never be passed to appLog).',
+        inputSchema: {
+          text: z.string().describe('Candidate log message or detail'),
+        },
+      },
+      async ({ text }) => {
+        const redacted = redactLogText(text)
+        return jsonText({ input: text, redacted, changed: redacted !== text })
       },
     )
 

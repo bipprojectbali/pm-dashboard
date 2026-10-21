@@ -6,6 +6,7 @@ import { TbAlertTriangle, TbFileText, TbRefresh } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { api } from './ProjectDetailView/types'
+import { DocumentPreviewModal } from './projectdocuments/DocumentPreviewModal'
 import { DocumentRow } from './projectdocuments/DocumentRow'
 import { DocumentTrashSection } from './projectdocuments/DocumentTrashSection'
 import {
@@ -35,6 +36,9 @@ export function ProjectDocumentsSection({
   const session = useSession()
   const [title, setTitle] = useState('')
   const [note, setNote] = useState('')
+  // One modal for the whole tab, holding whichever document is being viewed,
+  // rather than a modal instance per row.
+  const [previewDoc, setPreviewDoc] = useState<ProjectDocument | null>(null)
 
   const ctx: DocumentPermissionCtx = {
     myRole,
@@ -168,6 +172,7 @@ export function ProjectDocumentsSection({
               canDelete={canDeleteDocument(doc, ctx)}
               onDelete={() => confirmDelete(doc)}
               deleting={remove.isPending && remove.variables === doc.id}
+              onPreview={() => setPreviewDoc(doc)}
             />
           ))}
         </Stack>
@@ -176,6 +181,8 @@ export function ProjectDocumentsSection({
       {/* Outside the list branches on purpose: the trash can hold rows even
           when the live list is empty, which is exactly when someone needs it. */}
       <DocumentTrashSection projectId={projectId} ctx={ctx} enabled={canUpload} />
+
+      <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </Stack>
   )
 }

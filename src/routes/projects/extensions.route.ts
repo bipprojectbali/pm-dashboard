@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import { prisma } from '../../lib/db'
 import { emitInvalidate } from '../../lib/presence'
-import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMember } from '../../lib/route-helpers'
+import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMemberRaw } from '../../lib/route-helpers'
 import { audit } from './shared'
 
 export function projectExtensionRoutes() {
@@ -9,7 +9,9 @@ export function projectExtensionRoutes() {
     .post('/api/projects/:id/extend', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
       if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const membership = await requireProjectMember(params.id, auth.userId)
+      // Raw role on purpose: extending is the way out of an overdue lock, so it
+      // must stay available to the OWNER/PM of a locked project.
+      const membership = await requireProjectMemberRaw(params.id, auth.userId)
       if (!canManageProject(auth, membership)) {
         set.status = 403
         return { error: 'Only OWNER, PM, or system admin can extend deadline' }

@@ -30,6 +30,17 @@ export interface ProjectMember {
   user: ProjectUser & { role: string }
 }
 
+export type LockStage = 'EXEMPT' | 'ON_TIME' | 'DUE_SOON' | 'OVERDUE' | 'ESCALATED' | 'LOCKED'
+
+// Mirrors LockState in src/lib/project-lock.ts, with dates as ISO strings.
+export interface ProjectLockState {
+  stage: LockStage
+  locked: boolean
+  overdueDays: number
+  graceDays: number
+  lockAt: string | null
+}
+
 export interface ProjectListItem {
   id: string
   name: string
@@ -50,6 +61,7 @@ export interface ProjectListItem {
   _count: { members: number; tasks: number; milestones: number; phases: number }
   myRole: MemberRole | null
   canWrite: boolean
+  lock?: ProjectLockState
   joinedAt: string | null
   taskStats?: TaskStats
   milestoneStats?: { done: number; total: number }

@@ -12,6 +12,7 @@ import { milestonesReadonly, milestonesTools } from './tools/milestones'
 import { phasesReadonly, phasesTools } from './tools/phases'
 import { overviewReadonly } from './tools/overview'
 import { presenceTools } from './tools/presence'
+import { projectLockAdmin, projectLockReadonly } from './tools/project-lock'
 import { projectTools } from './tools/project'
 import { projectsReadonly, projectsTools } from './tools/projects'
 import { qcReadonly, qcTools } from './tools/qc'
@@ -38,6 +39,7 @@ const READONLY_MODULES: ToolModule[] = [
   codeTools,
   githubReadonly,
   projectsReadonly,
+  projectLockReadonly,
   tasksReadonly,
   ticketsReadonly,
   tagsReadonly,
@@ -61,6 +63,7 @@ const ADMIN_MODULES: ToolModule[] = [
   devTools,
   redisTools,
   projectsTools,
+  projectLockAdmin,
   tasksTools,
   ticketsTools,
   tagsTools,

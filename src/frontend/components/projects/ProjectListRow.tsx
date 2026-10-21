@@ -1,6 +1,6 @@
 import { ActionIcon, Badge, Box, Card, Group, Progress, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
-import { TbCalendarEvent, TbPencil, TbUsers } from 'react-icons/tb'
+import { TbCalendarEvent, TbLock, TbPencil, TbUsers } from 'react-icons/tb'
 import { computeOverdue, formatDate } from './helpers'
 import { PRIORITY_COLOR, STATUS_COLOR, type ProjectListItem } from './types'
 
@@ -43,6 +43,13 @@ export function ProjectListRow({
             <Badge color={PRIORITY_COLOR[p.priority]} variant="dot" size="xs">
               {p.priority}
             </Badge>
+            {p.lock?.locked && (
+              <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER, PM, atau admin yang bisa membukanya">
+                <Badge color="red" variant="filled" size="xs" leftSection={<TbLock size={10} />}>
+                  TERKUNCI
+                </Badge>
+              </Tooltip>
+            )}
             {overdue && (
               <Badge color="red" variant="filled" size="xs">
                 Overdue {daysOver}d

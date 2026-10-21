@@ -13,9 +13,9 @@ Default to using Bun instead of Node.js.
 - `src/index.tsx` — server entry (Vite middleware in dev, static serving in prod, `.listen()`)
 - `src/serve.ts` — dev entry (`bun --watch src/serve.ts`)
 - `src/frontend/` — React 19 + Vite 8 + TanStack Router (routes, components, hooks)
-- `src/lib/` — single-purpose helpers: `db` (Prisma client), `redis`, `applog`, `presence`, `github`, `github-summary`, `self-project`, `admin-overview`, `effort`, `retro`, `chat`, `chat-documents`, `extensions`, `task-metrics` (`WORKLOAD_KIND_FILTER` — excludes `IDEA` kind from workload aggregations), `project-access-tokens` (generate/hash/verify per-project bearer token for agents; see `@docs/INTEGRATIONS.md`), `agent-auth` (`resolveAgentAuth`/`resolveReporterId`/`canWrite` for the token-only `/api/agent/*` REST surface), `llms-content` (`renderLlmsTxt` — auth-gated `GET /api/agent/guide` agent guide), `evidence-storage` (`putEvidence`/`getEvidence`/`removeEvidence` — MinIO/S3 object storage for evidence files via `Bun.S3Client`; see `@docs/ARCHITECTURE.md`)
+- `src/lib/` — single-purpose helpers: `db` (Prisma client), `redis`, `applog`, `presence`, `github`, `github-summary`, `self-project`, `admin-overview`, `effort`, `retro`, `chat`, `chat-documents`, `extensions`, `task-metrics` (`WORKLOAD_KIND_FILTER` — excludes `IDEA` kind from workload aggregations), `project-access-tokens` (generate/hash/verify per-project bearer token for agents), `agent-auth` (`resolveAgentAuth`/`resolveReporterId`/`canWrite` for the token-only `/api/agent/*` REST surface), `llms-content` (`renderLlmsTxt` — auth-gated `GET /api/agent/guide` agent guide), `evidence-storage` (`putEvidence`/`getEvidence`/`removeEvidence` — MinIO/S3 object storage for evidence files via `Bun.S3Client`)
 - `prisma/` — `schema.prisma` + single baseline migration + `seed.ts` (dev only)
-- `scripts/mcp/` — local stdio MCP (see `@docs/MCP.md`); `scripts/mcp-deploy/` — deploy wrapper
+- `scripts/mcp/` — local stdio MCP; `scripts/mcp-deploy/` — deploy wrapper
 - `tests/unit/`, `tests/integration/` — `bun:test`
 
 ## Commands
@@ -23,12 +23,24 @@ Default to using Bun instead of Node.js.
 - DB: `bun run db:migrate`, `bun run db:seed`, `bun run db:generate`
 - Test: `bun run test`, `bun run test:unit`, `bun run test:integration`
 
+## Overdue project lock
+
+Forcing function, bukan penalti: project `ACTIVE` non-archived dengan `endsAt` yang lewat tanpa keputusan jadi read-only, supaya yang berwenang terpaksa memutuskan — perpanjang deadline, tandai `COMPLETED`, atau `CANCELLED`.
+
+- `src/lib/project-lock.ts` — state turunan, tidak ada kolom lock tersimpan. `computeLockState(project, graceDays, now?)` → stage `EXEMPT | ON_TIME | DUE_SOON | OVERDUE | ESCALATED | LOCKED`. Grace dari setting `project.lockGraceDays` (default 7, cache 60s); `DUE_SOON` 7 hari sebelum deadline; `ESCALATED` pada `ceil(grace/2)` hari terlambat; `LOCKED` pada `grace` hari terlambat.
+- Penegakan: `requireProjectMember` menurunkan role tiap anggota jadi `VIEWER` saat locked, `resolveAgentAuth` menurunkan scope token jadi `READ`. System admin tidak terkena. `requireProjectMemberRaw` memakai role asli — untuk jalur yang harus tetap hidup saat locked (extend deadline, baca access token, request-decision).
+- `src/lib/project-lock.sweep.ts` — `runProjectLockSweep(now?)`, jalan saat startup lalu tiap jam dari `src/index.tsx`. Kind per stage: `PROJECT_DUE_SOON` / `PROJECT_OVERDUE` → owner + member OWNER/PM; `PROJECT_LOCK_WARNING` → ditambah semua system admin non-blocked; `PROJECT_LOCKED` → semua anggota + owner + system admin. Dedup per (penerima, project, kind) dalam 24 jam.
+- `POST /api/projects/:id/request-decision` (`src/routes/projects/lock.route.ts`) — tombol anggota yang terblokir. Wajib anggota (role asli) atau system admin; 400 bila project belum locked; kirim `PROJECT_DECISION_REQUESTED` ke owner + OWNER/PM + system admin dengan `actorId` = caller; dedup per caller+project dalam 12 jam (`{ ok: true, deduped: true, notified: 0 }`); audit action `PROJECT_DECISION_REQUESTED`.
+- Saat locked, `PATCH /api/projects/:id` hanya menerima body yang *satu-satunya* key-nya `status` bernilai `COMPLETED`/`CANCELLED` (jalur disposisi OWNER/PM); field lain — termasuk yang diselipkan bersama `status` — ditolak 403 `{ locked: true }`.
+- `GET /api/projects` dan `GET /api/projects/:id` mengembalikan `lock` (LockState) plus `canWrite` (false saat locked kecuali system admin) dan, khusus detail, `canDecide` (OWNER/PM/system admin — sengaja tidak terpengaruh lock supaya layar kunci tahu siapa yang bisa memutuskan). `myRole` selalu role asli, bukan hasil downgrade.
+- MCP: `project_lock_states` (readonly — inspeksi stage tanpa mengirim notifikasi), `project_lock_sweep` (admin — jalankan sweep sekali), `project_lock_set_grace` (admin — ubah `project.lockGraceDays`, balikan: project yang langsung terkunci).
+
 ## Aturan penambahan fitur (WAJIB)
 
 Setiap fitur baru — endpoint API, route frontend, lib helper, integrasi, behavior cron, dsb. — harus selalu disertai **dua hal** sebelum dianggap selesai:
 
-1. **Test** di `tests/unit/` (untuk lib/helper murni) dan/atau `tests/integration/` (untuk endpoint via `app.handle()`). Minimal cover golden path + 1 edge case + 1 failure case. Gunakan helper di `tests/helpers.ts` (`createTestApp`, `seedTestUser`, `cleanupTestData`). Tidak boleh mock DB — tes integrasi harus hit Postgres asli (lihat `@docs/TESTING.md`).
-2. **MCP tool** di `scripts/mcp/tools/` yang membungkus fitur tersebut sehingga bisa dipakai dari dev (stdio, full admin scope) DAN stg (HTTP, readonly otomatis karena `NODE_ENV=production` gate). Tool readonly daftarkan di module `*Readonly`, tool write di module utama. Update `@docs/MCP.md` saat menambah tool. Tujuannya: setiap fitur bisa diinspeksi/dijalankan tanpa harus login UI baik di dev maupun stg.
+1. **Test** di `tests/unit/` (untuk lib/helper murni) dan/atau `tests/integration/` (untuk endpoint via `app.handle()`). Minimal cover golden path + 1 edge case + 1 failure case. Gunakan helper di `tests/helpers.ts` (`createTestApp`, `seedTestUser`, `cleanupTestData`). Tidak boleh mock DB — tes integrasi harus hit Postgres asli.
+2. **MCP tool** di `scripts/mcp/tools/` yang membungkus fitur tersebut sehingga bisa dipakai dari dev (stdio, full admin scope) DAN stg (HTTP, readonly otomatis karena `NODE_ENV=production` gate). Tool readonly daftarkan di module `*Readonly`, tool write di module utama. Tujuannya: setiap fitur bisa diinspeksi/dijalankan tanpa harus login UI baik di dev maupun stg.
 
 Pengecualian: perubahan kosmetik murni (rename label UI, tweak styling, copy-edit dokumentasi) tidak butuh test + MCP tool. Bila ragu apakah perubahan termasuk "fitur" — anggap iya, buat keduanya.
 
@@ -36,7 +48,7 @@ Saat menyelesaikan fitur tanpa test atau tanpa MCP tool, jelaskan secara eksplis
 
 ## Aturan update CLAUDE.md (WAJIB)
 
-Setiap kali menyentuh **business logic** — definisi: perubahan yang mengubah behavior runtime, bukan hanya tampilan atau struktur file — CLAUDE.md (dan doc terkait di `@docs/*.md`) harus diperbarui **dalam PR/commit yang sama**, bukan sebagai follow-up terpisah.
+Setiap kali menyentuh **business logic** — definisi: perubahan yang mengubah behavior runtime, bukan hanya tampilan atau struktur file — CLAUDE.md harus diperbarui **dalam PR/commit yang sama**, bukan sebagai follow-up terpisah.
 
 Yang termasuk business logic dan wajib diikuti update docs:
 - Alur autentikasi, otorisasi, atau role-check
@@ -52,20 +64,5 @@ Yang **tidak** termasuk dan tidak perlu update CLAUDE.md:
 - Tweak styling, label UI, copy-edit teks
 - Penambahan test atau MCP tool untuk fitur yang sudah terdokumentasi
 
-Cara update: perbarui bagian yang relevan di `CLAUDE.md` dan/atau file `@docs/` terkait (ARCHITECTURE, API, FEATURES, INTEGRATIONS, dll). Jika tidak ada seksi yang pas, tambahkan seksi baru. Jangan buat file docs baru tanpa alasan kuat.
+Cara update: perbarui bagian yang relevan di `CLAUDE.md`. Jika tidak ada seksi yang pas, tambahkan seksi baru.
 
-## Detailed docs
-
-Load the relevant file(s) when working in that area — Claude Code auto-loads `@docs/*.md`.
-
-- @docs/ARCHITECTURE.md — Elysia server, auth, DB schema + Prisma, Redis, WebSocket, logging
-- @docs/API.md — admin HTTP API + projects/tasks/tags endpoints (+ computed fields)
-- @docs/FEATURES.md — admin overview cockpit, effort tracking, retrospectives
-- @docs/INTEGRATIONS.md — pm-watch (`/webhooks/aw`) + GitHub (`/webhooks/github`)
-- @docs/QC-TICKETS.md — QC self-project + `ai-queue` ticket flow
-- @docs/FRONTEND.md — routes, components, role-based routing, dev tools, schema/structure visualization
-- @docs/MCP.md — MCP server + tools (local stdio, HTTP fallback, remote-stg)
-- @docs/DEPLOYMENT.md — Docker, compose, CI, deploy-stg MCP, preflight/version/migration gates
-- @docs/TESTING.md — `bun:test` structure + helpers
-- @docs/FILE-HEALTH.md — file size limits, single-responsibility rules, when to split files
-- @docs/CHAT-AI.md — Chat AI knowledge base: live context + RAG, sync schedule, doc types, citation flow

@@ -29,6 +29,26 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+export function useExtendDeadline(projectId: string, onDone: () => void) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { newEndAt: string; reason: string | null }) =>
+      api(`/api/projects/${projectId}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project-extensions', projectId] })
+      qc.invalidateQueries({ queryKey: ['project', projectId] })
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      onDone()
+      notifySuccess({ message: 'Deadline diperpanjang.' })
+    },
+    onError: (err) => notifyError(err),
+  })
+}
+
 export function ExtensionsSection({
   projectId,
   currentEndAt,
@@ -40,7 +60,6 @@ export function ExtensionsSection({
   startsAt: string | null
   canExtend: boolean
 }) {
-  const qc = useQueryClient()
   const [extendOpen, setExtendOpen] = useState(false)
 
   const historyQ = useQuery({
@@ -48,22 +67,7 @@ export function ExtensionsSection({
     queryFn: () => api<{ extensions: ProjectExtension[] }>(`/api/projects/${projectId}/extensions`),
   })
 
-  const extend = useMutation({
-    mutationFn: (body: { newEndAt: string; reason: string | null }) =>
-      api(`/api/projects/${projectId}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-extensions', projectId] })
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      setExtendOpen(false)
-      notifySuccess({ message: 'Deadline diperpanjang.' })
-    },
-    onError: (err) => notifyError(err),
-  })
+  const extend = useExtendDeadline(projectId, () => setExtendOpen(false))
 
   const extensions = historyQ.data?.extensions ?? []
 
@@ -125,7 +129,7 @@ export function ExtensionsSection({
   )
 }
 
-function ExtendDeadlineModal({
+export function ExtendDeadlineModal({
   opened,
   onClose,
   currentEndAt,
@@ -160,23 +164,29 @@ function ExtendDeadlineModal({
   const invalid = !newEnd || sameAsCurrent || beforeStart
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Extend deadline" size="md">
+    <Modal opened={opened} onClose={onClose} title="Perpanjang deadline" size="md">
       <Stack gap="sm">
         <Text size="sm" c="dimmed">
-          Current deadline: <b>{formatDate(currentEndAt)}</b>
+          Deadline saat ini: <b>{formatDate(currentEndAt)}</b>
         </Text>
         <DateInput
           highlightToday
-          label="New deadline"
+          label="Deadline baru"
           value={newEnd}
           onChange={(v) => setNewEnd(v ? new Date(v as unknown as string) : null)}
           clearable
           leftSection={<TbCalendarEvent size={14} />}
-          error={beforeStart ? 'Must be after project start' : sameAsCurrent ? 'Same as current deadline' : undefined}
+          error={
+            beforeStart
+              ? 'Harus setelah tanggal mulai proyek'
+              : sameAsCurrent
+                ? 'Sama dengan deadline saat ini'
+                : undefined
+          }
         />
         <Textarea
-          label="Reason (optional)"
-          placeholder="e.g. Scope expanded to include payment gateway integration"
+          label="Alasan (opsional)"
+          placeholder="mis. Scope bertambah untuk integrasi payment gateway"
           value={reason}
           onChange={(e) => setReason(e.currentTarget.value)}
           autosize
@@ -190,14 +200,14 @@ function ExtendDeadlineModal({
         )}
         <Group justify="flex-end">
           <Button variant="subtle" onClick={onClose}>
-            Cancel
+            Batal
           </Button>
           <Button
             disabled={Boolean(invalid) || loading}
             loading={loading}
             onClick={() => newEnd && onSubmit({ newEndAt: newEnd.toISOString(), reason: reason.trim() || null })}
           >
-            Save extension
+            Simpan perpanjangan
           </Button>
         </Group>
       </Stack>

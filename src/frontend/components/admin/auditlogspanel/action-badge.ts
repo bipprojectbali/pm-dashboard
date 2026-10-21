@@ -30,6 +30,7 @@ export const actionBadge: Record<string, { color: string; label: string }> = {
   PROJECT_UPDATED: { color: 'cyan', label: 'Project Updated' },
   PROJECT_DELETED: { color: 'red', label: 'Project Deleted' },
   PROJECT_EXTENDED: { color: 'cyan', label: 'Project Extended' },
+  PROJECT_DECISION_REQUESTED: { color: 'orange', label: 'Decision Requested' },
   PROJECT_MEMBER_ADDED: { color: 'grape', label: 'Member Added' },
   PROJECT_MEMBER_REMOVED: { color: 'red', label: 'Member Removed' },
   PROJECT_MEMBER_ROLE_CHANGED: { color: 'grape', label: 'Member Role Changed' },

@@ -25,6 +25,7 @@ export type {
   MemberRole,
   ProjectDetail,
   ProjectListItem,
+  ProjectLockState,
   ProjectPriority,
   ProjectStatus,
   ProjectUser,

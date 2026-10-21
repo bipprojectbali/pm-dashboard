@@ -84,6 +84,13 @@ enum NotificationKind {
   TASK_DUE_SOON
   TASK_OVERDUE
   TASK_MENTIONED
+  // Overdue-lock escalation chain: warn → overdue → escalate to admins → locked,
+  // plus the blocked team's explicit request for a decision.
+  PROJECT_DUE_SOON
+  PROJECT_OVERDUE
+  PROJECT_LOCK_WARNING
+  PROJECT_LOCKED
+  PROJECT_DECISION_REQUESTED
 }
 
 enum GithubEventKind {

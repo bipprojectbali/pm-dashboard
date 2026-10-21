@@ -13,10 +13,12 @@ import {
 } from '@mantine/core'
 import { useHotkeys } from '@mantine/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { TbAlertTriangle, TbArrowLeft, TbChecks, TbCopy, TbRefresh } from 'react-icons/tb'
+import { useState } from 'react'
+import { TbAlertTriangle, TbArrowLeft, TbChecks, TbCopy, TbLock, TbRefresh } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
-import type { MemberRole, ProjectDetail } from './ProjectsPanel'
+import type { MemberRole, ProjectDetail, ProjectLockState } from './ProjectsPanel'
 import { ProjectHeader } from './ProjectDetailView/ProjectHeader'
+import { ProjectLockedScreen } from './ProjectDetailView/ProjectLockedScreen'
 import { ProjectTabs } from './ProjectDetailView/ProjectTabs'
 import { PROJECT_DETAIL_TABS, api } from './ProjectDetailView/types'
 import type { ProjectDetailTab } from './ProjectDetailView/types'
@@ -41,15 +43,24 @@ export function ProjectDetailView({
   const qc = useQueryClient()
   const session = useSession()
   const systemRole = session.data?.user?.role ?? null
+  const [readOnlyPeek, setReadOnlyPeek] = useState(false)
   const detailQ = useQuery({
     queryKey: ['project', projectId],
     queryFn: () =>
-      api<{ project: ProjectDetail; myRole: string | null; canWrite: boolean }>(`/api/projects/${projectId}`),
+      api<{
+        project: ProjectDetail
+        myRole: string | null
+        canWrite: boolean
+        canDecide: boolean
+        lock: ProjectLockState
+      }>(`/api/projects/${projectId}`),
   })
 
   const project = detailQ.data?.project
   const myRole: MemberRole | null = (detailQ.data?.myRole as MemberRole) ?? null
   const canWrite = detailQ.data?.canWrite ?? false
+  const lock = detailQ.data?.lock
+  const locked = lock?.locked ?? false
 
   useHotkeys([['Escape', onBack]])
 
@@ -147,19 +158,46 @@ export function ProjectDetailView({
       ) : (
         <>
           <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} myRole={myRole} />
-          <ProjectTabs
-            project={project}
-            tab={tab}
-            onTabChange={onTabChange}
-            systemRole={systemRole}
-            canWrite={canWrite}
-            myRole={myRole}
-            onDeleted={() => {
-              qc.invalidateQueries({ queryKey: ['projects'] })
-              qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-              onDeleted()
-            }}
-          />
+          {locked && lock && !readOnlyPeek ? (
+            <ProjectLockedScreen
+              project={project}
+              lock={lock}
+              canDecide={detailQ.data?.canDecide ?? false}
+              onViewReadOnly={() => setReadOnlyPeek(true)}
+            />
+          ) : (
+            <>
+              {locked && (
+                <Alert
+                  color="red"
+                  variant="light"
+                  radius="md"
+                  icon={<TbLock size={18} />}
+                  title="Mode hanya baca — proyek terkunci"
+                >
+                  <Group justify="space-between" wrap="wrap" gap="sm">
+                    <Text size="sm">Kamu bisa melihat data, tapi semua perubahan dibekukan sampai ada keputusan.</Text>
+                    <Button size="xs" variant="light" color="red" onClick={() => setReadOnlyPeek(false)}>
+                      Lihat pilihan keputusan
+                    </Button>
+                  </Group>
+                </Alert>
+              )}
+              <ProjectTabs
+                project={project}
+                tab={tab}
+                onTabChange={onTabChange}
+                systemRole={systemRole}
+                canWrite={canWrite}
+                myRole={myRole}
+                onDeleted={() => {
+                  qc.invalidateQueries({ queryKey: ['projects'] })
+                  qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
+                  onDeleted()
+                }}
+              />
+            </>
+          )}
         </>
       )}
     </Stack>

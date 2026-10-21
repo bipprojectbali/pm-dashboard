@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
+import { canPreviewDocument, documentPreviewKind, documentResponseHeaders } from '../../../src/lib/document-preview'
 import { documentKey, getDocument } from '../../../src/lib/document-storage'
 import { jsonText, type ToolModule } from './shared'
 
@@ -105,6 +106,52 @@ export const documentsReadonly: ToolModule = {
           trashedCount: results.filter((r) => r.trashed).length,
           orphanedCount: orphaned.length,
           documents: results,
+        })
+      },
+    )
+
+    server.registerTool(
+      'project_document_preview_check',
+      {
+        title: 'Check document preview and serve headers',
+        description:
+          'Report whether a document may be rendered inline and the exact Content-Type / Content-Disposition / X-Content-Type-Options the serve route would send. Pass projectId+docId for a stored row, or just mimeType to probe a type that has not been uploaded. Calls the same src/lib/document-preview module the route and the UI call, so it cannot report something the route would not do.',
+        inputSchema: {
+          projectId: z.string().optional(),
+          docId: z.string().optional(),
+          // The bare-mimeType mode is the point of the tool on staging: "would
+          // a .svg upload render inline?" is answerable without uploading one.
+          mimeType: z.string().optional(),
+          originalName: z.string().optional(),
+        },
+      },
+      async ({ projectId, docId, mimeType, originalName }) => {
+        let row: { title: string; mimeType: string; originalName: string; deletedAt: Date | null } | null = null
+        if (projectId && docId) {
+          row = await prisma.projectDocument.findFirst({
+            where: { id: docId, projectId },
+            select: { title: true, mimeType: true, originalName: true, deletedAt: true },
+          })
+          if (!row) return jsonText({ error: 'Document not found', projectId, docId })
+        }
+        const mime = row?.mimeType ?? mimeType
+        if (!mime) return jsonText({ error: 'Pass projectId+docId, or mimeType' })
+        const name = row?.originalName ?? originalName ?? 'document.bin'
+        // A trashed row is 404 at the serve route, so the UI offers no preview
+        // control for it however previewable its type is. Reported as its own
+        // field rather than folded into `previewable`, which stays a pure
+        // statement about the type.
+        const trashed = row ? row.deletedAt !== null : false
+        return jsonText({
+          ...(row ? { projectId, docId, title: row.title, trashed } : {}),
+          mimeType: mime,
+          originalName: name,
+          previewKind: documentPreviewKind(mime),
+          previewable: canPreviewDocument(mime),
+          previewOfferedInUi: canPreviewDocument(mime) && !trashed,
+          // The route's own header builder, not a re-description of it — the
+          // tool cannot drift from the response a browser actually gets.
+          headers: documentResponseHeaders(mime, name),
         })
       },
     )

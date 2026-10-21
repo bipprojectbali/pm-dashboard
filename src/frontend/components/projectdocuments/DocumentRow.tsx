@@ -3,6 +3,7 @@ import type { ComponentType } from 'react'
 import {
   TbArrowBackUp,
   TbDownload,
+  TbEye,
   TbFile,
   TbFileSpreadsheet,
   TbFileText,
@@ -11,6 +12,7 @@ import {
   TbPhoto,
   TbTrash,
 } from 'react-icons/tb'
+import { canPreviewDocument } from '../../../lib/document-preview'
 import { formatDate } from '../ProjectDetailView/types'
 import { type DocumentKind, documentKind, formatFileSize, type ProjectDocument } from './helpers'
 
@@ -35,7 +37,8 @@ const KIND_COLOR: Record<DocumentKind, string> = {
 /**
  * One document row, in either of two modes. A trashed row drops the download
  * link on purpose: the serve route 404s a trashed document, so offering the
- * button would be a dead end.
+ * button would be a dead end — and for the same reason it gets no preview
+ * control either, whatever its type.
  */
 export function DocumentRow({
   doc,
@@ -45,6 +48,7 @@ export function DocumentRow({
   canRestore = false,
   onRestore,
   restoring = false,
+  onPreview,
 }: {
   doc: ProjectDocument
   canDelete: boolean
@@ -53,8 +57,13 @@ export function DocumentRow({
   canRestore?: boolean
   onRestore?: () => void
   restoring?: boolean
+  /** Omitted by the trash list, which must not offer a preview at all. */
+  onPreview?: () => void
 }) {
   const trashed = doc.deletedAt !== null
+  // Asking the server's own allowlist, so a type the route refuses to send
+  // inline never gets a control that would open an empty frame.
+  const previewable = onPreview != null && !trashed && canPreviewDocument(doc.mimeType)
   const kind = documentKind(doc.mimeType)
   const Icon = KIND_ICON[kind]
   const color = KIND_COLOR[kind]
@@ -114,6 +123,13 @@ export function DocumentRow({
         </Stack>
 
         <Group gap={4} wrap="nowrap">
+          {previewable && (
+            <Tooltip label="Pratinjau dokumen" withArrow>
+              <ActionIcon variant="subtle" size="sm" onClick={onPreview} aria-label={`Pratinjau ${doc.title}`}>
+                <TbEye size={15} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           {!trashed && (
             <Tooltip label="Buka atau unduh" withArrow>
               <ActionIcon

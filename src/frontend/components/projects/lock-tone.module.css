@@ -30,6 +30,21 @@
  *   --lock-scale    set by the severity rung (data-lock-tone)
  * Every colour is `calc(base * scale)`, so a rung rule and a scheme rule touch
  * different properties and source order stops mattering.
+ *
+ * On the rung spacing: the scale spans 1 → 3, one unit per rung. It used to span
+ * 1 → 1.7 → 2.4, which made the middle rung unreadable — alpha reads roughly
+ * linearly as darkness, so the step between two tints has to be *larger* than
+ * the step from neutral to a tint (neutral → tint is a hue change, which the eye
+ * catches; tint → tint is only saturation). A 1/1.7/2.4 ladder is already evenly
+ * spaced, so the only way to widen the steps is to widen the range.
+ *
+ * The range is widened upward, not downward — dropping the bottom rung would
+ * cost the "this project is late at all" signal, which is the one that has to
+ * survive. The card fill takes the full extra range as well, rather than being
+ * pinned to its old top value — it is the surface the eye actually lands on, so
+ * holding it still would have thrown away most of the point. At the heaviest
+ * rung it measures 16.7:1 in light and 7.3:1 in dark against
+ * `--mantine-color-text`, which is also why the lock copy on it is not dimmed.
  */
 
 .tone {
@@ -40,7 +55,7 @@
   --lock-wash-base: 0.05;
   --lock-surface-base: 0.065;
   --lock-border-base: 0.3;
-  --lock-border-strong-base: 0.45;
+  --lock-border-strong-base: 0.36;
 
   border-radius: var(--mantine-radius-lg);
   padding: var(--mantine-spacing-sm);
@@ -66,18 +81,34 @@
     --lock-wash-base: 0.09;
     --lock-surface-base: 0.11;
     --lock-border-base: 0.36;
-    --lock-border-strong-base: 0.55;
+    --lock-border-strong-base: 0.44;
   }
 }
 
 /*
  * Headings go red too, but to a shade picked for contrast against the wash
- * rather than to the badge red: near-black red on the light tint, pale red on
- * the dark one. Scoped to this element's own headings — modals and menus render
+ * rather than to the badge red: near-black red on the light tint, salmon on the
+ * dark one. Scoped to this element's own headings — modals and menus render
  * through a portal, outside the subtree, so they stay neutral.
+ *
+ * `red-4` and not `red-1` in dark: red-1 is #ffe3e3, which against a near-black
+ * card is indistinguishable from plain white, so the signal was simply lost.
+ * red-4 (#ff8787) reads unmistakably red and still measures 5.2:1 on the
+ * heaviest rung — above AA for body text, let alone for a heading.
  */
 .tone :is(h1, h2, h3, h4, h5, h6) {
-  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-1));
+  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-4));
+}
+
+/*
+ * Opt-out for a message whose own colour is the message. Mantine's `light`
+ * variant paints a 10%-alpha background, so a teal success Alert inside the
+ * wash composites over red and a success reads as a failure. Mixing the same
+ * teal over the opaque page colour reproduces exactly what the Alert looks
+ * like on a neutral page, which is the whole point.
+ */
+.calm {
+  background-color: color-mix(in srgb, var(--mantine-color-teal-6) 11%, var(--mantine-color-body));
 }
 
 /*
@@ -96,23 +127,27 @@
 .accent {
   --lock-rgb: 250, 82, 82;
   --lock-scale: 1;
-  --lock-border-base: 0.38;
-  --lock-surface-base: 0.055;
+  /* Thirds, because the border alpha is the row's only severity signal and it
+     clamps at 1: anything above 1/3 compresses the top two rungs into the same
+     opaque red. Lower than the old 0.38/0.45 at the first rung, and in exchange
+     the three rungs are evenly spaced instead of bunched at the ceiling. */
+  --lock-border-base: 0.33;
 
-  /* Both come straight off the card's own themed properties, so there is no
-     inline-style fight: `theme.ts` already sets the Card background to
-     `var(--app-surface)` and its border to `var(--app-border)`, and those vars
-     resolve against this element. */
-  --app-surface: rgba(var(--lock-rgb), calc(var(--lock-surface-base) * var(--lock-scale)));
+  /* Comes straight off the card's own themed property, so there is no
+     inline-style fight: `theme.ts` already sets the Card border to
+     `var(--app-border)` and that var resolves against this element. */
   --app-border: rgba(var(--lock-rgb), calc(var(--lock-border-base) * var(--lock-scale)));
 
   @mixin dark {
-    --lock-border-base: 0.45;
-    --lock-surface-base: 0.1;
+    --lock-border-base: 0.35;
   }
 }
 
-/* Severity rungs. Only ever touch --lock-scale (see the header comment). */
+/*
+ * Severity rungs. Only ever touch --lock-scale (see the header comment), and
+ * one unit per rung so the steps are even — see the note there on why the range
+ * grows upward rather than downward.
+ */
 .tone[data-lock-tone="overdue"],
 .accent[data-lock-tone="overdue"] {
   --lock-scale: 1;
@@ -120,10 +155,10 @@
 
 .tone[data-lock-tone="escalated"],
 .accent[data-lock-tone="escalated"] {
-  --lock-scale: 1.7;
+  --lock-scale: 2;
 }
 
 .tone[data-lock-tone="locked"],
 .accent[data-lock-tone="locked"] {
-  --lock-scale: 2.4;
+  --lock-scale: 3;
 }

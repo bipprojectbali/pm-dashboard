@@ -2,8 +2,10 @@ import { createHash, createHmac } from 'node:crypto'
 import { S3Client, type S3File } from 'bun'
 import { env } from './env'
 
-// Single place that talks to MinIO/S3 for evidence files. Every upload/serve/
-// delete path routes through here so the storage backend lives in one module.
+// Evidence files in MinIO/S3. Every evidence upload/serve/delete path routes
+// through here. The configured `client` and `ensureBucket` are exported for
+// sibling storage modules of other domains (see `document-storage.ts`) — the
+// S3 connection stays single, the per-domain key layouts stay separate.
 // Bucket must be PRIVATE — access control is enforced by the auth-gated proxy
 // (GET /api/evidence/:file), not by object ACL, so never write public-read.
 
@@ -15,7 +17,10 @@ function normalizeEndpoint(raw: string): string {
 
 const ENDPOINT = normalizeEndpoint(env.MINIO_ENDPOINT)
 
-const client = new S3Client({
+// Exported so sibling storage modules (e.g. `document-storage.ts`) reuse this
+// one configured client and the same bucket bootstrap instead of standing up a
+// second S3Client — one connection pool, one bucket-ensured promise per process.
+export const client = new S3Client({
   endpoint: ENDPOINT,
   accessKeyId: env.MINIO_ACCESS_KEY,
   secretAccessKey: env.MINIO_SECRET_KEY,
@@ -59,7 +64,7 @@ async function createBucket(): Promise<void> {
   }
 }
 
-function ensureBucket(): Promise<void> {
+export function ensureBucket(): Promise<void> {
   if (!bucketEnsured)
     bucketEnsured = createBucket().catch((e) => {
       bucketEnsured = null // allow retry on next call if creation failed

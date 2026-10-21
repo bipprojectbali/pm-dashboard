@@ -1,5 +1,6 @@
 import type { IconType } from 'react-icons'
 import type { ProjectDetailTab } from '@/frontend/components/ProjectDetailView'
+import type { NotificationKind } from '@/frontend/lib/notification-kinds'
 
 export const validTabs = ['overview', 'projects', 'tasks', 'tickets', 'ideas', 'team', 'events'] as const
 export type TabKey = (typeof validTabs)[number]
@@ -40,7 +41,7 @@ export type OverviewTask = {
 
 export type OverviewNotification = {
   id: string
-  kind: 'TASK_ASSIGNED' | 'TASK_COMMENTED' | 'TASK_STATUS_CHANGED' | 'TASK_DUE_SOON' | 'TASK_OVERDUE' | 'TASK_MENTIONED'
+  kind: NotificationKind
   taskId: string | null
   projectId: string | null
   title: string

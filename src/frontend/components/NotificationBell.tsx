@@ -19,19 +19,14 @@ import {
   TbChecks,
   TbClock,
   TbClockExclamation,
+  TbLock,
+  TbLockExclamation,
   TbMessage,
   TbRefresh,
   TbTrash,
   TbUserPlus,
 } from 'react-icons/tb'
-
-type NotificationKind =
-  | 'TASK_ASSIGNED'
-  | 'TASK_COMMENTED'
-  | 'TASK_STATUS_CHANGED'
-  | 'TASK_DUE_SOON'
-  | 'TASK_OVERDUE'
-  | 'TASK_MENTIONED'
+import type { NotificationKind } from '../lib/notification-kinds'
 
 interface NotificationItem {
   id: string
@@ -45,14 +40,23 @@ interface NotificationItem {
   actor: { id: string; name: string; email: string } | null
 }
 
-const KIND_META: Record<NotificationKind, { icon: typeof TbBell; color: string; label: string }> = {
+type KindMeta = { icon: typeof TbBell; color: string; label: string }
+
+export const KIND_META: Record<NotificationKind, KindMeta> = {
   TASK_ASSIGNED: { icon: TbUserPlus, color: 'blue', label: 'Assigned' },
   TASK_COMMENTED: { icon: TbMessage, color: 'violet', label: 'Comment' },
   TASK_STATUS_CHANGED: { icon: TbArrowRight, color: 'teal', label: 'Status' },
   TASK_DUE_SOON: { icon: TbClock, color: 'yellow', label: 'Due soon' },
   TASK_OVERDUE: { icon: TbClockExclamation, color: 'red', label: 'Overdue' },
   TASK_MENTIONED: { icon: TbMessage, color: 'cyan', label: 'Mentioned' },
+  PROJECT_DUE_SOON: { icon: TbClock, color: 'yellow', label: 'Project due' },
+  PROJECT_OVERDUE: { icon: TbClockExclamation, color: 'orange', label: 'Project late' },
+  PROJECT_LOCK_WARNING: { icon: TbLockExclamation, color: 'orange', label: 'Lock warning' },
+  PROJECT_LOCKED: { icon: TbLock, color: 'red', label: 'Locked' },
+  PROJECT_DECISION_REQUESTED: { icon: TbBellRinging, color: 'grape', label: 'Decision' },
 }
+
+const FALLBACK_META: KindMeta = { icon: TbBell, color: 'gray', label: 'Update' }
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -183,7 +187,7 @@ export function NotificationBell({ size = 'lg' }: { size?: 'sm' | 'md' | 'lg' })
           <ScrollArea h={Math.min(420, items.length * 72 + 16)}>
             <Stack gap={4} p={4}>
               {items.map((n) => {
-                const meta = KIND_META[n.kind]
+                const meta = KIND_META[n.kind] ?? FALLBACK_META
                 const Icon = meta.icon
                 const isUnread = !n.readAt
                 return (

@@ -6,6 +6,7 @@ import { TbBan, TbBell, TbCalendarPlus, TbCircleCheck, TbLock } from 'react-icon
 import { notifyError, notifySuccess } from '../../lib/notify'
 import { ExtendDeadlineModal, useExtendDeadline } from '../ExtensionsSection'
 import type { ProjectDetail, ProjectLockState } from '../ProjectsPanel'
+import classes from '../projects/lock-tone.module.css'
 import { api, formatDate } from './types'
 
 type Disposition = 'COMPLETED' | 'CANCELLED'
@@ -49,7 +50,9 @@ export function ProjectLockedDenied({ projectId }: { projectId: string }) {
           </ThemeIcon>
           <Stack gap={4} style={{ minWidth: 0 }}>
             <Title order={3}>Proyek ini terkunci</Title>
-            <Text size="sm" c="dimmed">
+            {/* Not dimmed: this is the sentence that explains why the project is
+                frozen, and the red wash underneath already costs contrast. */}
+            <Text size="sm">
               Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai pemilik proyek atau admin
               memutuskan: perpanjang deadline, tandai selesai, atau batalkan. Selama terkunci, isi proyek tidak bisa
               dibuka — termasuk daftar tugas, tim, dan milestone.
@@ -61,7 +64,8 @@ export function ProjectLockedDenied({ projectId }: { projectId: string }) {
           memutuskan.
         </Text>
         {requested ? (
-          <Alert color="teal" variant="light" icon={<TbBell size={16} />} radius="md">
+          // `classes.calm` keeps the success out of the red wash — see the CSS.
+          <Alert color="teal" variant="light" icon={<TbBell size={16} />} radius="md" className={classes.calm}>
             Pemilik proyek, PM, dan admin sudah diberi tahu. Tidak perlu mengirim lagi — tunggu keputusan mereka.
           </Alert>
         ) : (
@@ -149,7 +153,8 @@ export function ProjectLockedScreen({
           </ThemeIcon>
           <Stack gap={4} style={{ minWidth: 0 }}>
             <Title order={3}>Proyek ini terkunci</Title>
-            <Text size="sm" c="dimmed">
+            {/* Not dimmed — same reason as in ProjectLockedDenied above. */}
+            <Text size="sm">
               Deadline {formatDate(project.endsAt)} sudah terlewat {lock.overdueDays} hari tanpa keputusan, melewati
               masa tenggang {lock.graceDays} hari. Semua perubahan dibekukan sampai ada keputusan.
             </Text>
@@ -161,7 +166,8 @@ export function ProjectLockedScreen({
             <Text size="sm" fw={600}>
               Kamu berwenang membuka kunci ini. Pilih satu:
             </Text>
-            <List size="sm" spacing={4} c="dimmed">
+            {/* Not dimmed: these three lines are the decider's actual options. */}
+            <List size="sm" spacing={4}>
               <List.Item>Perpanjang deadline bila pekerjaan masih berjalan.</List.Item>
               <List.Item>Tandai selesai bila pekerjaannya sudah beres.</List.Item>
               <List.Item>Batalkan bila proyek ini tidak dilanjutkan.</List.Item>

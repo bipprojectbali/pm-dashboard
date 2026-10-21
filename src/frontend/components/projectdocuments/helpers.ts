@@ -10,6 +10,8 @@ export interface ProjectDocument {
   sizeBytes: number
   note: string | null
   createdAt: string
+  /** Terisi = ada di tempat sampah project, masih bisa dipulihkan. */
+  deletedAt: string | null
   uploadedBy: { id: string; name: string } | null
   /** `/api/projects/:projectId/documents/:id/file` — served by the API, not a bucket URL. */
   url: string
@@ -40,6 +42,33 @@ export function canDeleteDocument(doc: Pick<ProjectDocument, 'uploadedBy'>, ctx:
   if (computeCanManage(ctx.myRole, ctx.systemRole)) return true
   return ctx.currentUserId != null && doc.uploadedBy?.id === ctx.currentUserId
 }
+
+/**
+ * Mirrors the server restore rule, which is the same rule as delete: OWNER/PM,
+ * a system admin, or whoever uploaded it. Kept as its own name rather than
+ * reusing `canDeleteDocument` at the call sites — the two answer different
+ * questions, and a reader of the trash section should not have to know they
+ * currently coincide.
+ */
+export function canRestoreDocument(doc: Pick<ProjectDocument, 'uploadedBy'>, ctx: DocumentPermissionCtx): boolean {
+  return canDeleteDocument(doc, ctx)
+}
+
+/**
+ * The trash section only appears for someone who could actually act on it: at
+ * least one trashed document they may restore. A plain MEMBER who uploaded
+ * nothing in there sees no section at all, rather than a list of buttons that
+ * would all 403.
+ */
+export function canSeeDocumentTrash(
+  trashed: Array<Pick<ProjectDocument, 'uploadedBy'>>,
+  ctx: DocumentPermissionCtx,
+): boolean {
+  return trashed.some((doc) => canRestoreDocument(doc, ctx))
+}
+
+/** Hari retensi tempat sampah — harus sama dengan cron purge di `src/index.tsx`. */
+export const TRASH_RETENTION_DAYS = 30
 
 export type DocumentKind = 'image' | 'pdf' | 'doc' | 'sheet' | 'archive' | 'other'
 

@@ -7,11 +7,13 @@ import { useSession } from '../hooks/useAuth'
 import { notifyError, notifySuccess } from '../lib/notify'
 import { api } from './ProjectDetailView/types'
 import { DocumentRow } from './projectdocuments/DocumentRow'
+import { DocumentTrashSection } from './projectdocuments/DocumentTrashSection'
 import {
   canDeleteDocument,
   canUploadDocument,
   type DocumentPermissionCtx,
   type ProjectDocument,
+  TRASH_RETENTION_DAYS,
   uploadErrorMessage,
 } from './projectdocuments/helpers'
 import { EmptyState } from './shared/EmptyState'
@@ -74,7 +76,7 @@ export function ProjectDocumentsSection({
       api<{ ok: true }>(`/api/projects/${projectId}/documents/${docId}`, { method: 'DELETE' }),
     onSuccess: () => {
       invalidate()
-      notifySuccess({ message: 'Dokumen dihapus.' })
+      notifySuccess({ message: 'Dokumen dipindahkan ke tempat sampah.' })
     },
     onError: (err) => notifyError(err),
   })
@@ -84,10 +86,11 @@ export function ProjectDocumentsSection({
       title: 'Hapus dokumen',
       children: (
         <Text size="sm">
-          Hapus <b>{doc.title}</b> secara permanen? Berkasnya ikut terhapus dan tidak bisa dipulihkan.
+          Pindahkan <b>{doc.title}</b> ke tempat sampah? Berkasnya masih bisa dipulihkan dalam {TRASH_RETENTION_DAYS}{' '}
+          hari, setelah itu terhapus permanen.
         </Text>
       ),
-      labels: { confirm: 'Hapus', cancel: 'Batal' },
+      labels: { confirm: 'Pindahkan ke tempat sampah', cancel: 'Batal' },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(doc.id),
     })
@@ -169,6 +172,10 @@ export function ProjectDocumentsSection({
           ))}
         </Stack>
       )}
+
+      {/* Outside the list branches on purpose: the trash can hold rows even
+          when the live list is empty, which is exactly when someone needs it. */}
+      <DocumentTrashSection projectId={projectId} ctx={ctx} enabled={canUpload} />
     </Stack>
   )
 }

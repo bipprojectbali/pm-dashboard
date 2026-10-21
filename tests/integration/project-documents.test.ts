@@ -283,12 +283,13 @@ describe('delete', () => {
     expect(await prisma.projectDocument.count({ where: { id } })).toBe(1)
   })
 
-  test('the uploader can delete their own document, row and object both gone', async () => {
+  test('the uploader can delete their own document; the row is trashed, not gone', async () => {
     const id = await seedDoc(memberToken, 'hapus-sendiri.pdf')
     const res = await req(memberToken, 'DELETE', `/api/projects/${projectId}/documents/${id}`)
     expect(res.status).toBe(200)
     expect((await res.json()) as { ok: boolean }).toEqual({ ok: true })
-    expect(await prisma.projectDocument.count({ where: { id } })).toBe(0)
+    const row = await prisma.projectDocument.findUnique({ where: { id }, select: { deletedAt: true } })
+    expect(row?.deletedAt).toBeInstanceOf(Date)
     const file = await req(memberToken, 'GET', `/api/projects/${projectId}/documents/${id}/file`)
     expect(file.status).toBe(404)
   })
@@ -297,7 +298,8 @@ describe('delete', () => {
     const id = await seedDoc(memberToken, 'dihapus-owner.pdf')
     const res = await req(ownerToken, 'DELETE', `/api/projects/${projectId}/documents/${id}`)
     expect(res.status).toBe(200)
-    expect(await prisma.projectDocument.count({ where: { id } })).toBe(0)
+    const row = await prisma.projectDocument.findUnique({ where: { id }, select: { deletedAt: true } })
+    expect(row?.deletedAt).toBeInstanceOf(Date)
   })
 
   test('audit trail records upload and delete by id, with no email in the detail', async () => {

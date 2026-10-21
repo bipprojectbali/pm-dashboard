@@ -246,12 +246,18 @@ import { isExtensionEnabled } from './lib/extensions'
 })
 
 // ─── Auto-purge Trash ─────────────────────────────────
+import { removeDocument } from './lib/document-storage'
 import { withLockBypass } from './lib/prisma-project-lock'
 
-// Setiap hari jam 03:00 UTC, hapus permanen task yang sudah di-trash > 30 hari
+// Retensi tempat sampah, sama untuk task maupun dokumen project: satu angka,
+// supaya kedua jalur tidak bisa diam-diam melenceng dari janji di UI ("bisa
+// dipulihkan dalam 30 hari").
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+
+// Setiap hari jam 03:00 UTC, hapus permanen isi tempat sampah yang sudah > 30 hari
 ;(Bun as any).cron('0 3 * * *', async () => {
   try {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_MS)
     // Bypass the overdue-lock write guard on purpose: this is retention
     // housekeeping on rows a user already trashed, not a project write. An
     // overdue project must not be able to pin trash in the database forever,
@@ -263,6 +269,32 @@ import { withLockBypass } from './lib/prisma-project-lock'
     if (count > 0) appLog('info', `Auto-purge trash: ${count} task dihapus permanen (>30 hari)`)
   } catch (e) {
     appLog('error', `Auto-purge trash gagal: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
+  // Dokumen project: tidak cukup menghapus barisnya. Baris adalah satu-satunya
+  // jalan menemukan objeknya di bucket (`documents/<projectId>/<storedName>`),
+  // jadi baris dulu lalu objek akan meninggalkan sampah yang tak bisa dicari
+  // lagi — selamanya. Karena itu objek dibersihkan LEBIH DULU: kalau penghapusan
+  // baris gagal, yang tertinggal adalah baris trash yang sudah kedaluwarsa dan
+  // akan dicoba lagi besok, bukan objek yatim permanen.
+  try {
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_MS)
+    const expired = await prisma.projectDocument.findMany({
+      where: { deletedAt: { not: null, lt: cutoff } },
+      select: { id: true, projectId: true, storedName: true },
+    })
+    if (expired.length > 0) {
+      // Best-effort per objek (removeDocument tidak pernah melempar), jadi satu
+      // key yang hilang tidak menahan sisa batch.
+      for (const doc of expired) await removeDocument(doc.projectId, doc.storedName)
+      // withLockBypass untuk alasan yang sama seperti task di atas.
+      const { count } = await withLockBypass(() =>
+        prisma.projectDocument.deleteMany({ where: { id: { in: expired.map((d) => d.id) } } }),
+      )
+      appLog('info', `Auto-purge trash: ${count} dokumen project dihapus permanen (>30 hari)`)
+    }
+  } catch (e) {
+    appLog('error', `Auto-purge dokumen gagal: ${e instanceof Error ? e.message : String(e)}`)
   }
 })
 

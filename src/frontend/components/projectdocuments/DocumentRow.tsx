@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Box, Card, Group, Stack, Text, Tooltip } from '@mantine/core'
 import type { ComponentType } from 'react'
 import {
+  TbArrowBackUp,
   TbDownload,
   TbFile,
   TbFileSpreadsheet,
@@ -31,17 +32,29 @@ const KIND_COLOR: Record<DocumentKind, string> = {
   other: 'gray',
 }
 
+/**
+ * One document row, in either of two modes. A trashed row drops the download
+ * link on purpose: the serve route 404s a trashed document, so offering the
+ * button would be a dead end.
+ */
 export function DocumentRow({
   doc,
   canDelete,
   onDelete,
   deleting,
+  canRestore = false,
+  onRestore,
+  restoring = false,
 }: {
   doc: ProjectDocument
   canDelete: boolean
   onDelete: () => void
   deleting: boolean
+  canRestore?: boolean
+  onRestore?: () => void
+  restoring?: boolean
 }) {
+  const trashed = doc.deletedAt !== null
   const kind = documentKind(doc.mimeType)
   const Icon = KIND_ICON[kind]
   const color = KIND_COLOR[kind]
@@ -81,30 +94,56 @@ export function DocumentRow({
             <Badge size="xs" variant="light" color={color}>
               {doc.mimeType}
             </Badge>
+            {trashed && (
+              <Badge size="xs" variant="light" color="orange">
+                Di tempat sampah
+              </Badge>
+            )}
             <Text size="xs" c="dimmed">
               {formatFileSize(doc.sizeBytes)}
             </Text>
             <Text size="xs" c="dimmed">
               · diunggah {doc.uploadedBy?.name ?? 'pengguna terhapus'} · {formatDate(doc.createdAt)}
             </Text>
+            {trashed && doc.deletedAt && (
+              <Text size="xs" c="dimmed">
+                · dihapus {formatDate(doc.deletedAt)}
+              </Text>
+            )}
           </Group>
         </Stack>
 
         <Group gap={4} wrap="nowrap">
-          <Tooltip label="Buka atau unduh" withArrow>
-            <ActionIcon
-              component="a"
-              href={doc.url}
-              target="_blank"
-              rel="noreferrer"
-              variant="subtle"
-              size="sm"
-              aria-label={`Unduh ${doc.title}`}
-            >
-              <TbDownload size={15} />
-            </ActionIcon>
-          </Tooltip>
-          {canDelete && (
+          {!trashed && (
+            <Tooltip label="Buka atau unduh" withArrow>
+              <ActionIcon
+                component="a"
+                href={doc.url}
+                target="_blank"
+                rel="noreferrer"
+                variant="subtle"
+                size="sm"
+                aria-label={`Unduh ${doc.title}`}
+              >
+                <TbDownload size={15} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {trashed && canRestore && (
+            <Tooltip label="Pulihkan dokumen" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="teal"
+                size="sm"
+                loading={restoring}
+                onClick={onRestore}
+                aria-label={`Pulihkan ${doc.title}`}
+              >
+                <TbArrowBackUp size={15} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {!trashed && canDelete && (
             <Tooltip label="Hapus dokumen" withArrow>
               <ActionIcon
                 variant="subtle"

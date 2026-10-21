@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   canDeleteDocument,
+  canRestoreDocument,
+  canSeeDocumentTrash,
   canUploadDocument,
   type DocumentPermissionCtx,
   documentKind,
@@ -114,5 +116,39 @@ describe('uploadErrorMessage', () => {
 
   test('a non-Error failure still yields a readable message', () => {
     expect(uploadErrorMessage(undefined)).toBe('Gagal mengunggah dokumen.')
+  })
+})
+
+describe('canRestoreDocument', () => {
+  test('the uploader, OWNER/PM and a system admin may restore', () => {
+    expect(canRestoreDocument(uploadedBy('u1'), ctx({ myRole: 'MEMBER' }))).toBe(true)
+    expect(canRestoreDocument(uploadedBy('someone-else'), ctx({ myRole: 'OWNER' }))).toBe(true)
+    expect(canRestoreDocument(uploadedBy('someone-else'), ctx({ myRole: 'PM' }))).toBe(true)
+    expect(canRestoreDocument(uploadedBy('someone-else'), ctx({ myRole: null, systemRole: 'ADMIN' }))).toBe(true)
+  })
+
+  test('a plain MEMBER may not restore a document someone else uploaded', () => {
+    expect(canRestoreDocument(uploadedBy('someone-else'), ctx({ myRole: 'MEMBER' }))).toBe(false)
+  })
+
+  test('a locked project (canWrite=false) offers no restore, not even to OWNER', () => {
+    // Mirrors the server: the data-layer lock guard would refuse the write, so
+    // the UI must not advertise a button that 403s.
+    expect(canRestoreDocument(uploadedBy('u1'), ctx({ myRole: 'OWNER', canWrite: false }))).toBe(false)
+  })
+})
+
+describe('canSeeDocumentTrash', () => {
+  test('hidden when the trash is empty', () => {
+    expect(canSeeDocumentTrash([], ctx({ myRole: 'OWNER' }))).toBe(false)
+  })
+
+  test('shown to a plain MEMBER only for their own trashed upload', () => {
+    expect(canSeeDocumentTrash([uploadedBy('someone-else')], ctx({ myRole: 'MEMBER' }))).toBe(false)
+    expect(canSeeDocumentTrash([uploadedBy('someone-else'), uploadedBy('u1')], ctx({ myRole: 'MEMBER' }))).toBe(true)
+  })
+
+  test('shown to OWNER/PM for anyone else’s trashed upload', () => {
+    expect(canSeeDocumentTrash([uploadedBy('someone-else')], ctx({ myRole: 'PM' }))).toBe(true)
   })
 })

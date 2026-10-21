@@ -352,12 +352,16 @@ model ProjectDocument {
   sizeBytes    Int
   note         String?
   uploadedById String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  /// Soft-delete: terisi = ada di tempat sampah project. Dibersihkan permanen
+  /// oleh cron retensi 30 hari, yang juga menghapus objeknya di storage.
+  deletedAt    DateTime?
 
   project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploadedBy User    @relation(fields: [uploadedById], references: [id])
 
   @@index([projectId])
+  @@index([projectId, deletedAt])
   @@map("project_documents")
 }
 

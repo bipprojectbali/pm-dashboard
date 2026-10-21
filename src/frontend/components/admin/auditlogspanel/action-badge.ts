@@ -64,6 +64,7 @@ export const actionBadge: Record<string, { color: string; label: string }> = {
   // Project documents
   PROJECT_DOCUMENT_UPLOADED: { color: 'indigo', label: 'Document Uploaded' },
   PROJECT_DOCUMENT_DELETED: { color: 'red', label: 'Document Deleted' },
+  PROJECT_DOCUMENT_RESTORED: { color: 'teal', label: 'Document Restored' },
 
   // QC tickets
   QC_TICKET_CREATED: { color: 'blue', label: 'QC Ticket Created' },

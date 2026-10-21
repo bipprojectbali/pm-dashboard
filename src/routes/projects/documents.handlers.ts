@@ -2,90 +2,8 @@ import { prisma } from '../../lib/db'
 import { buildStoredName, getDocument, putDocument, removeDocument } from '../../lib/document-storage'
 import { env } from '../../lib/env'
 import { emitInvalidate } from '../../lib/presence'
-import { LOCKED_WRITE_MESSAGE } from '../../lib/prisma-project-lock'
-import {
-  canManageProject,
-  canReadProject,
-  getIp,
-  isSystemAdmin,
-  type ProjectRole,
-  requireAuth,
-  writeAuditLog,
-} from '../../lib/route-helpers'
-
-type Ctx = { request: Request; set: { status?: number | string } }
-type CtxWithId = Ctx & { params: { id: string } }
-type CtxWithDoc = Ctx & { params: { id: string; docId: string } }
-
-const documentSelect = {
-  id: true,
-  projectId: true,
-  title: true,
-  originalName: true,
-  mimeType: true,
-  sizeBytes: true,
-  note: true,
-  createdAt: true,
-  uploadedBy: { select: { id: true, name: true } },
-} as const
-
-type DocumentRow = {
-  id: string
-  projectId: string
-  title: string
-  originalName: string
-  mimeType: string
-  sizeBytes: number
-  note: string | null
-  createdAt: Date
-  uploadedBy: { id: string; name: string } | null
-}
-
-// `url` is the auth-gated proxy route, never a direct storage URL — the bucket
-// is private and access is decided per request, not by a signed link.
-function serialize(doc: DocumentRow) {
-  return {
-    id: doc.id,
-    projectId: doc.projectId,
-    title: doc.title,
-    originalName: doc.originalName,
-    mimeType: doc.mimeType,
-    sizeBytes: doc.sizeBytes,
-    note: doc.note,
-    createdAt: doc.createdAt,
-    uploadedBy: doc.uploadedBy,
-    url: `/api/projects/${doc.projectId}/documents/${doc.id}/file`,
-  }
-}
-
-type Gate =
-  | { ok: false; status: 403 | 404; body: Record<string, unknown> }
-  | { ok: true; membership: { role: ProjectRole } | null; admin: boolean }
-
-/**
- * Read gate for every document route: `canReadProject` with NO options, so an
- * overdue-locked project serves nothing to anyone but a system admin — the
- * OWNER decision carve-out belongs to GET /api/projects/:id alone, and letting
- * it through here would keep handing out the files the lock is meant to freeze.
- *
- * Membership (or system admin) is required on top of it, like the evidence
- * serve route: a project's documents are its artefacts and official letters,
- * not the summary data an INTERNAL project shows any logged-in user.
- */
-async function gateRead(projectId: string, auth: { userId: string; role: string }): Promise<Gate> {
-  const access = await canReadProject(projectId, auth)
-  if (!access.ok) {
-    if (access.status === 404) return { ok: false, status: 404, body: { error: 'Project not found' } }
-    // Surface the lock so the client renders the lock screen instead of a bare
-    // "no access" — same { locked: true } shape the data-layer guard returns.
-    return access.lock?.locked
-      ? { ok: false, status: 403, body: { error: LOCKED_WRITE_MESSAGE, locked: true, projectId } }
-      : { ok: false, status: 403, body: { error: 'Project not accessible' } }
-  }
-  const admin = isSystemAdmin(auth.role)
-  if (!access.membership && !admin) return { ok: false, status: 403, body: { error: 'Not a project member' } }
-  return { ok: true, membership: access.membership, admin }
-}
+import { canManageProject, getIp, requireAuth, writeAuditLog } from '../../lib/route-helpers'
+import { type CtxWithDoc, type CtxWithId, documentSelect, gateRead, serialize } from './documents.shared'
 
 export async function listProjectDocumentsHandler({ request, params, set }: CtxWithId) {
   const auth = await requireAuth(request)
@@ -98,8 +16,13 @@ export async function listProjectDocumentsHandler({ request, params, set }: CtxW
     set.status = gate.status
     return gate.body
   }
+  // `deletedAt: null` by hand, deliberately not by extending `withSoftDelete`:
+  // that extension is hardcoded to Task and generalising it drags in the traps
+  // its own comment documents (relation counts, nested includes). There are
+  // only three document read sites, so three explicit clauses are the smaller
+  // and more honest fix.
   const documents = await prisma.projectDocument.findMany({
-    where: { projectId: params.id },
+    where: { projectId: params.id, deletedAt: null },
     select: documentSelect,
     orderBy: { createdAt: 'desc' },
   })
@@ -193,8 +116,11 @@ export async function serveProjectDocumentHandler({ request, params, set }: CtxW
     set.status = gate.status
     return gate.body
   }
+  // A trashed document must 404 here even though its object is still in the
+  // bucket for a restore — a download that keeps working would make the trash
+  // cosmetic.
   const doc = await prisma.projectDocument.findFirst({
-    where: { id: params.docId, projectId: params.id },
+    where: { id: params.docId, projectId: params.id, deletedAt: null },
     select: { storedName: true, mimeType: true },
   })
   if (!doc) {
@@ -231,23 +157,26 @@ export async function deleteProjectDocumentHandler({ request, params, set }: Ctx
     return gate.body
   }
   const doc = await prisma.projectDocument.findFirst({
-    where: { id: params.docId, projectId: params.id },
-    select: { id: true, storedName: true, uploadedById: true },
+    where: { id: params.docId, projectId: params.id, deletedAt: null },
+    select: { id: true, uploadedById: true },
   })
   if (!doc) {
     set.status = 404
     return { error: 'Document not found' }
   }
-  // Uploader-or-manager, not "any writable member": deleting someone else's
-  // official letter destroys the traceability this table exists for, and a
-  // plain MEMBER has no standing to decide that. The uploader may undo their
-  // own mistake; beyond that it is an OWNER/PM call.
+  // Uploader-or-manager, not "any writable member": trashing someone else's
+  // official letter still hides it from the project, and a plain MEMBER has no
+  // standing to decide that. The uploader may undo their own mistake; beyond
+  // that it is an OWNER/PM call.
   if (!canManageProject(auth, gate.membership) && doc.uploadedById !== auth.userId) {
     set.status = 403
     return { error: 'Hanya pengunggah, OWNER/PM, atau admin sistem yang bisa menghapus dokumen' }
   }
-  await removeDocument(params.id, doc.storedName)
-  await prisma.projectDocument.delete({ where: { id: doc.id } })
+  // Soft-delete, and the object STAYS: restore needs those bytes, and the
+  // retention cron is the only thing that ever removes them. Writing on a
+  // locked project is refused at the data layer (`projectDocument` is in
+  // GUARDED_MODELS), so there is no extra lock check here.
+  await prisma.projectDocument.update({ where: { id: doc.id }, data: { deletedAt: new Date() } })
   writeAuditLog(
     auth.userId,
     'PROJECT_DOCUMENT_DELETED',

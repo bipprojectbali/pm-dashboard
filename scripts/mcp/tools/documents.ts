@@ -15,15 +15,19 @@ export const documentsReadonly: ToolModule = {
       {
         title: 'List project documents',
         description:
-          'Project-level documents (dokumentasi/artefak/surat) for a project, newest first. People are reported by id, never email.',
+          'Project-level documents (dokumentasi/artefak/surat) for a project. `state` picks the live rows (default), the trash (soft-deleted, restorable for 30 days), or both. People are reported by id, never email.',
         inputSchema: {
           projectId: z.string(),
+          // One tool with a state switch rather than a near-duplicate
+          // project_documents_trash_list: same inspectability, half the surface.
+          state: z.enum(['live', 'trashed', 'all']).default('live'),
           limit: z.number().int().min(1).max(500).default(200),
         },
       },
-      async ({ projectId, limit }) => {
+      async ({ projectId, state, limit }) => {
+        const deletedAt = state === 'live' ? null : state === 'trashed' ? { not: null } : undefined
         const documents = await prisma.projectDocument.findMany({
-          where: { projectId },
+          where: { projectId, ...(deletedAt === undefined ? {} : { deletedAt }) },
           select: {
             id: true,
             title: true,
@@ -33,11 +37,14 @@ export const documentsReadonly: ToolModule = {
             note: true,
             uploadedById: true,
             createdAt: true,
+            deletedAt: true,
           },
-          orderBy: { createdAt: 'desc' },
+          // Trash is read newest-deleted-first, same order the route serves, so
+          // the tool and the UI never disagree about what is "top of the trash".
+          orderBy: state === 'trashed' ? { deletedAt: 'desc' } : { createdAt: 'desc' },
           take: limit,
         })
-        return jsonText({ projectId, count: documents.length, documents })
+        return jsonText({ projectId, state, count: documents.length, documents })
       },
     )
 
@@ -46,16 +53,20 @@ export const documentsReadonly: ToolModule = {
       {
         title: 'Check project document storage',
         description:
-          'For every document row of a project, report whether its stored object actually exists — so rows orphaned by a failed or partial delete are detectable without opening the UI.',
+          'For every document row of a project — trashed rows included — report whether its stored object actually exists, so rows orphaned by a failed or partial delete are detectable without opening the UI.',
         inputSchema: {
           projectId: z.string(),
           limit: z.number().int().min(1).max(200).default(100),
         },
       },
       async ({ projectId, limit }) => {
+        // Trashed rows are checked too, and their object is EXPECTED to exist:
+        // soft-delete keeps the bytes so a restore can work, and only the
+        // 30-day retention cron removes them. Filtering them out here, or
+        // counting them as orphans, would both report drift that isn't there.
         const rows = await prisma.projectDocument.findMany({
           where: { projectId },
-          select: { id: true, title: true, storedName: true, sizeBytes: true },
+          select: { id: true, title: true, storedName: true, sizeBytes: true, deletedAt: true },
           orderBy: { createdAt: 'desc' },
           take: limit,
         })
@@ -69,6 +80,7 @@ export const documentsReadonly: ToolModule = {
               return {
                 id: row.id,
                 title: row.title,
+                trashed: row.deletedAt !== null,
                 key: documentKey(projectId, row.storedName),
                 exists: true,
                 storedBytes: bytes.length,
@@ -78,6 +90,7 @@ export const documentsReadonly: ToolModule = {
               return {
                 id: row.id,
                 title: row.title,
+                trashed: row.deletedAt !== null,
                 key: documentKey(projectId, row.storedName),
                 exists: false,
                 error: (e as { code?: string }).code ?? (e as Error).message,
@@ -89,6 +102,7 @@ export const documentsReadonly: ToolModule = {
         return jsonText({
           projectId,
           count: results.length,
+          trashedCount: results.filter((r) => r.trashed).length,
           orphanedCount: orphaned.length,
           documents: results,
         })

@@ -1,7 +1,7 @@
 import type { Prisma } from '../../../generated/prisma'
 import { prisma } from '../../lib/db'
 import { computeLockState, getLockGraceDays, resolveLockState } from '../../lib/project-lock'
-import { isSystemAdmin, requireAuth } from '../../lib/route-helpers'
+import { canReadProject, isSystemAdmin, requireAuth } from '../../lib/route-helpers'
 
 type Ctx = { request: Request; set: { status?: number | string } }
 type CtxWithQuery = Ctx & { query: Record<string, string> }
@@ -161,6 +161,34 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     return { error: 'Unauthorized' }
   }
 
+  // The lock-aware gate. `allowLockedDecider` is opted into here and nowhere
+  // else: this is the only route that can serve the reduced lock-screen payload.
+  const access = await canReadProject(params.id, auth, { allowLockedDecider: true })
+  if (!access.ok) {
+    set.status = access.status!
+    if (access.status === 404) return { error: 'Project not found' }
+    // `locked` lets the client tell "frozen pending a decision" apart from
+    // "never had access" — the two need very different screens.
+    return { error: 'Project not accessible', locked: access.lock?.locked ?? false }
+  }
+
+  const isAdmin = isSystemAdmin(auth.role)
+
+  // Locked, and the caller is the OWNER/PM who must decide: hand back only what
+  // the lock screen needs. Returning the full payload here would give back the
+  // very project the lock just closed.
+  if (access.lockedView) {
+    const p = access.project!
+    return {
+      project: { id: p.id, name: p.name, status: p.status, startsAt: p.startsAt, endsAt: p.endsAt },
+      myRole: access.rawRole,
+      canWrite: false,
+      canDecide: true,
+      lock: access.lock,
+      lockedView: true,
+    }
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: PROJECT_INCLUDE,
@@ -170,16 +198,9 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     return { error: 'Project not found' }
   }
 
-  // Raw role from the already-included members — no extra query, and the lock
-  // must not hide who the owner is: the lock screen needs the real role to offer
-  // the way out. Enforcement lives in requireProjectMember, not here.
+  // Raw role from the already-included members — the lock must not hide who the
+  // owner is: the lock screen needs the real role to offer the way out.
   const myRole = project.members.find((m) => m.userId === auth.userId)?.role ?? null
-  const isAdmin = isSystemAdmin(auth.role)
-  const isVisible = isAdmin || myRole != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
-  if (!isVisible) {
-    set.status = 403
-    return { error: 'Project not accessible' }
-  }
 
   const [grouped, milestonesDone] = await Promise.all([
     prisma.task.groupBy({ by: ['status'], where: { projectId: params.id }, _count: { _all: true } }),

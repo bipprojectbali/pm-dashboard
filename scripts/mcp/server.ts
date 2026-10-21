@@ -6,6 +6,7 @@ import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
 import { devTools } from './tools/dev'
 import { documentsReadonly } from './tools/documents'
+import { evidenceReadonly } from './tools/evidence'
 import { githubReadonly } from './tools/github'
 import { healthTools } from './tools/health'
 import { logsAdmin, logsReadonly } from './tools/logs'
@@ -42,6 +43,7 @@ const READONLY_MODULES: ToolModule[] = [
   projectsReadonly,
   projectLockReadonly,
   documentsReadonly,
+  evidenceReadonly,
   tasksReadonly,
   ticketsReadonly,
   tagsReadonly,

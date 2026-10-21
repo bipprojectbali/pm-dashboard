@@ -1,6 +1,12 @@
 import { prisma } from '../../lib/db'
 import { env } from '../../lib/env'
-import { getEvidence, putEvidence, removeEvidence } from '../../lib/evidence-storage'
+import {
+  evidenceResponseHeaders,
+  getEvidence,
+  putEvidence,
+  removeEvidence,
+  sanitizeEvidenceName,
+} from '../../lib/evidence-storage'
 import { emitInvalidate } from '../../lib/presence'
 import {
   canReadProject,
@@ -146,7 +152,7 @@ export async function deleteEvidenceHandler({
   // and, if present, the legacy on-disk copy.
   const match = evidence.url.match(/^\/api\/evidence\/([^?]+)/)
   if (match) {
-    const safeName = match[1].replace(/[^a-zA-Z0-9._-]/g, '')
+    const safeName = sanitizeEvidenceName(match[1])
     await removeEvidence(params.id, safeName)
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
@@ -188,14 +194,17 @@ export async function serveEvidenceHandler({ request, params, query, set }: CtxW
     set.status = 403
     return { error: 'Not a project member' }
   }
-  const safeName = params.file.replace(/[^a-zA-Z0-9._-]/g, '')
+  const safeName = sanitizeEvidenceName(params.file)
 
   // Prefer MinIO (new uploads). We read the object directly rather than calling
   // exists() first — MinIO's HEAD response makes Bun's exists() throw, while a
   // direct GET works. A missing key throws NoSuchKey, which we treat as "try disk".
   try {
     const bytes = await getEvidence(taskId, safeName).bytes()
-    return new Response(bytes)
+    // Never a bare `new Response(bytes)`: with no declared type and no nosniff
+    // the browser sniffs the bytes, and this route is same-origin — so a .html
+    // uploaded by any non-VIEWER member would run in the viewer's session.
+    return new Response(bytes, { headers: evidenceResponseHeaders(safeName) })
   } catch (e) {
     const code = (e as { code?: string }).code
     if (code && code !== 'NoSuchKey' && code !== 'ERR_S3_INVALID_PATH') {
@@ -211,7 +220,10 @@ export async function serveEvidenceHandler({ request, params, query, set }: CtxW
   const fullPath = path.resolve(rootDir, safeName)
   if (fullPath.startsWith(rootDir)) {
     const diskFile = Bun.file(fullPath)
-    if (await diskFile.exists()) return new Response(diskFile)
+    // Same headers as the MinIO path, and explicitly: a BunFile body makes Bun
+    // fill in Content-Type from the extension, so this path rendered a legacy
+    // .html deliberately rather than by sniffing.
+    if (await diskFile.exists()) return new Response(diskFile, { headers: evidenceResponseHeaders(safeName) })
   }
   set.status = 404
   return { error: 'File not found' }

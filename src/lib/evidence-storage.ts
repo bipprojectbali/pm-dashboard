@@ -1,5 +1,6 @@
 import { createHash, createHmac } from 'node:crypto'
 import { S3Client, type S3File } from 'bun'
+import { documentResponseHeaders } from './document-preview'
 import { env } from './env'
 
 // Evidence files in MinIO/S3. Every evidence upload/serve/delete path routes
@@ -91,6 +92,32 @@ export async function putEvidence(
 // Lazy reference — caller checks .exists() then streams via `new Response(s3file)`.
 export function getEvidence(taskId: string, storedName: string): S3File {
   return client.file(evidenceKey(taskId, storedName))
+}
+
+/**
+ * The stored name the serve route will actually look up, from whatever the URL
+ * segment held. Exported so the serve route and the MCP header-check tool can
+ * never disagree about which name the headers are computed from — the sanitiser
+ * is the only transform between request and response headers.
+ */
+export function sanitizeEvidenceName(requested: string): string {
+  return requested.replace(/[^a-zA-Z0-9._-]/g, '')
+}
+
+/**
+ * Every header the evidence serve route sends for a file body — the same
+ * allowlist the document route uses, not a second copy of it.
+ *
+ * The type is derived from `storedName`'s extension because `TaskEvidence` has
+ * no `mimeType` column (its metadata was crammed into the free-form `note`), so
+ * the stored name is all serve time has. `Bun.file(name).type` is the platform's
+ * own extension-to-MIME map, no dependency and no I/O, and it answers
+ * `application/octet-stream` for an extension it does not know — an unmapped or
+ * extension-less name therefore lands in the attachment path rather than
+ * becoming something the browser guesses at.
+ */
+export function evidenceResponseHeaders(storedName: string): Record<string, string> {
+  return documentResponseHeaders(Bun.file(storedName).type, storedName)
 }
 
 // Best-effort delete — never throw (evidence row removal must still succeed).

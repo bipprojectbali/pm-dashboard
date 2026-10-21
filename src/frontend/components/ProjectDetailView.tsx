@@ -14,6 +14,7 @@ import {
 import { useHotkeys } from '@mantine/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TbAlertTriangle, TbArrowLeft, TbChecks, TbCopy, TbRefresh } from 'react-icons/tb'
+import { lockTone } from '../../lib/project-lock-tone'
 import { useSession } from '../hooks/useAuth'
 import { ProjectHeader } from './ProjectDetailView/ProjectHeader'
 import { ProjectLockedDenied, ProjectLockedScreen } from './ProjectDetailView/ProjectLockedScreen'
@@ -21,6 +22,7 @@ import { ProjectTabs } from './ProjectDetailView/ProjectTabs'
 import type { ApiError, ProjectDetailTab } from './ProjectDetailView/types'
 import { api, PROJECT_DETAIL_TABS } from './ProjectDetailView/types'
 import type { MemberRole, ProjectDetail, ProjectLockState } from './ProjectsPanel'
+import classes from './projects/lock-tone.module.css'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 
 export type { ProjectDetailTab }
@@ -70,10 +72,15 @@ export function ProjectDetailView({
   // an error box: the member did nothing wrong and has an action to take.
   const lockedOut = (detailQ.error as ApiError | null)?.locked === true
 
+  // The red wash. A 403 denial is a locked project by definition, so it gets the
+  // hardest rung even though its reduced payload never arrives to say so.
+  // Neutral stages return attr === null and nothing extra renders at all.
+  const tone = lockTone(lockedOut ? 'LOCKED' : lock?.stage)
+
   useHotkeys([['Escape', onBack]])
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className={tone.attr ? classes.tone : undefined} data-lock-tone={tone.attr ?? undefined}>
       <Group justify="space-between" wrap="wrap" gap="sm">
         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
           <Tooltip label="Kembali ke daftar proyek (Esc)">

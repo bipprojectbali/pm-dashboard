@@ -1,7 +1,22 @@
 import { Elysia } from 'elysia'
 import { prisma } from '../../lib/db'
-import { isSystemAdmin, requireAuth } from '../../lib/route-helpers'
+import { isSystemAdmin, requireAuth, requireProjectMember } from '../../lib/route-helpers'
 import { eventInclude } from './shared'
+
+type WriteAccess = { ok: true } | { ok: false; status: 400 | 403; error: string }
+
+async function checkProjectWritable(projectId: string, auth: { userId: string; role: string }): Promise<WriteAccess> {
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
+  if (!p) return { ok: false, status: 400, error: 'Project tidak ditemukan' }
+  if (isSystemAdmin(auth.role)) return { ok: true }
+  // requireProjectMember melaporkan tiap anggota sebagai VIEWER saat project terkunci
+  // (overdue lock), jadi gate 'bukan VIEWER' di bawah sekaligus menegakkan lock itu.
+  const membership = await requireProjectMember(projectId, auth.userId)
+  if (!membership || membership.role === 'VIEWER') {
+    return { ok: false, status: 403, error: 'Not a writable project member' }
+  }
+  return { ok: true }
+}
 
 export function eventWriteRoutes() {
   return new Elysia()
@@ -25,8 +40,8 @@ export function eventWriteRoutes() {
       const endsAt = body.endsAt ? new Date(body.endsAt) : undefined
       if (endsAt && Number.isNaN(endsAt.getTime())) { set.status = 400; return { error: 'endsAt tidak valid' } }
       if (body.projectId) {
-        const p = await prisma.project.findUnique({ where: { id: body.projectId }, select: { id: true } })
-        if (!p) { set.status = 400; return { error: 'Project tidak ditemukan' } }
+        const access = await checkProjectWritable(body.projectId, auth)
+        if (!access.ok) { set.status = access.status; return { error: access.error } }
       }
       const event = await prisma.event.create({
         data: {
@@ -60,6 +75,14 @@ export function eventWriteRoutes() {
         location?: string
         projectId?: string | null
         tagIds?: string[]
+      }
+      if (existing.projectId) {
+        const origin = await checkProjectWritable(existing.projectId, auth)
+        if (!origin.ok) { set.status = origin.status; return { error: origin.error } }
+      }
+      if (body.projectId) {
+        const target = await checkProjectWritable(body.projectId, auth)
+        if (!target.ok) { set.status = target.status; return { error: target.error } }
       }
       const data: Record<string, unknown> = { updatedAt: new Date() }
       if (body.title !== undefined) {

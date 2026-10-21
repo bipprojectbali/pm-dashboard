@@ -35,6 +35,16 @@ Forcing function, bukan penalti: project `ACTIVE` non-archived dengan `endsAt` y
 - `GET /api/projects` dan `GET /api/projects/:id` mengembalikan `lock` (LockState) plus `canWrite` (false saat locked kecuali system admin) dan, khusus detail, `canDecide` (OWNER/PM/system admin — sengaja tidak terpengaruh lock supaya layar kunci tahu siapa yang bisa memutuskan). `myRole` selalu role asli, bukan hasil downgrade.
 - MCP: `project_lock_states` (readonly — inspeksi stage tanpa mengirim notifikasi), `project_lock_sweep` (admin — jalankan sweep sekali), `project_lock_set_grace` (admin — ubah `project.lockGraceDays`, balikan: project yang langsung terkunci).
 
+## Otorisasi event
+
+Menautkan event ke sebuah project adalah aksi tulis pada project itu, bukan sekadar aksi pada event. `src/routes/events/write.route.ts` menegakkannya lewat `checkProjectWritable(projectId, auth)`: project tidak ada → 400; system admin lolos; selain itu wajib `requireProjectMember` dengan role selain `VIEWER`, kalau tidak 403.
+
+- `POST /api/events` — `requireAuth` saja untuk event tanpa `projectId` (bebas dibuat user login). Begitu `projectId` diisi, `checkProjectWritable` berlaku.
+- `PATCH /api/events/:id` — creator-or-system-admin tetap gate pertama (403). Lalu write-access diperiksa pada project **asal** bila event sudah melekat ke project, dan pada project **tujuan** bila `projectId` diubah; keduanya harus lolos, jadi event tidak bisa dipindahkan keluar/masuk project yang tidak boleh ditulis caller.
+- `DELETE /api/events/:id` — tidak berubah: creator-or-system-admin.
+- Overdue lock ikut tertutup tanpa kode tambahan: `requireProjectMember` melaporkan anggota project terkunci sebagai `VIEWER`, sehingga gate "bukan VIEWER" otomatis menolak.
+- MCP `event_create`/`event_update` menulis langsung ke prisma tanpa cek keanggotaan — ini disengaja dan setara system admin: modul `eventsTools` hanya terdaftar pada scope `admin`, dan `NODE_ENV=production` memaksa scope `readonly` saat registrasi. Tool event tidak ada di whitelist `token-scoped-server.ts` (task saja), jadi token project tidak bisa menyentuh event.
+
 ## Aturan penambahan fitur (WAJIB)
 
 Setiap fitur baru — endpoint API, route frontend, lib helper, integrasi, behavior cron, dsb. — harus selalu disertai **dua hal** sebelum dianggap selesai:

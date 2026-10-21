@@ -1,7 +1,13 @@
 import Elysia from 'elysia'
 import { prisma } from '../../lib/db'
 import { generateProjectToken } from '../../lib/project-access-tokens'
-import { canManageProject, getIp, requireAuth, requireProjectMember } from '../../lib/route-helpers'
+import {
+  canManageProject,
+  getIp,
+  requireAuth,
+  requireProjectMember,
+  requireProjectMemberRaw,
+} from '../../lib/route-helpers'
 import { audit } from './shared'
 
 const TOKEN_SELECT = {
@@ -25,7 +31,9 @@ export function projectAccessTokenRoutes() {
     .get('/api/projects/:id/access-tokens', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
       if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      const membership = await requireProjectMember(params.id, auth.userId)
+      // Raw role: listing tokens is a read, and the overdue lock must not take
+      // reads away from the people who already had them.
+      const membership = await requireProjectMemberRaw(params.id, auth.userId)
       if (!canManageProject(auth, membership)) {
         set.status = 403
         return { error: 'Only OWNER, PM, or system admin can view access tokens' }

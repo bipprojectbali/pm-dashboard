@@ -62,9 +62,11 @@ export function taskCommentsRoutes() {
         return { error: 'Comment not found' }
       }
       const membership = await requireProjectMember(comment.task.projectId, auth.userId)
-      if (!membership && !isSystemAdmin(auth.role)) {
+      // VIEWER rejected like the create path: editing is a write, and a locked
+      // project reports every member as VIEWER.
+      if ((!membership || membership.role === 'VIEWER') && !isSystemAdmin(auth.role)) {
         set.status = 403
-        return { error: 'Not a project member' }
+        return { error: 'Not a writable project member' }
       }
       if (comment.authorId !== auth.userId && !isSystemAdmin(auth.role)) {
         set.status = 403
@@ -98,9 +100,9 @@ export function taskCommentsRoutes() {
         return { error: 'Comment not found' }
       }
       const membership = await requireProjectMember(comment.task.projectId, auth.userId)
-      if (!membership && !isSystemAdmin(auth.role)) {
+      if ((!membership || membership.role === 'VIEWER') && !isSystemAdmin(auth.role)) {
         set.status = 403
-        return { error: 'Not a project member' }
+        return { error: 'Not a writable project member' }
       }
       if (comment.authorId !== auth.userId && !isSystemAdmin(auth.role)) {
         set.status = 403

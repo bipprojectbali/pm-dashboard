@@ -2,6 +2,7 @@ import Elysia from 'elysia'
 import { projectAccessTokenRoutes } from './projects/access-tokens.route'
 import { projectExtensionRoutes } from './projects/extensions.route'
 import { projectGithubRoutes } from './projects/github.route'
+import { projectLockRoutes } from './projects/lock.route'
 import { projectMemberRoutes } from './projects/members.route'
 import { milestoneRoutes } from './projects/milestones.route'
 import { projectQueryRoutes } from './projects/query.route'
@@ -13,6 +14,7 @@ export function projectsRoutes() {
     .use(projectWriteRoutes())
     .use(projectMemberRoutes())
     .use(projectExtensionRoutes())
+    .use(projectLockRoutes())
     .use(milestoneRoutes())
     .use(projectGithubRoutes())
     .use(projectAccessTokenRoutes())

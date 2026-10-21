@@ -1,6 +1,6 @@
 import { ActionIcon, Avatar, Badge, Card, Group, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
-import { TbAlertTriangle, TbCalendarEvent, TbFolder, TbPencil } from 'react-icons/tb'
+import { TbAlertTriangle, TbCalendarEvent, TbFolder, TbLock, TbPencil } from 'react-icons/tb'
 import { UserAvatar } from '../shared/UserAvatar'
 import { computeHealth, computeOverdue, computeTimeProgress, formatDate, isExtended } from './helpers'
 import { ProjectCardStats } from './ProjectCardStats'
@@ -114,6 +114,13 @@ export function ProjectCard({
             <Badge variant="default" size="xs" style={{ border: 'none' }}>
               PRIVATE
             </Badge>
+          )}
+          {p.lock?.locked && (
+            <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER, PM, atau admin yang bisa membukanya">
+              <Badge color="red" variant="filled" size="xs" leftSection={<TbLock size={10} />}>
+                TERKUNCI
+              </Badge>
+            </Tooltip>
           )}
           {overdue && (
             <Badge

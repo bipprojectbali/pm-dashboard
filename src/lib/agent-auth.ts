@@ -1,5 +1,6 @@
 import { prisma } from './db'
 import { verifyProjectToken } from './project-access-tokens'
+import { resolveLockState } from './project-lock'
 
 // Auth context for the token-only `/api/agent/*` surface. Distinct from session
 // auth (requireAuth): the project + scope come entirely from the pmt_ token, so
@@ -23,10 +24,24 @@ export async function resolveAgentAuth(request: Request): Promise<AgentAuth> {
   if (!result.ok) return { ok: false, status: 401, error: 'Unauthorized' }
 
   // Dangling-token guard: project may have been deleted after the token was issued.
-  const project = await prisma.project.findUnique({ where: { id: result.projectId }, select: { id: true } })
+  const project = await prisma.project.findUnique({
+    where: { id: result.projectId },
+    select: { id: true, endsAt: true, status: true, archivedAt: true },
+  })
   if (!project) return { ok: false, status: 401, error: 'Unauthorized' }
 
-  return { ok: true, projectId: result.projectId, scope: result.scope, userId: result.userId }
+  // Mirror of the session-side role downgrade: an overdue-locked project drops
+  // every token to READ, so all /api/agent/* write handlers reject via canWrite
+  // without a single call-site change. Agents must not be the hole that lets
+  // work continue while humans are blocked.
+  const lock = await resolveLockState(project)
+
+  return {
+    ok: true,
+    projectId: result.projectId,
+    scope: lock.locked ? 'READ' : result.scope,
+    userId: result.userId,
+  }
 }
 
 // A pmt_ token's creator may have been deleted (userId null). Task/comment rows

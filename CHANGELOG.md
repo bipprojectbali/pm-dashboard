@@ -5,6 +5,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Ditambahkan
+- **Proyek yang telat lama otomatis jadi read-only sampai ada keputusan**: selama ini proyek overdue hanya ditandai badge — penanganannya bergantung pada kesadaran orang, sehingga mudah terlewat. Kini proyek berstatus Aktif yang melewati deadline lebih dari masa tenggang (default 7 hari, diatur lewat setting `project.lockGraceDays`) otomatis terkunci: seluruh anggota — termasuk Owner/PM dan token agent — turun jadi hanya-baca, jadi tidak ada task baru, edit, atau komentar sampai pihak berwenang mengambil keputusan. Tiga jalan keluar tetap terbuka bagi Owner/PM/admin walau proyek terkunci: perpanjang deadline, tandai Selesai, atau Batalkan. Admin sistem tidak pernah ikut terkunci. Proyek Draft/On Hold/Selesai/Dibatalkan, yang diarsip, atau tanpa deadline tidak pernah terkunci — status non-aktif sudah berupa keputusan.
+- **Rantai notifikasi eskalasi menjelang dan sesudah terkunci**: sweep tiap jam mengirim peringatan berjenjang — 7 hari sebelum deadline (ke Owner/PM), saat deadline lewat (ke Owner/PM), di tengah masa tenggang naik ke admin sistem, lalu saat terkunci ke seluruh anggota. Tiap penerima hanya menerima satu notifikasi per jenis per proyek dalam 24 jam, jadi sweep berikutnya tidak membanjiri.
+- **Tombol "Minta keputusan" di layar proyek terkunci**: anggota yang terblokir bisa menekan satu tombol untuk menotifikasi Owner, PM, dan admin sistem sekaligus (endpoint `POST /api/projects/:id/request-decision`, dibatasi satu permintaan per orang per proyek per 12 jam). Layar terkunci menampilkan tanggal deadline, lama keterlambatan, dan masa tenggang, plus opsi melihat proyek dalam mode hanya-baca.
+- **Badge "TERKUNCI" di daftar proyek** (tampilan grid maupun list) di samping badge Overdue yang sudah ada.
+- **MCP tool baru**: `project_lock_states` (readonly — stage lock tiap proyek aktif beserta jumlah penerima notifikasi), `project_lock_sweep` (admin — jalankan rantai eskalasi sekali di luar jadwal), dan `project_lock_set_grace` (admin — ubah masa tenggang, balikannya daftar proyek yang langsung terkunci oleh nilai baru).
+
 ## [0.10.0] - 2026-08-05
 
 ### Ditambahkan

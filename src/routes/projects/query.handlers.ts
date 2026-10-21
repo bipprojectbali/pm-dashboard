@@ -1,6 +1,7 @@
 import type { Prisma } from '../../../generated/prisma'
 import { prisma } from '../../lib/db'
-import { isSystemAdmin, requireAuth, requireProjectMember } from '../../lib/route-helpers'
+import { computeLockState, getLockGraceDays, resolveLockState } from '../../lib/project-lock'
+import { isSystemAdmin, requireAuth } from '../../lib/route-helpers'
 
 type Ctx = { request: Request; set: { status?: number | string } }
 type CtxWithQuery = Ctx & { query: Record<string, string> }
@@ -130,15 +131,19 @@ export async function listProjectsHandler({ request, query, set }: CtxWithQuery)
     statsByProject.set(g.projectId, row)
   }
   const doneByProject = new Map<string, number>(milestonesDone.map((m) => [m.projectId, m._count._all]))
+  // One setting read for the whole page; the state itself is pure arithmetic.
+  const graceDays = await getLockGraceDays()
 
   return {
     projects: projectRows.map((p) => {
       const myRole = roleByProject.get(p.id) ?? null
+      const lock = computeLockState(p, graceDays)
       return {
         ...p,
         myRole,
         joinedAt: joinedAtByProject.get(p.id) ?? null,
-        canWrite: isAdmin || myRole != null,
+        canWrite: isAdmin || (myRole != null && !lock.locked),
+        lock,
         taskStats: buildTaskStats(statsByProject.get(p.id) ?? {}),
         milestoneStats: { done: doneByProject.get(p.id) ?? 0, total: p._count.milestones },
       }
@@ -165,10 +170,12 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     return { error: 'Project not found' }
   }
 
-  const membership = await requireProjectMember(params.id, auth.userId)
+  // Raw role from the already-included members — no extra query, and the lock
+  // must not hide who the owner is: the lock screen needs the real role to offer
+  // the way out. Enforcement lives in requireProjectMember, not here.
+  const myRole = project.members.find((m) => m.userId === auth.userId)?.role ?? null
   const isAdmin = isSystemAdmin(auth.role)
-  const isVisible =
-    isAdmin || membership != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
+  const isVisible = isAdmin || myRole != null || project.visibility === 'INTERNAL' || project.visibility === 'PUBLIC'
   if (!isVisible) {
     set.status = 403
     return { error: 'Project not accessible' }
@@ -183,13 +190,18 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
   const s: Record<string, number> = {}
   for (const g of grouped) s[g.status] = g._count._all
 
+  const lock = await resolveLockState(project)
+
   return {
     project: {
       ...project,
       taskStats: buildTaskStats(s),
       milestoneStats: { done: milestonesDone, total: project._count.milestones },
     },
-    myRole: membership?.role ?? null,
-    canWrite: isAdmin || membership != null,
+    myRole,
+    canWrite: isAdmin || (myRole != null && !lock.locked),
+    // Who can end the overdue state — unaffected by the lock on purpose.
+    canDecide: isAdmin || myRole === 'OWNER' || myRole === 'PM',
+    lock,
   }
 }

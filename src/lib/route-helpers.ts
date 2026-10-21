@@ -9,6 +9,7 @@ export {
   isSystemAdmin,
   type ProjectRole,
   requireProjectMember,
+  requireProjectMemberRaw,
 } from './project-access'
 export {
   extractSessionToken,

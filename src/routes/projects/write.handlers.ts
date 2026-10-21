@@ -3,8 +3,19 @@ import { prisma } from '../../lib/db'
 import { normalizeGithubRepo } from '../../lib/github'
 import { getPermissionRule } from '../../lib/permission-config'
 import { emitInvalidate } from '../../lib/presence'
-import { canManageProject, getIp, requireAuth, requireProjectMember } from '../../lib/route-helpers'
+import {
+  canManageProject,
+  getIp,
+  requireAuth,
+  requireProjectMember,
+  requireProjectMemberRaw,
+} from '../../lib/route-helpers'
 import { audit } from './shared'
+
+// Exits from an overdue lock other than extending. A locked project reports its
+// members as VIEWER, which would also block the decisions that end the overdue
+// state — so OWNER/PM keep these two status transitions, and nothing else.
+const DISPOSITION_STATUS = new Set(['COMPLETED', 'CANCELLED'])
 
 type Ctx = { request: Request; set: { status?: number | string } }
 type CtxWithId = Ctx & { params: { id: string } }
@@ -62,9 +73,14 @@ export async function updateProjectHandler({ request, params, set }: CtxWithId) 
   const auth = await requireAuth(request)
   if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
   const membership = await requireProjectMember(params.id, auth.userId)
+  let dispositionOnly = false
   if (!canManageProject(auth, membership)) {
-    set.status = 403
-    return { error: 'Only OWNER, PM, or system admin can modify project' }
+    const raw = await requireProjectMemberRaw(params.id, auth.userId)
+    if (!canManageProject(auth, raw)) {
+      set.status = 403
+      return { error: 'Only OWNER, PM, or system admin can modify project' }
+    }
+    dispositionOnly = true
   }
   const body = (await request.json()) as {
     name?: string; description?: string | null
@@ -73,6 +89,16 @@ export async function updateProjectHandler({ request, params, set }: CtxWithId) 
     visibility?: 'PRIVATE' | 'INTERNAL' | 'PUBLIC'
     startsAt?: string | null; endsAt?: string | null
     archived?: boolean; githubRepo?: string | null
+  }
+  if (dispositionOnly) {
+    const keys = Object.keys(body)
+    if (keys.length !== 1 || keys[0] !== 'status' || !DISPOSITION_STATUS.has(body.status ?? '')) {
+      set.status = 403
+      return {
+        error: 'Project terkunci karena overdue — perpanjang deadline, atau tandai selesai/dibatalkan',
+        locked: true,
+      }
+    }
   }
   const existing = await prisma.project.findUnique({
     where: { id: params.id },

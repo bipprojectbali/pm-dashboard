@@ -175,6 +175,7 @@ async function serveFrontend(request: Request): Promise<Response> {
 // ─── Audit Log Rotation ───────────────────────────────
 import { prisma } from './lib/db'
 import { runDueSoonSweep } from './lib/notifications'
+import { runProjectLockSweep } from './lib/project-lock.sweep'
 
 async function cleanupAuditLogs() {
   const cutoff = new Date(Date.now() - env.AUDIT_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)
@@ -187,11 +188,19 @@ async function sweepDueTasks() {
   if (dueSoon || overdue) console.log(`[Notifications] dueSoon=${dueSoon} overdue=${overdue}`)
 }
 
+async function sweepProjectLocks() {
+  const counts = await runProjectLockSweep()
+  const sent = Object.values(counts).reduce((a, b) => a + b, 0)
+  if (sent > 0) console.log(`[ProjectLock] sent=${sent} ${JSON.stringify(counts)}`)
+}
+
 // Run on startup, then periodically
 cleanupAuditLogs().catch(console.error)
 sweepDueTasks().catch(console.error)
+sweepProjectLocks().catch(console.error)
 setInterval(() => cleanupAuditLogs().catch(console.error), 24 * 60 * 60 * 1000)
 setInterval(() => sweepDueTasks().catch(console.error), 60 * 60 * 1000)
+setInterval(() => sweepProjectLocks().catch(console.error), 60 * 60 * 1000)
 
 import { appLog } from './lib/applog'
 // ─── Daily AI Report Cron ─────────────────────────────

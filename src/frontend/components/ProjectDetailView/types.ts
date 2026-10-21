@@ -12,11 +12,19 @@ export const PROJECT_DETAIL_TABS = [
 ] as const
 export type ProjectDetailTab = (typeof PROJECT_DETAIL_TABS)[number]
 
+// Carries the HTTP status and the server's `locked` flag alongside the message,
+// so a 403 on a locked project can be told apart from a plain "no access" and
+// get its own screen instead of a red error box.
+export type ApiError = Error & { status?: number; locked?: boolean }
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(err.error || `HTTP ${res.status}`)
+    const e: ApiError = new Error(err.error || `HTTP ${res.status}`)
+    e.status = res.status
+    e.locked = err.locked === true
+    throw e
   }
   return res.json()
 }

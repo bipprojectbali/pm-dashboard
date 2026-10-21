@@ -2,7 +2,7 @@ import { Alert, Button, Card, Group, List, Stack, Text, ThemeIcon, Title } from 
 import { modals } from '@mantine/modals'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { TbBan, TbBell, TbCalendarPlus, TbCircleCheck, TbEye, TbLock } from 'react-icons/tb'
+import { TbBan, TbBell, TbCalendarPlus, TbCircleCheck, TbLock } from 'react-icons/tb'
 import { notifyError, notifySuccess } from '../../lib/notify'
 import { ExtendDeadlineModal, useExtendDeadline } from '../ExtensionsSection'
 import type { ProjectDetail, ProjectLockState } from '../ProjectsPanel'
@@ -10,20 +10,87 @@ import { api, formatDate } from './types'
 
 type Disposition = 'COMPLETED' | 'CANCELLED'
 
+// A locked project is served to OWNER/PM as a reduced payload — id/name/status/
+// dates only — so this screen must not reach for task lists, members or counts.
+export type ProjectLockSubject = Pick<ProjectDetail, 'id' | 'name' | 'endsAt' | 'startsAt'> & {
+  taskStats?: ProjectDetail['taskStats']
+}
+
+// The view a member who may NOT decide gets. They can no longer open the
+// project at all (the API returns 403), so this is rendered standalone from the
+// denial — nudging the people who can decide is the only action left to them.
+export function ProjectLockedDenied({ projectId }: { projectId: string }) {
+  const [requested, setRequested] = useState(false)
+
+  const requestDecision = useMutation({
+    mutationFn: () =>
+      api<{ ok: boolean; deduped: boolean; notified: number }>(`/api/projects/${projectId}/request-decision`, {
+        method: 'POST',
+      }),
+    // `deduped` means this person already asked within 12 jam — still a success,
+    // so the button locks either way and nobody is invited to spam.
+    onSuccess: (res) => {
+      setRequested(true)
+      notifySuccess({
+        message: res.deduped
+          ? 'Permintaan kamu sebelumnya masih berlaku — pemilik dan admin sudah diberi tahu.'
+          : 'Permintaan keputusan terkirim ke pemilik proyek, PM, dan admin.',
+      })
+    },
+    onError: (err) => notifyError(err),
+  })
+
+  return (
+    <Card withBorder padding="lg" radius="md" style={{ borderColor: 'var(--mantine-color-red-6)' }}>
+      <Stack gap="md">
+        <Group gap="sm" align="flex-start" wrap="nowrap">
+          <ThemeIcon color="red" variant="light" size="xl" radius="md">
+            <TbLock size={22} />
+          </ThemeIcon>
+          <Stack gap={4} style={{ minWidth: 0 }}>
+            <Title order={3}>Proyek ini terkunci</Title>
+            <Text size="sm" c="dimmed">
+              Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai pemilik proyek, PM, atau admin
+              memutuskan: perpanjang deadline, tandai selesai, atau batalkan. Selama terkunci, isi proyek tidak bisa
+              dibuka — termasuk daftar tugas, tim, dan milestone.
+            </Text>
+          </Stack>
+        </Group>
+        <Text size="sm">
+          Hanya pemilik proyek, PM, atau admin yang bisa membuka kunci ini. Kirim permintaan supaya mereka segera
+          memutuskan.
+        </Text>
+        {requested ? (
+          <Alert color="teal" variant="light" icon={<TbBell size={16} />} radius="md">
+            Pemilik proyek, PM, dan admin sudah diberi tahu. Tidak perlu mengirim lagi — tunggu keputusan mereka.
+          </Alert>
+        ) : (
+          <Group>
+            <Button
+              leftSection={<TbBell size={16} />}
+              loading={requestDecision.isPending}
+              onClick={() => requestDecision.mutate()}
+            >
+              Minta keputusan
+            </Button>
+          </Group>
+        )}
+      </Stack>
+    </Card>
+  )
+}
+
 export function ProjectLockedScreen({
   project,
   lock,
   canDecide,
-  onViewReadOnly,
 }: {
-  project: ProjectDetail
+  project: ProjectLockSubject
   lock: ProjectLockState
   canDecide: boolean
-  onViewReadOnly: () => void
 }) {
   const qc = useQueryClient()
   const [extendOpen, setExtendOpen] = useState(false)
-  const [requested, setRequested] = useState(false)
 
   const extend = useExtendDeadline(project.id, () => setExtendOpen(false))
 
@@ -46,24 +113,6 @@ export function ProjectLockedScreen({
     onError: (err) => notifyError(err),
   })
 
-  const requestDecision = useMutation({
-    mutationFn: () =>
-      api<{ ok: boolean; deduped: boolean; notified: number }>(`/api/projects/${project.id}/request-decision`, {
-        method: 'POST',
-      }),
-    // `deduped` means this person already asked within 12 jam — still a success,
-    // so the button locks either way and nobody is invited to spam.
-    onSuccess: (res) => {
-      setRequested(true)
-      notifySuccess({
-        message: res.deduped
-          ? 'Permintaan kamu sebelumnya masih berlaku — pemilik dan admin sudah diberi tahu.'
-          : 'Permintaan keputusan terkirim ke pemilik proyek, PM, dan admin.',
-      })
-    },
-    onError: (err) => notifyError(err),
-  })
-
   const confirmDispose = (status: Disposition) => {
     const selesai = status === 'COMPLETED'
     modals.openConfirmModal({
@@ -76,7 +125,11 @@ export function ProjectLockedScreen({
           </Text>
           <Text size="sm" c="dimmed">
             {selesai
-              ? `Status proyek menjadi COMPLETED dan kuncinya terbuka. ${project.taskStats?.open ?? 0} tugas masih terbuka dan tidak akan ikut ditutup.`
+              ? // taskStats is absent from the reduced locked payload — only mention
+                // the open-task count when it was actually sent.
+                `Status proyek menjadi COMPLETED dan kuncinya terbuka.${
+                  project.taskStats ? ` ${project.taskStats.open} tugas masih terbuka dan tidak akan ikut ditutup.` : ''
+                }`
               : 'Status proyek menjadi CANCELLED dan kuncinya terbuka. Pekerjaan yang tersisa dianggap tidak dilanjutkan.'}
           </Text>
         </Stack>
@@ -138,34 +191,10 @@ export function ProjectLockedScreen({
             </Group>
           </Stack>
         ) : (
-          <Stack gap="sm">
-            <Text size="sm">
-              Hanya pemilik proyek, PM, atau admin yang bisa membuka kunci ini. Kirim permintaan supaya mereka segera
-              memutuskan.
-            </Text>
-            {requested ? (
-              <Alert color="teal" variant="light" icon={<TbBell size={16} />} radius="md">
-                Pemilik proyek, PM, dan admin sudah diberi tahu. Tidak perlu mengirim lagi — tunggu keputusan mereka.
-              </Alert>
-            ) : (
-              <Group>
-                <Button
-                  leftSection={<TbBell size={16} />}
-                  loading={requestDecision.isPending}
-                  onClick={() => requestDecision.mutate()}
-                >
-                  Minta keputusan
-                </Button>
-              </Group>
-            )}
-          </Stack>
+          // Defensive: the API only serves a locked project to people who can
+          // decide, so this is a fallback rather than a path members reach.
+          <ProjectLockedDenied projectId={project.id} />
         )}
-
-        <Group gap="xs">
-          <Button variant="subtle" size="sm" leftSection={<TbEye size={16} />} onClick={onViewReadOnly}>
-            Lihat proyek (hanya baca)
-          </Button>
-        </Group>
       </Stack>
 
       <ExtendDeadlineModal

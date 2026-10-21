@@ -13,19 +13,18 @@ import {
 } from '@mantine/core'
 import { useHotkeys } from '@mantine/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { TbAlertTriangle, TbArrowLeft, TbChecks, TbCopy, TbLock, TbRefresh } from 'react-icons/tb'
+import { TbAlertTriangle, TbArrowLeft, TbChecks, TbCopy, TbRefresh } from 'react-icons/tb'
 import { useSession } from '../hooks/useAuth'
-import type { MemberRole, ProjectDetail, ProjectLockState } from './ProjectsPanel'
 import { ProjectHeader } from './ProjectDetailView/ProjectHeader'
-import { ProjectLockedScreen } from './ProjectDetailView/ProjectLockedScreen'
+import { ProjectLockedDenied, ProjectLockedScreen } from './ProjectDetailView/ProjectLockedScreen'
 import { ProjectTabs } from './ProjectDetailView/ProjectTabs'
-import { PROJECT_DETAIL_TABS, api } from './ProjectDetailView/types'
-import type { ProjectDetailTab } from './ProjectDetailView/types'
+import type { ApiError, ProjectDetailTab } from './ProjectDetailView/types'
+import { api, PROJECT_DETAIL_TABS } from './ProjectDetailView/types'
+import type { MemberRole, ProjectDetail, ProjectLockState } from './ProjectsPanel'
 import { Breadcrumbs } from './shared/Breadcrumbs'
 
-export { PROJECT_DETAIL_TABS }
 export type { ProjectDetailTab }
+export { PROJECT_DETAIL_TABS }
 
 export function ProjectDetailView({
   projectId,
@@ -43,7 +42,6 @@ export function ProjectDetailView({
   const qc = useQueryClient()
   const session = useSession()
   const systemRole = session.data?.user?.role ?? null
-  const [readOnlyPeek, setReadOnlyPeek] = useState(false)
   const detailQ = useQuery({
     queryKey: ['project', projectId],
     queryFn: () =>
@@ -53,7 +51,13 @@ export function ProjectDetailView({
         canWrite: boolean
         canDecide: boolean
         lock: ProjectLockState
+        // Set when the project is locked and the caller may only decide: the
+        // payload is reduced to id/name/status/dates, so nothing that needs the
+        // full project (header, tabs) may render.
+        lockedView?: boolean
       }>(`/api/projects/${projectId}`),
+    // A locked project answers 403 for good — retrying just repeats the denial.
+    retry: false,
   })
 
   const project = detailQ.data?.project
@@ -61,6 +65,10 @@ export function ProjectDetailView({
   const canWrite = detailQ.data?.canWrite ?? false
   const lock = detailQ.data?.lock
   const locked = lock?.locked ?? false
+  const lockedView = detailQ.data?.lockedView ?? false
+  // 403 because the project is frozen pending a decision — its own screen, not
+  // an error box: the member did nothing wrong and has an action to take.
+  const lockedOut = (detailQ.error as ApiError | null)?.locked === true
 
   useHotkeys([['Escape', onBack]])
 
@@ -131,6 +139,8 @@ export function ProjectDetailView({
             </Stack>
           </Card>
         </Stack>
+      ) : lockedOut ? (
+        <ProjectLockedDenied projectId={projectId} />
       ) : detailQ.error ? (
         <Alert color="red" icon={<TbAlertTriangle size={18} />} title="Gagal memuat proyek" radius="md">
           <Stack gap="sm">
@@ -155,49 +165,31 @@ export function ProjectDetailView({
         <Alert color="yellow" icon={<TbAlertTriangle size={18} />} radius="md">
           Proyek tidak ditemukan atau kamu tidak punya akses.
         </Alert>
+      ) : locked && lock && lockedView ? (
+        // Reduced payload: the lock screen is the whole page. No header and no
+        // tabs — neither the data nor the permission to see it exists here.
+        <ProjectLockedScreen project={project} lock={lock} canDecide={detailQ.data?.canDecide ?? false} />
       ) : (
         <>
           <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} myRole={myRole} />
-          {locked && lock && !readOnlyPeek ? (
-            <ProjectLockedScreen
-              project={project}
-              lock={lock}
-              canDecide={detailQ.data?.canDecide ?? false}
-              onViewReadOnly={() => setReadOnlyPeek(true)}
-            />
-          ) : (
-            <>
-              {locked && (
-                <Alert
-                  color="red"
-                  variant="light"
-                  radius="md"
-                  icon={<TbLock size={18} />}
-                  title="Mode hanya baca — proyek terkunci"
-                >
-                  <Group justify="space-between" wrap="wrap" gap="sm">
-                    <Text size="sm">Kamu bisa melihat data, tapi semua perubahan dibekukan sampai ada keputusan.</Text>
-                    <Button size="xs" variant="light" color="red" onClick={() => setReadOnlyPeek(false)}>
-                      Lihat pilihan keputusan
-                    </Button>
-                  </Group>
-                </Alert>
-              )}
-              <ProjectTabs
-                project={project}
-                tab={tab}
-                onTabChange={onTabChange}
-                systemRole={systemRole}
-                canWrite={canWrite}
-                myRole={myRole}
-                onDeleted={() => {
-                  qc.invalidateQueries({ queryKey: ['projects'] })
-                  qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
-                  onDeleted()
-                }}
-              />
-            </>
+          {/* Locked with a full payload = a system admin: lock screen first, then
+              the project itself, which only they may still see. */}
+          {locked && lock && (
+            <ProjectLockedScreen project={project} lock={lock} canDecide={detailQ.data?.canDecide ?? false} />
           )}
+          <ProjectTabs
+            project={project}
+            tab={tab}
+            onTabChange={onTabChange}
+            systemRole={systemRole}
+            canWrite={canWrite}
+            myRole={myRole}
+            onDeleted={() => {
+              qc.invalidateQueries({ queryKey: ['projects'] })
+              qc.invalidateQueries({ queryKey: ['milestones', 'all'] })
+              onDeleted()
+            }}
+          />
         </>
       )}
     </Stack>

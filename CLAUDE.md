@@ -14,7 +14,7 @@ Default to using Bun instead of Node.js.
 - `src/serve.ts` — dev entry (`bun --watch src/serve.ts`)
 - `src/frontend/` — React 19 + Vite 8 + TanStack Router (routes, components, hooks)
 - `src/lib/` — single-purpose helpers: `db` (Prisma client), `redis`, `applog`, `presence`, `github`, `github-summary`, `self-project`, `admin-overview`, `effort`, `retro`, `chat`, `chat-documents`, `extensions`, `task-metrics` (`WORKLOAD_KIND_FILTER` — excludes `IDEA` kind from workload aggregations), `project-access-tokens` (generate/hash/verify per-project bearer token for agents), `agent-auth` (`resolveAgentAuth`/`resolveReporterId`/`canWrite` for the token-only `/api/agent/*` REST surface), `llms-content` (`renderLlmsTxt` — auth-gated `GET /api/agent/guide` agent guide), `evidence-storage` (`putEvidence`/`getEvidence`/`removeEvidence` — MinIO/S3 object storage for evidence files via `Bun.S3Client`)
-- `prisma/` — `schema.prisma` + single baseline migration + `seed.ts` (dev only)
+- `prisma/` — `schema.prisma` + single baseline migration + `seed.ts` (dev only, wipe-and-reseed) + `seed-lock-demo.ts` (dev only, additive: fixture `DEMO-LOCK-*` untuk menelusuri tiap stage overdue lock di browser — `bun run db:seed:lock-demo`, bersihkan dengan `db:seed:lock-demo:clean`)
 - `scripts/mcp/` — local stdio MCP; `scripts/mcp-deploy/` — deploy wrapper
 - `tests/unit/`, `tests/integration/` — `bun:test`
 

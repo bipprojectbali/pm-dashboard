@@ -7,8 +7,11 @@
 import type { Task } from '../../../generated/prisma'
 import { prisma } from '../../lib/db'
 import { notifyTaskStatusChanged } from '../../lib/notifications'
+import { getAllowedTaskTransitions } from '../../lib/route-helpers'
 
 type StatusEnum = 'OPEN' | 'IN_PROGRESS' | 'READY_FOR_QC' | 'REOPENED' | 'CLOSED'
+
+export type ReorderUpdate = { id: string; kanbanOrder: number; status?: string }
 
 // Builds the Prisma `data` patch for one reorder update. Mirrors
 // task.update.helpers.ts's closedAt logic (set on CLOSED, clear on
@@ -24,36 +27,105 @@ export function buildReorderUpdateData(u: { kanbanOrder: number; status?: string
   return data
 }
 
-// Writes the TaskStatusChange row + fires notifyTaskStatusChanged for one
-// dragged task, using the pre-update row as `fromStatus`. No-op if `status`
-// wasn't part of this update (pure reorder).
-export async function applyReorderStatusSideEffects(params: {
-  update: { id: string; status?: string }
-  before: Task
+// A row in the batch that actually moves the task between columns, paired with
+// its pre-update row (the `fromStatus` + notification recipients).
+type ReorderTransition = { before: Task; toStatus: StatusEnum }
+
+// Gate every status-carrying row through the SAME state machine the sidebar
+// uses (getAllowedTaskTransitions in src/lib/task-lifecycle.ts, via
+// PATCH /api/tasks/:id). Without this the endpoint wrote whatever status the
+// client sent, so dropping a card in the wrong column could skip a kind's QC
+// gate outright.
+//
+// All-or-nothing on purpose: a drag is one user gesture over a whole column, so
+// applying the legal rows and dropping the illegal one would leave exactly the
+// half-moved board that the surrounding transaction exists to prevent — and the
+// kanbanOrder sequence the frontend computed assumes every row lands.
+//
+// A row whose `status` equals the current one is a no-op, not a transition: the
+// state machine lists no X → X edge, but a client re-sending the current status
+// is not asking for an illegal move.
+export function validateReorderTransitions(
+  statusUpdates: ReorderUpdate[],
+  beforeById: Map<string, Task>,
+): { error: string } | { transitions: ReorderTransition[] } {
+  const transitions: ReorderTransition[] = []
+  for (const u of statusUpdates) {
+    const before = beforeById.get(u.id)
+    if (!before) return { error: `Task ${u.id} tidak ditemukan` }
+    if (!u.status || u.status === before.status) continue
+    if (!getAllowedTaskTransitions(before.status, before.kind).includes(u.status)) {
+      return {
+        error:
+          `Transisi status ditolak untuk task "${before.title}" (${before.id}): ` +
+          `${before.status} → ${u.status} tidak diizinkan untuk kind ${before.kind}. ` +
+          'Seluruh batch reorder dibatalkan.',
+      }
+    }
+    transitions.push({ before, toStatus: u.status as StatusEnum })
+  }
+  return { transitions }
+}
+
+// Validate, then apply the whole batch atomically, then notify.
+//
+// The task rows and their TaskStatusChange history rows go in ONE transaction:
+// a Promise.all of independent updates is not a transaction, so a reject
+// partway through used to leave the board half-reordered — colliding/gapped
+// kanbanOrder values and some cards moved while their siblings were not, all
+// behind a failed response.
+//
+// Notifications stay OUTSIDE the transaction, deliberately, in both directions:
+// firing them inside would announce a status change that a later rollback
+// un-does, and notifyTaskStatusChanged does network I/O (Telegram), which must
+// never hold a DB transaction open.
+export async function applyReorderBatch(params: {
+  updates: ReorderUpdate[]
   actorId: string
-  actorName: string
-}): Promise<void> {
-  const { update, before, actorId, actorName } = params
-  if (!update.status || update.status === before.status) return
+}): Promise<{ error: string } | { ok: true }> {
+  const { updates, actorId } = params
+  // Only rows carrying a `status` need the pre-update row (fromStatus +
+  // notification recipients) — a pure kanbanOrder reorder skips this entirely.
+  const statusUpdates = updates.filter((u) => u.status)
+  const beforeById = new Map(
+    statusUpdates.length
+      ? (await prisma.task.findMany({ where: { id: { in: statusUpdates.map((u) => u.id) } } })).map((t) => [t.id, t])
+      : [],
+  )
 
-  await prisma.taskStatusChange.create({
-    data: {
-      taskId: before.id,
-      authorId: actorId,
-      fromStatus: before.status,
-      toStatus: update.status as StatusEnum,
-    },
-  })
+  const validated = validateReorderTransitions(statusUpdates, beforeById)
+  if ('error' in validated) return validated
 
-  notifyTaskStatusChanged({
-    taskId: before.id,
-    projectId: before.projectId,
-    taskTitle: before.title,
-    reporterId: before.reporterId,
-    assigneeId: before.assigneeId,
-    actorId,
-    actorName,
-    fromStatus: before.status,
-    toStatus: update.status,
-  }).catch(() => {})
+  await prisma.$transaction([
+    ...updates.map((u) => prisma.task.update({ where: { id: u.id }, data: buildReorderUpdateData(u) })),
+    ...validated.transitions.map((t) =>
+      prisma.taskStatusChange.create({
+        data: { taskId: t.before.id, authorId: actorId, fromStatus: t.before.status, toStatus: t.toStatus },
+      }),
+    ),
+  ])
+
+  if (validated.transitions.length) {
+    const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { name: true } })
+    const actorName = actor?.name ?? 'Someone'
+    // Awaited so the notification rows exist by the time the response lands,
+    // but each failure is swallowed: a dead Telegram must not fail the drag.
+    await Promise.all(
+      validated.transitions.map((t) =>
+        notifyTaskStatusChanged({
+          taskId: t.before.id,
+          projectId: t.before.projectId,
+          taskTitle: t.before.title,
+          reporterId: t.before.reporterId,
+          assigneeId: t.before.assigneeId,
+          actorId,
+          actorName,
+          fromStatus: t.before.status,
+          toStatus: t.toStatus,
+        }).catch(() => {}),
+      ),
+    )
+  }
+
+  return { ok: true }
 }

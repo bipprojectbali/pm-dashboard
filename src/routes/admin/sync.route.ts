@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import { appLog } from '../../lib/applog'
 import { prisma } from '../../lib/db'
 import { env } from '../../lib/env'
+import { withLockBypass } from '../../lib/prisma-project-lock'
 import { extractSessionToken, getIp } from '../../lib/route-helpers'
 import { importEntities, wipeEntities } from './sync.helpers'
 
@@ -100,8 +101,13 @@ export function adminSyncRoutes() {
         }
         const { entities: data } = (await exportRes.json()) as { exportedAt: string; entities: Record<string, unknown[]> }
 
-        await wipeEntities(entities)
-        const summary = await importEntities(data, entities)
+        // Bypass sanctioned: a system-admin sync replaces the whole dataset.
+        // The wipe is a bare deleteMany that touches every project, so one
+        // locked project anywhere would otherwise refuse the entire pull.
+        const summary = await withLockBypass(async () => {
+          await wipeEntities(entities)
+          return importEntities(data, entities)
+        })
 
         const ip = getIp(request)
         appLog('info', `Sync pull from ${remoteUrl} by userId=${session.user.id} — entities: ${entities.join(',') || 'all'}`, ip)

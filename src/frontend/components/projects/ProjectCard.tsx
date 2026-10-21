@@ -1,8 +1,10 @@
 import { ActionIcon, Avatar, Badge, Card, Group, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 import { TbAlertTriangle, TbCalendarEvent, TbFolder, TbLock, TbPencil } from 'react-icons/tb'
+import { lockTone } from '../../../lib/project-lock-tone'
 import { UserAvatar } from '../shared/UserAvatar'
 import { computeHealth, computeOverdue, computeTimeProgress, formatDate, isExtended } from './helpers'
+import classes from './lock-tone.module.css'
 import { ProjectCardStats } from './ProjectCardStats'
 import { PRIORITY_COLOR, type ProjectListItem, STATUS_BG } from './types'
 
@@ -35,7 +37,14 @@ export function ProjectCard({
   const compact = density === 'compact'
   const [hover, setHover] = useState(false)
 
-  const statusBg = overdue ? 'rgba(250,82,82,0.06)' : STATUS_BG[p.status]
+  // Same red signal as the project detail view, so the list already shows it
+  // before you click in. Driven by the lock stage rather than by the date, so
+  // the two surfaces can never disagree about what counts as past-deadline.
+  const tone = lockTone(p.lock?.stage)
+  // A toned card hands its background to the stylesheet, which intensifies it
+  // per rung. The date-only `overdue` tint stays as the fallback for projects
+  // that never lock at all (DRAFT, ON_HOLD, archived — see computeLockState).
+  const statusBg = tone.attr ? undefined : overdue ? 'rgba(250,82,82,0.06)' : STATUS_BG[p.status]
   const pad = compact ? 'sm' : 'md'
 
   return (
@@ -43,6 +52,8 @@ export function ProjectCard({
       withBorder
       padding={0}
       radius="md"
+      className={tone.attr ? classes.accent : undefined}
+      data-lock-tone={tone.attr ?? undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -116,7 +127,7 @@ export function ProjectCard({
             </Badge>
           )}
           {p.lock?.locked && (
-            <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER, PM, atau admin yang bisa membukanya">
+            <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER atau admin yang bisa membukanya">
               <Badge color="red" variant="filled" size="xs" leftSection={<TbLock size={10} />}>
                 TERKUNCI
               </Badge>

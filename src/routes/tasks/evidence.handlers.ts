@@ -2,7 +2,14 @@ import { prisma } from '../../lib/db'
 import { env } from '../../lib/env'
 import { getEvidence, putEvidence, removeEvidence } from '../../lib/evidence-storage'
 import { emitInvalidate } from '../../lib/presence'
-import { getIp, isSystemAdmin, requireAuth, requireProjectMember, writeAuditLog } from '../../lib/route-helpers'
+import {
+  canReadProject,
+  getIp,
+  isSystemAdmin,
+  requireAuth,
+  requireProjectMember,
+  writeAuditLog,
+} from '../../lib/route-helpers'
 
 type Ctx = { request: Request; set: { status?: number | string } }
 type CtxWithParams = Ctx & { params: { id: string } }
@@ -169,8 +176,15 @@ export async function serveEvidenceHandler({ request, params, query, set }: CtxW
     set.status = 404
     return { error: 'Task not found' }
   }
-  const membership = await requireProjectMember(task.projectId, auth.userId)
-  if (!membership && !isSystemAdmin(auth.role)) {
+  // Lock-aware, like GET /api/tasks/:id: evidence is project substance, so a
+  // locked project must not keep serving its files to members who can no longer
+  // open the project.
+  const access = await canReadProject(task.projectId, auth)
+  if (!access.ok) {
+    set.status = access.status!
+    return { error: access.status === 404 ? 'Project not found' : 'Project not accessible' }
+  }
+  if (!access.membership && !isSystemAdmin(auth.role)) {
     set.status = 403
     return { error: 'Not a project member' }
   }

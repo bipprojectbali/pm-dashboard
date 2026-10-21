@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { withLockBypass } from '../../src/lib/prisma-project-lock'
 import { generateProjectToken } from '../../src/lib/project-access-tokens'
 import { invalidateProjectLockCache, LOCK_GRACE_SETTING_KEY } from '../../src/lib/project-lock'
 import { createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
@@ -100,11 +101,15 @@ afterAll(async () => {
     })
   }
   invalidateProjectLockCache()
-  await prisma.task.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
-  await prisma.projectAccessToken.deleteMany({ where: { projectId: lockedProjectId } })
-  await prisma.projectExtension.deleteMany({ where: { projectId: lockedProjectId } })
-  await prisma.projectMember.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
-  await prisma.project.deleteMany({ where: { id: { in: [lockedProjectId, healthyProjectId] } } })
+  // The suite ends with lockedProjectId genuinely locked; teardown is not a
+  // project write, so it opts out of the data-layer guard.
+  await withLockBypass(async () => {
+    await prisma.task.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
+    await prisma.projectAccessToken.deleteMany({ where: { projectId: lockedProjectId } })
+    await prisma.projectExtension.deleteMany({ where: { projectId: lockedProjectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
+    await prisma.project.deleteMany({ where: { id: { in: [lockedProjectId, healthyProjectId] } } })
+  })
   await prisma.session.deleteMany({
     where: { token: { in: [ownerToken, memberToken, adminToken, outsiderToken] } },
   })
@@ -122,31 +127,35 @@ afterAll(async () => {
   })
 })
 
-describe('project terkunci — pembacaan tetap jalan', () => {
-  test('detail project tetap bisa dibuka, menandai terkunci dan read-only', async () => {
+describe('project terkunci — pembacaan ikut tertutup', () => {
+  test('member tidak bisa lagi membuka detail project terkunci', async () => {
     const res = await req(memberToken, 'GET', `/api/projects/${lockedProjectId}`)
+    expect(res.status).toBe(403)
+    const data = (await res.json()) as { locked: boolean }
+    expect(data.locked).toBe(true)
+  })
+
+  test('owner dapat payload layar kunci, bukan isi project', async () => {
+    const res = await req(ownerToken, 'GET', `/api/projects/${lockedProjectId}`)
     expect(res.status).toBe(200)
     const data = (await res.json()) as {
+      project: Record<string, unknown>
       myRole: string
-      canWrite: boolean
       canDecide: boolean
+      canWrite: boolean
+      lockedView: boolean
       lock: { locked: boolean; stage: string; overdueDays: number }
     }
     expect(data.lock.locked).toBe(true)
     expect(data.lock.stage).toBe('LOCKED')
     expect(data.lock.overdueDays).toBeGreaterThanOrEqual(30)
-    expect(data.canWrite).toBe(false)
+    expect(data.lockedView).toBe(true)
     // Peran asli tidak disembunyikan: layar kunci butuh ini untuk tahu siapa
     // yang boleh mengambil keputusan.
-    expect(data.myRole).toBe('MEMBER')
-    expect(data.canDecide).toBe(false)
-  })
-
-  test('owner ditandai boleh mengambil keputusan', async () => {
-    const res = await req(ownerToken, 'GET', `/api/projects/${lockedProjectId}`)
-    const data = (await res.json()) as { canDecide: boolean; canWrite: boolean }
+    expect(data.myRole).toBe('OWNER')
     expect(data.canDecide).toBe(true)
     expect(data.canWrite).toBe(false)
+    expect(data.project.members).toBeUndefined()
   })
 
   test('project sehat tidak terpengaruh', async () => {

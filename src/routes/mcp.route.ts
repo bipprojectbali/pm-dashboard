@@ -1,9 +1,8 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import Elysia from 'elysia'
 import { buildTokenScopedServer } from '../../scripts/mcp/token-scoped-server'
+import { resolveAgentAuth } from '../lib/agent-auth'
 import { appLog } from '../lib/applog'
-import { verifyProjectToken } from '../lib/project-access-tokens'
-import { prisma } from '../lib/db'
 
 function readBearer(request: Request): string | null {
   const header = request.headers.get('authorization') ?? ''
@@ -27,17 +26,18 @@ async function handleMcp(request: Request, parsedBody?: unknown): Promise<Respon
   const raw = readBearer(request)
   if (!raw || !raw.startsWith('pmt_')) return unauthorized()
 
-  const result = await verifyProjectToken(raw)
-  if (!result.ok) {
-    await appLog('warn', `MCP token rejected: ${result.reason}`)
+  // Same resolver as /api/agent/*, deliberately: it owns token verification,
+  // the dangling-project guard, and the overdue-lock downgrade to READ. This
+  // endpoint used to call verifyProjectToken directly and so handed a WRITE
+  // token the write toolset on a locked project, while the REST surface refused
+  // it — two answers to the same question.
+  const auth = await resolveAgentAuth(request)
+  if (!auth.ok) {
+    await appLog('warn', 'MCP token rejected')
     return unauthorized()
   }
 
-  // Dangling-token guard: the project may have been deleted after the token was issued.
-  const project = await prisma.project.findUnique({ where: { id: result.projectId }, select: { id: true } })
-  if (!project) return unauthorized()
-
-  const ctx = { projectId: result.projectId, scope: result.scope, tokenId: result.tokenId, userId: result.userId }
+  const ctx = { projectId: auth.projectId, scope: auth.scope, tokenId: auth.tokenId, userId: auth.userId }
   const server = buildTokenScopedServer(ctx)
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

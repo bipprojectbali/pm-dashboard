@@ -1,7 +1,7 @@
 import Elysia from 'elysia'
 import { prisma } from '../../lib/db'
 import { emitInvalidate } from '../../lib/presence'
-import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMemberRaw } from '../../lib/route-helpers'
+import { canManageProjectNow, canReadProject, getIp, requireAuth } from '../../lib/route-helpers'
 import { audit } from './shared'
 
 export function projectExtensionRoutes() {
@@ -9,12 +9,18 @@ export function projectExtensionRoutes() {
     .post('/api/projects/:id/extend', async ({ request, params, set }) => {
       const auth = await requireAuth(request)
       if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
-      // Raw role on purpose: extending is the way out of an overdue lock, so it
-      // must stay available to the OWNER/PM of a locked project.
-      const membership = await requireProjectMemberRaw(params.id, auth.userId)
-      if (!canManageProject(auth, membership)) {
+      // Lock-aware on purpose: extending is the way out of an overdue lock, so
+      // it must stay available while locked — but only to the OWNER, not to
+      // every PM. On a healthy project PM extends exactly as before.
+      const { allowed, locked } = await canManageProjectNow(params.id, auth)
+      if (!allowed) {
         set.status = 403
-        return { error: 'Only OWNER, PM, or system admin can extend deadline' }
+        return locked
+          ? {
+              error: 'Project terkunci karena overdue — hanya pemilik project atau admin yang bisa memperpanjang',
+              locked: true,
+            }
+          : { error: 'Only OWNER, PM, or system admin can extend deadline' }
       }
       const body = (await request.json()) as { newEndAt?: string; reason?: string }
       if (!body.newEndAt) { set.status = 400; return { error: 'newEndAt wajib diisi' } }

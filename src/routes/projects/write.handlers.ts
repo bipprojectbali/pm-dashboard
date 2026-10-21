@@ -4,6 +4,7 @@ import { normalizeGithubRepo } from '../../lib/github'
 import { getPermissionRule } from '../../lib/permission-config'
 import { emitInvalidate } from '../../lib/presence'
 import {
+  canDecideLockedProject,
   canManageProject,
   getIp,
   requireAuth,
@@ -14,7 +15,7 @@ import { audit } from './shared'
 
 // Exits from an overdue lock other than extending. A locked project reports its
 // members as VIEWER, which would also block the decisions that end the overdue
-// state — so OWNER/PM keep these two status transitions, and nothing else.
+// state — so the OWNER keeps these two status transitions, and nothing else.
 const DISPOSITION_STATUS = new Set(['COMPLETED', 'CANCELLED'])
 
 type Ctx = { request: Request; set: { status?: number | string } }
@@ -75,10 +76,18 @@ export async function updateProjectHandler({ request, params, set }: CtxWithId) 
   const membership = await requireProjectMember(params.id, auth.userId)
   let dispositionOnly = false
   if (!canManageProject(auth, membership)) {
+    // Locked projects report every member as VIEWER, so fall back to the raw
+    // role — but only the decision carve-out (OWNER + system admin) reaches the
+    // disposition path. A PM keeps its normal powers and loses only this.
     const raw = await requireProjectMemberRaw(params.id, auth.userId)
-    if (!canManageProject(auth, raw)) {
+    if (!canDecideLockedProject(auth, raw)) {
       set.status = 403
-      return { error: 'Only OWNER, PM, or system admin can modify project' }
+      return canManageProject(auth, raw)
+        ? {
+            error: 'Project terkunci karena overdue — hanya pemilik project atau admin yang bisa memutuskan',
+            locked: true,
+          }
+        : { error: 'Only OWNER, PM, or system admin can modify project' }
     }
     dispositionOnly = true
   }

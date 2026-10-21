@@ -3,8 +3,10 @@
 export { writeAuditLog } from './audit-log'
 export { getIp, getPublicOrigin } from './http-request'
 export {
+  canDecideLockedProject,
   canGrantProjectOwner,
   canManageProject,
+  canManageProjectNow,
   canReadProject,
   isSystemAdmin,
   type ProjectRole,

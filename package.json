@@ -17,6 +17,8 @@
     "lint:fix": "biome check --write src/",
     "db:migrate": "bunx prisma migrate dev",
     "db:seed": "bun run prisma/seed.ts",
+    "db:seed:lock-demo": "bun run prisma/seed-lock-demo.ts",
+    "db:seed:lock-demo:clean": "bun run prisma/seed-lock-demo.ts --cleanup",
     "db:studio": "bunx prisma studio",
     "db:generate": "bunx prisma generate",
     "db:push": "bunx prisma db push"

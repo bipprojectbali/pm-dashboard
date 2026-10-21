@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { prisma } from '../../../src/lib/db'
 import { getPermissionRule, meetsMinProjectRole } from '../../../src/lib/permission-config'
 import { isSystemAdmin, requireProjectMember } from '../../../src/lib/project-access'
+import { getAllowedTaskTransitions } from '../../../src/lib/task-lifecycle'
 import { jsonText, type ToolModule } from './shared'
 import { resolveUserEmail } from './tasks.helpers'
 import { registerTaskWriteTools } from './tasks.write'
@@ -120,6 +121,53 @@ export const tasksReadonly: ToolModule = {
           projects,
           // Sama seperti handler: id hilang → 404, satu project tak writable → 403 untuk seluruh batch.
           expectedStatus: missing.length ? 404 : projects.every((p) => p.writable) ? 200 : 403,
+        })
+      },
+    )
+
+    server.registerTool(
+      'task_reorder_transition_check',
+      {
+        title: 'Cek transisi status batch reorder',
+        description:
+          'Inspeksi gate status POST /api/tasks/reorder: untuk tiap baris updates[] yang membawa `status`, laporkan apakah transisi dari status task sekarang legal untuk kind-nya menurut getAllowedTaskTransitions (src/lib/task-lifecycle.ts) — state machine yang sama dipakai PATCH /api/tasks/:id. Baris tanpa `status`, atau yang statusnya sama dengan sekarang, dihitung no-op dan selalu lolos. Satu baris ilegal menolak SELURUH batch (400, tanpa tulisan apa pun). Read-only: tidak menulis apa pun.',
+        inputSchema: {
+          updates: z
+            .array(z.object({ id: z.string(), status: z.string().optional() }))
+            .min(1)
+            .describe('Seperti body updates[] pada endpoint; kanbanOrder tidak dipakai di sini'),
+        },
+      },
+      async ({ updates }) => {
+        const ids = [...new Set(updates.map((u) => u.id))]
+        const tasks = await prisma.task.findMany({
+          where: { id: { in: ids }, deletedAt: null },
+          select: { id: true, title: true, status: true, kind: true },
+        })
+        const byId = new Map(tasks.map((t) => [t.id, t]))
+        const rows = updates.map((u) => {
+          const t = byId.get(u.id)
+          if (!t) return { id: u.id, found: false, noop: false, legal: false, reason: 'Task tidak ditemukan' }
+          const base = { id: u.id, found: true, title: t.title, kind: t.kind, from: t.status, to: u.status ?? null }
+          if (!u.status || u.status === t.status) return { ...base, noop: true, legal: true }
+          const allowed = getAllowedTaskTransitions(t.status, t.kind)
+          const legal = allowed.includes(u.status)
+          return {
+            ...base,
+            noop: false,
+            allowed,
+            legal,
+            reason: legal ? undefined : `${t.status} → ${u.status} tidak diizinkan untuk kind ${t.kind}`,
+          }
+        })
+        const firstIllegal = rows.find((r) => !r.legal)
+        return jsonText({
+          rowCount: rows.length,
+          transitionCount: rows.filter((r) => r.found && !r.noop && r.legal).length,
+          rows,
+          firstIllegal: firstIllegal ?? null,
+          // Sama seperti handler: id hilang → 404, transisi ilegal → 400 untuk seluruh batch.
+          expectedStatus: rows.some((r) => !r.found) ? 404 : firstIllegal ? 400 : 200,
         })
       },
     )

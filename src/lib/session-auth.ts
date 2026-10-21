@@ -4,6 +4,8 @@
 import { auth } from './auth'
 import { prisma } from './db'
 import { env } from './env'
+import { recordLockActor } from './prisma-project-lock'
+import { isSystemAdmin } from './project-access'
 
 export const SESSION_TTL_SEC = 7 * 24 * 60 * 60
 export const SESSION_REFRESH_THRESHOLD_SEC = 24 * 60 * 60
@@ -23,6 +25,19 @@ export function sessionCookie(value: string, maxAgeSec: number): string {
 }
 
 export async function requireAuth(
+  request: Request,
+  responseHeaders?: Headers,
+): Promise<{ userId: string; role: string; email: string } | null> {
+  const auth = await resolveSession(request, responseHeaders)
+  // Every authenticated request passes through here, which makes it the one
+  // place that can tell the data-layer overdue-lock guard who is writing.
+  // `null` records "not an admin", so an unauthenticated request can never
+  // inherit an admin actor from an earlier one.
+  recordLockActor(isSystemAdmin(auth?.role))
+  return auth
+}
+
+async function resolveSession(
   request: Request,
   responseHeaders?: Headers,
 ): Promise<{ userId: string; role: string; email: string } | null> {

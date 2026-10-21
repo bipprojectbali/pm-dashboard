@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { withLockBypass } from '../../src/lib/prisma-project-lock'
 import { generateProjectToken } from '../../src/lib/project-access-tokens'
 import { invalidateProjectLockCache, LOCK_GRACE_SETTING_KEY } from '../../src/lib/project-lock'
 import { createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
@@ -100,11 +101,15 @@ afterAll(async () => {
     })
   }
   invalidateProjectLockCache()
-  await prisma.task.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
-  await prisma.projectAccessToken.deleteMany({ where: { projectId: lockedProjectId } })
-  await prisma.projectExtension.deleteMany({ where: { projectId: lockedProjectId } })
-  await prisma.projectMember.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
-  await prisma.project.deleteMany({ where: { id: { in: [lockedProjectId, healthyProjectId] } } })
+  // The suite ends with lockedProjectId genuinely locked; teardown is not a
+  // project write, so it opts out of the data-layer guard.
+  await withLockBypass(async () => {
+    await prisma.task.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
+    await prisma.projectAccessToken.deleteMany({ where: { projectId: lockedProjectId } })
+    await prisma.projectExtension.deleteMany({ where: { projectId: lockedProjectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId: { in: [lockedProjectId, healthyProjectId] } } })
+    await prisma.project.deleteMany({ where: { id: { in: [lockedProjectId, healthyProjectId] } } })
+  })
   await prisma.session.deleteMany({
     where: { token: { in: [ownerToken, memberToken, adminToken, outsiderToken] } },
   })

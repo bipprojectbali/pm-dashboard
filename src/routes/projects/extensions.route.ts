@@ -1,6 +1,7 @@
 import Elysia from 'elysia'
 import { prisma } from '../../lib/db'
 import { emitInvalidate } from '../../lib/presence'
+import { withLockBypass } from '../../lib/prisma-project-lock'
 import { canManageProject, canReadProject, getIp, requireAuth, requireProjectMemberRaw } from '../../lib/route-helpers'
 import { audit } from './shared'
 
@@ -33,25 +34,29 @@ export function projectExtensionRoutes() {
         set.status = 400
         return { error: 'newEndAt sama dengan deadline saat ini' }
       }
-      const [extension, project] = await prisma.$transaction([
-        prisma.projectExtension.create({
-          data: {
-            projectId: params.id,
-            extendedById: auth.userId,
-            previousEndAt: existing.endsAt,
-            newEndAt: newEnd,
-            reason: body.reason?.trim() || null,
-          },
-          include: { extendedBy: { select: { id: true, name: true, email: true, image: true } } },
-        }),
-        prisma.project.update({
-          where: { id: params.id },
-          data: {
-            endsAt: newEnd,
-            originalEndAt: existing.originalEndAt ?? existing.endsAt ?? newEnd,
-          },
-        }),
-      ])
+      // Bypass sanctioned: moving the deadline is the primary exit from the
+      // lock, so the write guard must not block the very write that unlocks.
+      const [extension, project] = await withLockBypass(() =>
+        prisma.$transaction([
+          prisma.projectExtension.create({
+            data: {
+              projectId: params.id,
+              extendedById: auth.userId,
+              previousEndAt: existing.endsAt,
+              newEndAt: newEnd,
+              reason: body.reason?.trim() || null,
+            },
+            include: { extendedBy: { select: { id: true, name: true, email: true, image: true } } },
+          }),
+          prisma.project.update({
+            where: { id: params.id },
+            data: {
+              endsAt: newEnd,
+              originalEndAt: existing.originalEndAt ?? existing.endsAt ?? newEnd,
+            },
+          }),
+        ]),
+      )
       audit(
         auth.userId,
         'PROJECT_EXTENDED',

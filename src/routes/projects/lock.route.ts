@@ -1,6 +1,7 @@
 import Elysia from 'elysia'
 import { prisma } from '../../lib/db'
 import { createNotification } from '../../lib/notifications'
+import { withLockBypass } from '../../lib/prisma-project-lock'
 import { resolveLockState } from '../../lib/project-lock'
 import { getIp, isSystemAdmin, requireAuth, requireProjectMemberRaw } from '../../lib/route-helpers'
 import { audit } from './shared'
@@ -70,16 +71,22 @@ export function projectLockRoutes() {
 
     const title = `Permintaan keputusan untuk "${project.name}"`
     const body = `Project terkunci karena terlambat ${lock.overdueDays} hari. Anggota meminta keputusan: perpanjang deadline, tandai selesai, atau batalkan project.`
-    for (const recipientId of recipients) {
-      await createNotification({
-        recipientId,
-        actorId: auth.userId,
-        kind: 'PROJECT_DECISION_REQUESTED',
-        projectId: project.id,
-        title,
-        body,
-      })
-    }
+    // Bypass sanctioned: asking for a decision is an exit from the lock, and it
+    // runs *because* the project is locked. Notification is outside the guarded
+    // model set today, so this is belt-and-braces — it keeps the escape hatch
+    // working if that ever changes.
+    await withLockBypass(async () => {
+      for (const recipientId of recipients) {
+        await createNotification({
+          recipientId,
+          actorId: auth.userId,
+          kind: 'PROJECT_DECISION_REQUESTED',
+          projectId: project.id,
+          title,
+          body,
+        })
+      }
+    })
 
     audit(
       auth.userId,

@@ -9,6 +9,13 @@ import {
   LOCK_GRACE_SETTING_KEY,
 } from '../../../src/lib/project-lock'
 import { recipientsForStage, runProjectLockSweep } from '../../../src/lib/project-lock.sweep'
+import {
+  findLockedProject,
+  GUARDED_MODELS,
+  isGuardedWrite,
+  LOCK_PROJECT_SELECT,
+  WRITE_OPS,
+} from '../../../src/lib/prisma-project-lock'
 import { jsonText, type ToolModule } from './shared'
 
 export const projectLockReadonly: ToolModule = {
@@ -62,6 +69,52 @@ export const projectLockReadonly: ToolModule = {
           })
           .filter((r) => stage === 'ALL' || r.stage === stage)
         return jsonText({ graceDays, total: rows.length, projects: rows })
+      },
+    )
+
+    server.registerTool(
+      'project_lock_write_guard',
+      {
+        title: 'Inspect the data-layer overdue-lock write guard',
+        description:
+          'Jawab: apakah guard di Prisma client (src/lib/prisma-project-lock.ts) akan menolak sebuah write. Tanpa argumen: daftar model + operasi yang dijaga. Dengan projectId: stage lock project itu dan apakah write ditolak. Read-only: tidak menulis apa pun. Pengecualian yang tidak terlihat di sini: actor system admin dan scope withLockBypass.',
+        inputSchema: {
+          projectId: z.string().optional().describe('Project yang diuji; kosong = hanya tampilkan daftar model dijaga'),
+          model: z
+            .string()
+            .optional()
+            .describe('Nama model Prisma, mis. "taskComment" atau "Task"; kosong = tidak cek per-model'),
+          operation: z.string().default('update').describe('Operasi Prisma, mis. create/update/deleteMany'),
+        },
+      },
+      async ({ projectId, model, operation }) => {
+        const guardedModels = Object.fromEntries(
+          Object.entries(GUARDED_MODELS).map(([key, spec]) => [
+            key,
+            {
+              via: spec.parent ? `${spec.field} → ${spec.parent}.projectId` : spec.field,
+              operations: [...(spec.ops ?? WRITE_OPS)],
+            },
+          ]),
+        )
+        // Same resolver the extension uses, so this report cannot drift from
+        // the guard it describes.
+        const locked = projectId
+          ? await findLockedProject(
+              (ids) => prisma.project.findMany({ where: { id: { in: ids } }, select: LOCK_PROJECT_SELECT }),
+              [projectId],
+            )
+          : null
+        const guarded = model ? isGuardedWrite(model, operation) : null
+        return jsonText({
+          guardedModels,
+          exemptions: ['actor system admin (recordLockActor)', 'scope withLockBypass'],
+          query: projectId || model ? { projectId: projectId ?? null, model: model ?? null, operation } : null,
+          projectLocked: projectId ? locked !== null : null,
+          lock: locked,
+          modelGuarded: guarded,
+          wouldBlock: projectId && model ? guarded === true && locked !== null : null,
+        })
       },
     )
   },

@@ -246,11 +246,20 @@ import { isExtensionEnabled } from './lib/extensions'
 })
 
 // ─── Auto-purge Trash ─────────────────────────────────
+import { withLockBypass } from './lib/prisma-project-lock'
+
 // Setiap hari jam 03:00 UTC, hapus permanen task yang sudah di-trash > 30 hari
 ;(Bun as any).cron('0 3 * * *', async () => {
   try {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const { count } = await prisma.task.deleteMany({ where: { deletedAt: { not: null, lt: cutoff } } })
+    // Bypass the overdue-lock write guard on purpose: this is retention
+    // housekeeping on rows a user already trashed, not a project write. An
+    // overdue project must not be able to pin trash in the database forever,
+    // and the sweep has no actor to be an admin. Do not remove — without it
+    // the data-layer guard refuses every purge that touches a locked project.
+    const { count } = await withLockBypass(() =>
+      prisma.task.deleteMany({ where: { deletedAt: { not: null, lt: cutoff } } }),
+    )
     if (count > 0) appLog('info', `Auto-purge trash: ${count} task dihapus permanen (>30 hari)`)
   } catch (e) {
     appLog('error', `Auto-purge trash gagal: ${e instanceof Error ? e.message : String(e)}`)

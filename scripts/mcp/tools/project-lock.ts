@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { setSetting } from '../../../src/lib/app-settings'
 import { prisma } from '../../../src/lib/db'
+import { canReadProject } from '../../../src/lib/project-access'
 import {
   computeLockState,
   DEFAULT_LOCK_GRACE_DAYS,
@@ -62,6 +63,49 @@ export const projectLockReadonly: ToolModule = {
           })
           .filter((r) => stage === 'ALL' || r.stage === stage)
         return jsonText({ graceDays, total: rows.length, projects: rows })
+      },
+    )
+
+    server.registerTool(
+      'project_lock_read_access',
+      {
+        title: 'Explain a project read decision for one user',
+        description:
+          'Untuk satu project + satu user: tampilkan stage lock, peran asli (raw) user di project, peran efektif (turun jadi VIEWER saat terkunci), dan hasil pembacaan — FULL (payload penuh), LOCK_SCREEN (payload minimal khusus OWNER/PM di project terkunci), atau DENIED_403/DENIED_404. Juga melaporkan apakah sub-resource (task, milestone, phase, tag, retro, github) boleh dibaca. Read-only: memanggil gate canReadProject yang sama dengan API, jadi hasilnya tidak bisa melenceng dari behavior asli.',
+        inputSchema: {
+          projectId: z.string().describe('ID project yang diperiksa'),
+          userEmail: z.string().email().describe('Email user yang hendak membaca project'),
+        },
+      },
+      async ({ projectId, userEmail }) => {
+        const user = await prisma.user.findUnique({
+          where: { email: userEmail },
+          select: { id: true, role: true, blocked: true },
+        })
+        if (!user) return jsonText({ error: `User ${userEmail} tidak ditemukan` })
+
+        const auth = { userId: user.id, role: user.role }
+        // Two calls on purpose: the detail route opts into the OWNER/PM carve-out,
+        // every sub-resource route does not — that difference IS the behavior.
+        const detail = await canReadProject(projectId, auth, { allowLockedDecider: true })
+        const sub = await canReadProject(projectId, auth)
+        if (detail.status === 404) return jsonText({ error: `Project ${projectId} tidak ditemukan` })
+
+        return jsonText({
+          projectId,
+          projectName: detail.project?.name ?? null,
+          user: { email: userEmail, systemRole: user.role, blocked: user.blocked },
+          lock: detail.lock,
+          rawRole: detail.rawRole,
+          effectiveRole: detail.membership?.role ?? null,
+          projectDetailRead: detail.ok ? (detail.lockedView ? 'LOCK_SCREEN' : 'FULL') : `DENIED_${detail.status}`,
+          subResourceRead: sub.ok ? 'ALLOWED' : `DENIED_${sub.status}`,
+          canDecide:
+            user.role === 'ADMIN' ||
+            user.role === 'SUPER_ADMIN' ||
+            detail.rawRole === 'OWNER' ||
+            detail.rawRole === 'PM',
+        })
       },
     )
   },

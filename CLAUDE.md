@@ -45,6 +45,12 @@ Menautkan event ke sebuah project adalah aksi tulis pada project itu, bukan seka
 - Overdue lock ikut tertutup tanpa kode tambahan: `requireProjectMember` melaporkan anggota project terkunci sebagai `VIEWER`, sehingga gate "bukan VIEWER" otomatis menolak.
 - MCP `event_create`/`event_update` menulis langsung ke prisma tanpa cek keanggotaan — ini disengaja dan setara system admin: modul `eventsTools` hanya terdaftar pada scope `admin`, dan `NODE_ENV=production` memaksa scope `readonly` saat registrasi. Tool event tidak ada di whitelist `token-scoped-server.ts` (task saja), jadi token project tidak bisa menyentuh event.
 
+## Otorisasi batch reorder task
+
+`POST /api/tasks/reorder` (`src/routes/tasks/bulk.route.ts`) menulis ke **semua** `updates[].id`, jadi otorisasinya juga per batch, bukan per task pertama. Satu query `task.findMany` me-resolve seluruh id → id yang tidak ada/soft-deleted menghasilkan 404; lalu tiap `projectId` **distinct** yang tersentuh wajib lolos `requireProjectMember` + `meetsMinProjectRole('permissions.task.write.minProjectRole')` (system admin bypass). Satu project gagal → 403 untuk seluruh request, tanpa tulisan parsial (entri yang tidak sah tidak boleh di-drop diam-diam karena itu menyembunyikan percobaan serangan). Overdue lock ikut tertutup otomatis lewat downgrade `VIEWER` dari `requireProjectMember`.
+
+MCP: `task_reorder_authz_check` (readonly) — dari daftar taskId, laporkan project yang tersentuh, role efektif user, dan status yang diharapkan (200/403/404).
+
 ## Aturan penambahan fitur (WAJIB)
 
 Setiap fitur baru — endpoint API, route frontend, lib helper, integrasi, behavior cron, dsb. — harus selalu disertai **dua hal** sebelum dianggap selesai:

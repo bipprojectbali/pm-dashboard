@@ -174,7 +174,7 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
 
   const isAdmin = isSystemAdmin(auth.role)
 
-  // Locked, and the caller is the OWNER/PM who must decide: hand back only what
+  // Locked, and the caller is the OWNER who must decide: hand back only what
   // the lock screen needs. Returning the full payload here would give back the
   // very project the lock just closed.
   if (access.lockedView) {
@@ -221,8 +221,9 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     },
     myRole,
     canWrite: isAdmin || (myRole != null && !lock.locked),
-    // Who can end the overdue state — unaffected by the lock on purpose.
-    canDecide: isAdmin || myRole === 'OWNER' || myRole === 'PM',
+    // Who can end the overdue state — unaffected by the lock on purpose, and
+    // narrower than canWrite: PM may run the project but not unfreeze it.
+    canDecide: isAdmin || myRole === 'OWNER',
     lock,
   }
 }

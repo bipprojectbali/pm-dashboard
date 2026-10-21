@@ -10,7 +10,7 @@ import { api, formatDate } from './types'
 
 type Disposition = 'COMPLETED' | 'CANCELLED'
 
-// A locked project is served to OWNER/PM as a reduced payload — id/name/status/
+// A locked project is served to its OWNER as a reduced payload — id/name/status/
 // dates only — so this screen must not reach for task lists, members or counts.
 export type ProjectLockSubject = Pick<ProjectDetail, 'id' | 'name' | 'endsAt' | 'startsAt'> & {
   taskStats?: ProjectDetail['taskStats']
@@ -50,14 +50,14 @@ export function ProjectLockedDenied({ projectId }: { projectId: string }) {
           <Stack gap={4} style={{ minWidth: 0 }}>
             <Title order={3}>Proyek ini terkunci</Title>
             <Text size="sm" c="dimmed">
-              Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai pemilik proyek, PM, atau admin
+              Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai pemilik proyek atau admin
               memutuskan: perpanjang deadline, tandai selesai, atau batalkan. Selama terkunci, isi proyek tidak bisa
               dibuka — termasuk daftar tugas, tim, dan milestone.
             </Text>
           </Stack>
         </Group>
         <Text size="sm">
-          Hanya pemilik proyek, PM, atau admin yang bisa membuka kunci ini. Kirim permintaan supaya mereka segera
+          Hanya pemilik proyek atau admin yang bisa membuka kunci ini. Kirim permintaan supaya mereka segera
           memutuskan.
         </Text>
         {requested ? (

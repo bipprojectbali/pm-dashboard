@@ -51,7 +51,7 @@ export function ProjectListRow({
               {p.priority}
             </Badge>
             {p.lock?.locked && (
-              <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER, PM, atau admin yang bisa membukanya">
+              <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER atau admin yang bisa membukanya">
                 <Badge color="red" variant="filled" size="xs" leftSection={<TbLock size={10} />}>
                   TERKUNCI
                 </Badge>

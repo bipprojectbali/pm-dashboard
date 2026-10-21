@@ -13,6 +13,19 @@ export function canManageProject(authCtx: { role: string }, membership: { role: 
   return membership?.role === 'OWNER' || membership?.role === 'PM'
 }
 
+// Who gets past an overdue lock. Deliberately narrower than canManageProject:
+// a project may have several PMs, and every extra person who can quietly
+// unfreeze it weakens the forcing function the lock exists to be. PM keeps every
+// normal power on a healthy project — this predicate is only ever consulted
+// while a project is locked, so the two must stay separate helpers.
+export function canDecideLockedProject(
+  authCtx: { role: string },
+  membership: { role: ProjectRole } | null,
+): boolean {
+  if (isSystemAdmin(authCtx.role)) return true
+  return membership?.role === 'OWNER'
+}
+
 export function canGrantProjectOwner(authCtx: { role: string }, membership: { role: ProjectRole } | null): boolean {
   if (authCtx.role === 'SUPER_ADMIN') return true
   return membership?.role === 'OWNER'
@@ -21,7 +34,7 @@ export function canGrantProjectOwner(authCtx: { role: string }, membership: { ro
 // Real membership role, ignoring the overdue lock. Only for the paths that must
 // keep working while locked: extending the deadline (otherwise the owner who is
 // meant to unlock the project is locked out of unlocking it), reading the
-// project's access tokens, and telling an OWNER/PM apart from a plain member in
+// project's access tokens, and telling an OWNER apart from a plain member in
 // canReadProject — requireProjectMember reports both as VIEWER, which would
 // collapse the decision carve-out into the blanket denial.
 export async function requireProjectMemberRaw(
@@ -33,6 +46,28 @@ export async function requireProjectMemberRaw(
     select: { role: true },
   })
   return m
+}
+
+// Lock-aware management gate for the routes that must survive the lock —
+// extending the deadline and reading the project's access tokens. They gate on
+// the RAW role because requireProjectMember reports even the owner as VIEWER
+// once locked, which is exactly why the lock has to be re-applied by hand here:
+// unlocked, the usual OWNER/PM powers apply; locked, only the decision carve-out
+// gets through. Returns `locked` so callers can explain which rule denied them.
+export async function canManageProjectNow(
+  projectId: string,
+  authCtx: { userId: string; role: string },
+): Promise<{ allowed: boolean; locked: boolean }> {
+  const membership = await requireProjectMemberRaw(projectId, authCtx.userId)
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { endsAt: true, status: true, archivedAt: true },
+  })
+  const locked = project ? (await resolveLockState(project)).locked : false
+  return {
+    allowed: locked ? canDecideLockedProject(authCtx, membership) : canManageProject(authCtx, membership),
+    locked,
+  }
 }
 
 // Effective membership role. A locked project reports every member as VIEWER,
@@ -94,7 +129,7 @@ export type ProjectReadAccess = {
 // meant to freeze stay fully readable through the sub-resource routes.
 //
 // `allowLockedDecider` is the one carve-out, opted into by GET /api/projects/:id
-// alone: OWNER/PM are the people who must end the overdue state, so they may
+// alone: the OWNER is the person who must end the overdue state, so they may
 // open a locked project — but only far enough to decide. The caller MUST honour
 // `lockedView` by serving the reduced payload; every other route leaves the
 // option off and so returns 403 to everyone but a system admin.
@@ -134,7 +169,7 @@ export async function canReadProject(
   if (admin) return { ok: true, status: null, ...base, lockedView: false }
 
   if (lock.locked) {
-    const decider = raw?.role === 'OWNER' || raw?.role === 'PM'
+    const decider = canDecideLockedProject(authCtx, raw)
     if (decider && opts.allowLockedDecider) return { ok: true, status: null, ...base, lockedView: true }
     return { ok: false, status: 403, ...base, lockedView: false }
   }

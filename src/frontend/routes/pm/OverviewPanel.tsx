@@ -25,6 +25,8 @@ import {
   TbClockHour4,
   TbGhost2,
   TbListCheck,
+  TbLock,
+  TbLockExclamation,
   TbMessage,
   TbPlus,
   TbSparkles,
@@ -49,6 +51,11 @@ const NOTIF_ICON: Record<OverviewNotification['kind'], IconType> = {
   TASK_DUE_SOON: TbCalendarDue,
   TASK_OVERDUE: TbAlertTriangle,
   TASK_MENTIONED: TbMessage,
+  PROJECT_DUE_SOON: TbCalendarDue,
+  PROJECT_OVERDUE: TbAlertTriangle,
+  PROJECT_LOCK_WARNING: TbLockExclamation,
+  PROJECT_LOCKED: TbLock,
+  PROJECT_DECISION_REQUESTED: TbBell,
 }
 
 const NOTIF_COLOR: Record<OverviewNotification['kind'], string> = {
@@ -58,6 +65,11 @@ const NOTIF_COLOR: Record<OverviewNotification['kind'], string> = {
   TASK_DUE_SOON: 'orange',
   TASK_OVERDUE: 'red',
   TASK_MENTIONED: 'violet',
+  PROJECT_DUE_SOON: 'yellow',
+  PROJECT_OVERDUE: 'orange',
+  PROJECT_LOCK_WARNING: 'orange',
+  PROJECT_LOCKED: 'red',
+  PROJECT_DECISION_REQUESTED: 'grape',
 }
 
 export function OverviewPanel({

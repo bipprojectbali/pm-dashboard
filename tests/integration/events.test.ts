@@ -7,16 +7,18 @@ let token = ''
 let userId = ''
 
 beforeAll(async () => {
+  await prisma.$connect()
   await cleanupTestData()
   const user = await seedTestUser('events@example.com', 'pass123', 'Events User', 'USER')
   userId = user.id
   token = await createTestSession(userId)
-})
+  // Prisma cold-connect bisa >5s di mesin yang sibuk, di atas default hook timeout.
+}, 60_000)
 
 afterAll(async () => {
   await cleanupTestData()
   await prisma.$disconnect()
-})
+}, 60_000)
 
 describe('POST /api/events', () => {
   test('create event — golden path', async () => {
@@ -150,7 +152,8 @@ describe('GET /api/events/badge-stats', () => {
     expect(body.todayCount).toBe(110)
     expect(body.tomorrowCount).toBe(1)
     expect(body.total).toBe(111)
-  })
+    // 111 baris seed + agregasi bisa lewat default 5s di mesin yang sibuk.
+  }, 30_000)
 
   test('unauthenticated → 401', async () => {
     const res = await app.handle(new Request('http://localhost/api/events/badge-stats'))

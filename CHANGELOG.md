@@ -14,6 +14,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 - **Badge "TERKUNCI" di daftar proyek** (tampilan grid maupun list) di samping badge Overdue yang sudah ada.
 - **MCP tool baru**: `project_lock_states` (readonly — stage lock tiap proyek aktif beserta jumlah penerima notifikasi), `project_lock_sweep` (admin — jalankan rantai eskalasi sekali di luar jadwal), dan `project_lock_set_grace` (admin — ubah masa tenggang, balikannya daftar proyek yang langsung terkunci oleh nilai baru).
 
+### Diperbaiki
+- **Event proyek hanya bisa dibuat & dipindahkan oleh anggota proyek yang berhak**: sebelumnya membuat event (`POST /api/events`) dan mengubah event (`PATCH /api/events/:id`) hanya mensyaratkan login — siapa pun yang punya akun bisa menempelkan event ke proyek manapun, termasuk proyek yang tidak pernah ia ikuti, dan memindahkan event milik sebuah proyek ke proyek lain. Kini menautkan event ke sebuah proyek mewajibkan pelakunya admin sistem atau anggota proyek tersebut dengan peran selain Viewer; proyek yang tidak ada ditolak sebagai permintaan tidak valid. Saat memindahkan event, baik proyek asal maupun proyek tujuan sama-sama diperiksa, jadi event tidak bisa "dicuri" keluar dari proyek yang tidak boleh disentuh pelakunya. Aturan lama tetap berlaku untuk sisanya: event tanpa proyek bebas dibuat siapa saja yang login, dan mengubah/menghapus event tetap terbatas pada pembuatnya atau admin sistem. Efek sampingnya, proyek yang terkunci karena telat (overdue lock) kini ikut menutup jalur event — seluruh anggotanya turun jadi hanya-baca, sehingga event tidak lagi bisa dipakai menembus kunci itu.
+
 ## [0.10.0] - 2026-08-05
 
 ### Ditambahkan

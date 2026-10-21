@@ -5,7 +5,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.11.0] - 2026-10-21
 
 ### Ditambahkan
 - **Proyek yang telat lama otomatis jadi read-only sampai ada keputusan**: selama ini proyek overdue hanya ditandai badge — penanganannya bergantung pada kesadaran orang, sehingga mudah terlewat. Kini proyek berstatus Aktif yang melewati deadline lebih dari masa tenggang (default 7 hari, diatur lewat setting `project.lockGraceDays`) otomatis terkunci: seluruh anggota — termasuk Owner/PM dan token agent — turun jadi hanya-baca, jadi tidak ada task baru, edit, atau komentar sampai pihak berwenang mengambil keputusan. Tiga jalan keluar tetap terbuka bagi Owner/PM/admin walau proyek terkunci: perpanjang deadline, tandai Selesai, atau Batalkan. Admin sistem tidak pernah ikut terkunci. Proyek Draft/On Hold/Selesai/Dibatalkan, yang diarsip, atau tanpa deadline tidak pernah terkunci — status non-aktif sudah berupa keputusan.

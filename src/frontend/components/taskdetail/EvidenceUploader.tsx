@@ -12,12 +12,14 @@ export function EvidenceUploader({
   error,
   label,
   hint,
+  allowPaste = false,
 }: {
   onPick: (file: File) => void
   loading: boolean
   error?: string
   label?: string
   hint?: string
+  allowPaste?: boolean
 }) {
   const [dragOver, setDragOver] = useState(false)
   const [pastedHint, setPastedHint] = useState(false)
@@ -28,10 +30,11 @@ export function EvidenceUploader({
     onPick(files[0])
   }
 
-  // Paste an image straight from the clipboard (e.g. a screenshot). The uploader
-  // only mounts while the Evidence tab is open, so a document listener is scoped
-  // enough; we still skip pastes aimed at a text field so note-typing isn't hijacked.
+  // Paste an image straight from the clipboard (e.g. a screenshot). The listener is
+  // document-level, so a stray Ctrl/Cmd+V anywhere uploads a file — opt-in per caller
+  // (`allowPaste`) rather than inherited. Pastes aimed at a text field are still skipped.
   useEffect(() => {
+    if (!allowPaste) return
     const onPaste = (e: ClipboardEvent) => {
       if (loading) return
       const target = e.target as HTMLElement | null
@@ -48,7 +51,7 @@ export function EvidenceUploader({
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
-  }, [loading, onPick])
+  }, [allowPaste, loading, onPick])
 
   return (
     <Stack gap={6}>

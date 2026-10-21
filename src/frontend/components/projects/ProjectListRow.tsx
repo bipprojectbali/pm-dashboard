@@ -1,8 +1,10 @@
 import { ActionIcon, Badge, Box, Card, Group, Progress, Text, Tooltip } from '@mantine/core'
 import { useState } from 'react'
 import { TbCalendarEvent, TbLock, TbPencil, TbUsers } from 'react-icons/tb'
+import { lockTone } from '../../../lib/project-lock-tone'
 import { computeOverdue, formatDate } from './helpers'
-import { PRIORITY_COLOR, STATUS_COLOR, type ProjectListItem } from './types'
+import classes from './lock-tone.module.css'
+import { PRIORITY_COLOR, type ProjectListItem, STATUS_COLOR } from './types'
 
 export function ProjectListRow({
   project: p,
@@ -20,12 +22,17 @@ export function ProjectListRow({
   const taskDone =
     p.taskStats && p.taskStats.total > 0 ? Math.round((p.taskStats.closed / p.taskStats.total) * 100) : null
   const [_hover, setHover] = useState(false)
+  // Same red accent as the grid card — see ProjectCard for why it keys off the
+  // lock stage rather than the date.
+  const tone = lockTone(p.lock?.stage)
 
   return (
     <Card
       withBorder
       padding="sm"
       radius="md"
+      className={tone.attr ? classes.accent : undefined}
+      data-lock-tone={tone.attr ?? undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ cursor: onOpen ? 'pointer' : 'default', transition: 'box-shadow 120ms ease' }}

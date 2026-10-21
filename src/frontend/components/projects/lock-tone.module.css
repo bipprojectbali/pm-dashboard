@@ -1,0 +1,129 @@
+/**
+ * biome-ignore-all lint/suspicious/noUnknownAtRules: `@mixin` comes from
+ * postcss-preset-mantine (see postcss.config.js) and is compiled away at build
+ * time into a `[data-mantine-color-scheme="dark"]` selector — verified in the
+ * built CSS. Biome has no PostCSS awareness, so it reads it as unknown.
+ * biome-ignore-all lint/suspicious/noDuplicateCustomProperties: follows from the
+ * above — Biome treats the `@mixin dark` body as part of the enclosing block, so
+ * the dark-mode overrides look like duplicate declarations. They compile into a
+ * separate, more specific rule.
+ */
+
+/*
+ * Red wash for a project past its deadline.
+ *
+ * Mechanism: these classes redefine the app's own surface/border custom
+ * properties — the very ones `theme.ts` already routes every Card, Paper, Menu,
+ * Popover, Notification and Divider through. Redefining them on a wrapper
+ * recolors the entire subtree by plain custom-property inheritance, so no
+ * component is hand-painted and nothing can leak: custom properties only ever
+ * reach descendants of the element that declares them.
+ *
+ * Why not a nested MantineProvider: Mantine's own docs say the provider "must be
+ * rendered at the root of your application and should be used only once", and
+ * the theme-only variant does not emit CSS variables at all — so neither one
+ * reliably recolors components that read `var(--app-surface)`.
+ *
+ * Two independent knobs, deliberately kept separate so they can never collide
+ * on specificity:
+ *   --lock-*-base   set by the color scheme (light vs dark pigment needs)
+ *   --lock-scale    set by the severity rung (data-lock-tone)
+ * Every colour is `calc(base * scale)`, so a rung rule and a scheme rule touch
+ * different properties and source order stops mattering.
+ */
+
+.tone {
+  /* red-6, the same hue the overdue badges already use. */
+  --lock-rgb: 250, 82, 82;
+  --lock-scale: 1;
+
+  --lock-wash-base: 0.05;
+  --lock-surface-base: 0.065;
+  --lock-border-base: 0.3;
+  --lock-border-strong-base: 0.45;
+
+  border-radius: var(--mantine-radius-lg);
+  padding: var(--mantine-spacing-sm);
+  background: rgba(var(--lock-rgb), calc(var(--lock-wash-base) * var(--lock-scale)));
+  box-shadow: inset 0 0 0 1px rgba(var(--lock-rgb), calc(var(--lock-border-base) * var(--lock-scale)));
+
+  /* The payoff — every themed surface and border inside picks these up. */
+  --app-surface: rgba(var(--lock-rgb), calc(var(--lock-surface-base) * var(--lock-scale)));
+  --app-surface-elevated: rgba(var(--lock-rgb), calc(var(--lock-surface-base) * var(--lock-scale)));
+  --app-border: rgba(var(--lock-rgb), calc(var(--lock-border-base) * var(--lock-scale)));
+  /* At the `locked` rung this exceeds 1 and clamps to a fully opaque red. That
+     is the intent at maximum severity, and a border carries no text. The other
+     three vars stay translucent and keep differentiating the rungs. */
+  --app-border-strong: rgba(var(--lock-rgb), calc(var(--lock-border-strong-base) * var(--lock-scale)));
+
+  /*
+   * Dark mode needs more pigment before a tint reads as red at all. Only the
+   * bases move; body text keeps `--mantine-color-text` untouched in both
+   * schemes, which is what preserves contrast — the tints stay translucent and
+   * low-alpha, and all the saturated red lives in borders, which carry no text.
+   */
+  @mixin dark {
+    --lock-wash-base: 0.09;
+    --lock-surface-base: 0.11;
+    --lock-border-base: 0.36;
+    --lock-border-strong-base: 0.55;
+  }
+}
+
+/*
+ * Headings go red too, but to a shade picked for contrast against the wash
+ * rather than to the badge red: near-black red on the light tint, pale red on
+ * the dark one. Scoped to this element's own headings — modals and menus render
+ * through a portal, outside the subtree, so they stay neutral.
+ */
+.tone :is(h1, h2, h3, h4, h5, h6) {
+  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-1));
+}
+
+/*
+ * Buttons are deliberately NOT recolored. The decision actions are the entire
+ * point of the lock: "Perpanjang deadline" is constructive and keeps the indigo
+ * primary — which now pops harder against a red field — while "Batalkan" keeps
+ * its own red. Washing every button red would make the constructive action read
+ * as destructive and the whole row read as disabled error text.
+ */
+
+/*
+ * List and row accent: border only. A dense grid of fully washed cards turns
+ * into noise, and the point here is just that the signal is already visible
+ * before you click in. Same `--app-border` trick, applied to the card itself.
+ */
+.accent {
+  --lock-rgb: 250, 82, 82;
+  --lock-scale: 1;
+  --lock-border-base: 0.38;
+  --lock-surface-base: 0.055;
+
+  /* Both come straight off the card's own themed properties, so there is no
+     inline-style fight: `theme.ts` already sets the Card background to
+     `var(--app-surface)` and its border to `var(--app-border)`, and those vars
+     resolve against this element. */
+  --app-surface: rgba(var(--lock-rgb), calc(var(--lock-surface-base) * var(--lock-scale)));
+  --app-border: rgba(var(--lock-rgb), calc(var(--lock-border-base) * var(--lock-scale)));
+
+  @mixin dark {
+    --lock-border-base: 0.45;
+    --lock-surface-base: 0.1;
+  }
+}
+
+/* Severity rungs. Only ever touch --lock-scale (see the header comment). */
+.tone[data-lock-tone="overdue"],
+.accent[data-lock-tone="overdue"] {
+  --lock-scale: 1;
+}
+
+.tone[data-lock-tone="escalated"],
+.accent[data-lock-tone="escalated"] {
+  --lock-scale: 1.7;
+}
+
+.tone[data-lock-tone="locked"],
+.accent[data-lock-tone="locked"] {
+  --lock-scale: 2.4;
+}

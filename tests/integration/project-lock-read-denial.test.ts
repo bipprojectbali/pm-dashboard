@@ -3,6 +3,7 @@
 // lock still has an exit. Everyone else gets 403 — PM included, and including on
 // the routes scoped under the project, otherwise the denial would be cosmetic.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { withLockBypass } from '../../src/lib/prisma-project-lock'
 import { invalidateProjectLockCache, LOCK_GRACE_SETTING_KEY } from '../../src/lib/project-lock'
 import { createTestApp, createTestSession, prisma, seedTestUser } from '../helpers'
 
@@ -69,7 +70,10 @@ beforeAll(async () => {
   }
   const now = Date.now()
 
-  // 30 hari lewat deadline dengan grace 7 hari → LOCKED.
+  // Dibuat sehat dulu, dituakan di akhir beforeAll. Guard di lapisan data
+  // (src/lib/prisma-project-lock.ts) menolak setiap tulis ke project terkunci,
+  // termasuk tulisan dari test setup — jadi fixture ini harus diisi selagi
+  // project-nya masih bisa ditulis, bukan dibuat terkunci sejak awal.
   const locked = await prisma.project.create({
     data: {
       name: 'RD Locked',
@@ -78,7 +82,7 @@ beforeAll(async () => {
       status: 'ACTIVE',
       priority: 'MEDIUM',
       visibility: 'PRIVATE',
-      endsAt: new Date(now - 30 * DAY_MS),
+      endsAt: new Date(now + 30 * DAY_MS),
       members,
     },
   })
@@ -131,6 +135,15 @@ beforeAll(async () => {
     update: { value: '7' },
     create: { key: LOCK_GRACE_SETTING_KEY, value: '7' },
   })
+
+  // Baru sekarang project-nya dituakan: 30 hari lewat deadline dengan grace 7
+  // hari → LOCKED. Update ini tidak butuh withLockBypass — guard menghitung
+  // state lock dari baris yang ada saat ini, dan baris itu masih sehat ketika
+  // update dieksekusi, jadi lolos secara sah.
+  await prisma.project.update({
+    where: { id: lockedProjectId },
+    data: { endsAt: new Date(now - 30 * DAY_MS) },
+  })
   invalidateProjectLockCache()
 })
 
@@ -144,11 +157,17 @@ afterAll(async () => {
   const ids = [lockedProjectId, healthyProjectId]
   // Scoped cleanup, not cleanupTestData(): the integration suite shares one
   // database, and a mass delete would take other files' fixtures with it.
-  await prisma.notification.deleteMany({ where: { projectId: { in: ids } } })
-  await prisma.projectExtension.deleteMany({ where: { projectId: { in: ids } } })
-  await prisma.task.deleteMany({ where: { projectId: { in: ids } } })
-  await prisma.projectMember.deleteMany({ where: { projectId: { in: ids } } })
-  await prisma.project.deleteMany({ where: { id: { in: ids } } })
+  // Teardown lewat bypass: project-nya sengaja ditinggalkan dalam keadaan
+  // terkunci, dan guard lapisan data menolak delete pada task/projectMember/
+  // projectExtension miliknya. Teardown test adalah salah satu pemakaian
+  // withLockBypass yang memang disahkan di komentar modul guard.
+  await withLockBypass(async () => {
+    await prisma.notification.deleteMany({ where: { projectId: { in: ids } } })
+    await prisma.projectExtension.deleteMany({ where: { projectId: { in: ids } } })
+    await prisma.task.deleteMany({ where: { projectId: { in: ids } } })
+    await prisma.projectMember.deleteMany({ where: { projectId: { in: ids } } })
+    await prisma.project.deleteMany({ where: { id: { in: ids } } })
+  })
   await prisma.session.deleteMany({
     where: { token: { in: [ownerToken, pmToken, memberToken, viewerToken, adminToken, outsiderToken] } },
   })

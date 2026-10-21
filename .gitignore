@@ -43,6 +43,8 @@ uploads/
 .playwright-mcp/
 .claude/scheduled_tasks.lock
 .claude/hooks/
+# Agent worktrees: nested checkouts of this very repo, never committable
+.claude/worktrees/
 /*.png
 
 # Dev server PID guard

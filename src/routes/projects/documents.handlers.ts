@@ -178,7 +178,7 @@ export async function uploadProjectDocumentHandler({ request, params, set }: Ctx
     `project=${params.id} document=${created.id} size=${file.size} mime=${mimeType}`,
     getIp(request),
   )
-  emitInvalidate('documents', { projectId: params.id })
+  emitInvalidate('project-documents', { projectId: params.id })
   return { document: serialize(document) }
 }
 
@@ -254,6 +254,6 @@ export async function deleteProjectDocumentHandler({ request, params, set }: Ctx
     `project=${params.id} document=${doc.id} uploader=${doc.uploadedById}`,
     getIp(request),
   )
-  emitInvalidate('documents', { projectId: params.id })
+  emitInvalidate('project-documents', { projectId: params.id })
   return { ok: true }
 }

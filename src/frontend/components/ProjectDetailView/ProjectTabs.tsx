@@ -1,6 +1,7 @@
 import { ActionIcon, Badge, Box, Group, Menu, Tabs } from '@mantine/core'
 import {
   TbDots,
+  TbFileText,
   TbFlag,
   TbHistory,
   TbLayoutColumns,
@@ -14,6 +15,7 @@ import { ExtensionsSection } from '../ExtensionsSection'
 import { MembersSection } from '../MembersSection'
 import { MilestonesSection } from '../MilestonesSection'
 import { PhasesSection } from '../PhasesSection'
+import { ProjectDocumentsSection } from '../ProjectDocumentsSection'
 import { ProjectSettingsTab } from '../ProjectSettingsTab'
 import type { MemberRole, ProjectDetail } from '../ProjectsPanel'
 import { RetroTab } from '../RetroTab'
@@ -86,6 +88,12 @@ export function ProjectTabs({
             rightSection={<TabCount value={tabCounts?.phases} />}
           >
             Phases
+          </Tabs.Tab>
+          {/* Primary, never in the overflow menu: the point of the tab is that
+              project files stop being hard to find. No count badge — the
+              documents list endpoint does not report one. */}
+          <Tabs.Tab value="documents" leftSection={<TbFileText size={14} />}>
+            Dokumen
           </Tabs.Tab>
         </Tabs.List>
 
@@ -165,6 +173,9 @@ export function ProjectTabs({
       </Tabs.Panel>
       <Tabs.Panel value="phases" pt="md">
         <PhasesSection projectId={project.id} myRole={myRole} systemRole={systemRole} />
+      </Tabs.Panel>
+      <Tabs.Panel value="documents" pt="md">
+        <ProjectDocumentsSection projectId={project.id} myRole={myRole} systemRole={systemRole} canWrite={canWrite} />
       </Tabs.Panel>
       <Tabs.Panel value="extensions" pt="md">
         <ExtensionsSection

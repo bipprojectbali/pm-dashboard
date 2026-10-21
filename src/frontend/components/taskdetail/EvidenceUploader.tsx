@@ -3,15 +3,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { TbCloudUpload, TbUpload } from 'react-icons/tb'
 
 // Drag-drop / click / paste file picker for task evidence. Split out of
-// EvidenceSection to keep each file within FILE-HEALTH limits.
+// EvidenceSection to keep each file within FILE-HEALTH limits. `label`/`hint`
+// exist so other sections (project documents) can reuse the picker without
+// inheriting evidence-specific copy.
 export function EvidenceUploader({
   onPick,
   loading,
   error,
+  label,
+  hint,
 }: {
   onPick: (file: File) => void
   loading: boolean
   error?: string
+  label?: string
+  hint?: string
 }) {
   const [dragOver, setDragOver] = useState(false)
   const [pastedHint, setPastedHint] = useState(false)
@@ -80,10 +86,10 @@ export function EvidenceUploader({
                   ? 'Drop file to upload'
                   : pastedHint
                     ? 'Gambar dari clipboard ditambahkan'
-                    : 'Drag & drop, klik, atau tempel (paste) gambar'}
+                    : (label ?? 'Drag & drop, klik, atau tempel (paste) gambar')}
             </Text>
             <Text size="xs" c="dimmed">
-              Screenshot, log, PDF — atau Ctrl/Cmd+V untuk menempel gambar dari clipboard
+              {hint ?? 'Screenshot, log, PDF — atau Ctrl/Cmd+V untuk menempel gambar dari clipboard'}
             </Text>
           </Stack>
         </Card>

@@ -6,6 +6,7 @@ export const PROJECT_DETAIL_TABS = [
   'team',
   'milestones',
   'phases',
+  'documents',
   'extensions',
   'retro',
   'settings',

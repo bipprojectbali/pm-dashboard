@@ -1,5 +1,6 @@
 import Elysia from 'elysia'
 import { projectAccessTokenRoutes } from './projects/access-tokens.route'
+import { projectDocumentRoutes } from './projects/documents.route'
 import { projectExtensionRoutes } from './projects/extensions.route'
 import { projectGithubRoutes } from './projects/github.route'
 import { projectLockRoutes } from './projects/lock.route'
@@ -18,4 +19,5 @@ export function projectsRoutes() {
     .use(milestoneRoutes())
     .use(projectGithubRoutes())
     .use(projectAccessTokenRoutes())
+    .use(projectDocumentRoutes())
 }

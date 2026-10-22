@@ -20,6 +20,7 @@ import { qcReadonly, qcTools } from './tools/qc'
 import { accessTokensReadonly, accessTokensTools } from './tools/access-tokens'
 import { redisTools } from './tools/redis'
 import { reportAdmin, reportReadonly } from './tools/report'
+import { signupReadonly } from './tools/signup'
 import { tagsReadonly, tagsTools } from './tools/tags'
 import { eventsReadonly, eventsTools } from './tools/events'
 import { extensionsAdmin, extensionsReadonly } from './tools/extensions'
@@ -56,6 +57,7 @@ const READONLY_MODULES: ToolModule[] = [
   chatReadonly,
   extensionsReadonly,
   permissionsReadonly,
+  signupReadonly,
 ]
 
 const ADMIN_MODULES: ToolModule[] = [

@@ -1,8 +1,9 @@
-import { createAuthMiddleware } from 'better-auth/api'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { appLog } from './applog'
 import { prisma } from './db'
 import { env } from './env'
 import { redis } from './redis'
+import { resolveSignupDecision, SIGNUP_CLOSED_MESSAGE } from './signup-allowlist'
 
 export const authSecondaryStorage = {
   get: async (key: string) => {
@@ -39,6 +40,25 @@ export const authDatabaseHooks = {
   },
   user: {
     create: {
+      // Signup gate. This is the chokepoint both unauthenticated doors funnel
+      // through — email/password sign-up (internalAdapter.createUser) and Google
+      // OAuth first sign-in (internalAdapter.createOAuthUser) both reach the
+      // user row via the same createWithHooks(data, 'user') call, so one guard
+      // here closes both. Throwing APIError rather than returning `false`:
+      // `false` merely makes the insert return null, which surfaces as Better
+      // Auth's own generic 400 "failed to create user" on the email path and as
+      // a TypeError-turned-"unable to create user" redirect on the OAuth path.
+      before: async (user: { email?: string }) => {
+        const decision = await resolveSignupDecision(user.email)
+        if (decision.allowed) return
+        // appLog masks email-shaped substrings at the sink, so the attempted
+        // address is safe to include and useful for spotting probing.
+        await appLog(
+          'warn',
+          `Rejected account creation for ${user.email ?? '(no email)'} — signup allowlist closed (entries=${decision.entryCount})`,
+        ).catch(() => {})
+        throw new APIError('FORBIDDEN', { message: SIGNUP_CLOSED_MESSAGE })
+      },
       // After OAuth signup, auto-promote SUPER_ADMIN if email matches the env list.
       after: async (user: { id: string; email: string }) => {
         if (

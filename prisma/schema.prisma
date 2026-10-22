@@ -137,6 +137,7 @@ model User {
   matchedGithubEvents    ProjectGithubEvent[] @relation("GithubEventMatchedUser")
   createdEvents          Event[]              @relation("EventCreatedBy")
   createdPhases          ProjectPhase[]       @relation("PhaseCreatedBy")
+  uploadedDocuments      ProjectDocument[]
 
   @@map("user")
 }
@@ -236,6 +237,7 @@ model Project {
   githubLogs   GithubWebhookLog[]
   events       Event[]
   accessTokens ProjectAccessToken[]
+  documents    ProjectDocument[]
 
   @@index([ownerId])
   @@index([archivedAt])
@@ -334,6 +336,33 @@ model ProjectAccessToken {
   @@index([status])
   @@index([createdById])
   @@map("project_access_token")
+}
+
+// Project-level documents (dokumentasi, artefak, surat-surat). Unlike
+// TaskEvidence — which crams the filename, size and mime type into a free-text
+// `note` — every traceability field gets its own column, because the point of
+// this table is answering "who added/removed what, and when".
+model ProjectDocument {
+  id           String   @id @default(uuid())
+  projectId    String
+  title        String
+  storedName   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  note         String?
+  uploadedById String
+  createdAt    DateTime  @default(now())
+  /// Soft-delete: terisi = ada di tempat sampah project. Dibersihkan permanen
+  /// oleh cron retensi 30 hari, yang juga menghapus objeknya di storage.
+  deletedAt    DateTime?
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedById], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, deletedAt])
+  @@map("project_documents")
 }
 
 model ProjectMember {

@@ -5,6 +5,7 @@ import { chatAdmin, chatReadonly } from './tools/chat'
 import { codeTools } from './tools/code'
 import { dbTools } from './tools/db'
 import { devTools } from './tools/dev'
+import { documentsReadonly } from './tools/documents'
 import { githubReadonly } from './tools/github'
 import { healthTools } from './tools/health'
 import { logsAdmin, logsReadonly } from './tools/logs'
@@ -40,6 +41,7 @@ const READONLY_MODULES: ToolModule[] = [
   githubReadonly,
   projectsReadonly,
   projectLockReadonly,
+  documentsReadonly,
   tasksReadonly,
   ticketsReadonly,
   tagsReadonly,

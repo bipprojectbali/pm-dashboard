@@ -161,6 +161,7 @@ export function EvidenceSection({
             onPick={(file) => upload.mutate({ file, note: note.trim() || undefined })}
             loading={upload.isPending}
             error={upload.error ? (upload.error as Error).message : undefined}
+            allowPaste
           />
           <Divider label="Or attach URL" labelPosition="center" />
           <Group grow>

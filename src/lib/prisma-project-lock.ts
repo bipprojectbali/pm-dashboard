@@ -31,7 +31,7 @@ import type { withSoftDelete } from './prisma-soft-delete'
 //                        restricted to OWNER (blocked by the role downgrade) or
 //                        system admin.
 //   • own projectId    — task, tag, event, projectMember, projectMilestone,
-//                        projectPhase, projectExtension
+//                        projectPhase, projectExtension, projectDocument
 //   • via parent task  — taskComment, taskEvidence, taskChecklistItem,
 //                        taskStatusChange, taskTag, taskDependency
 //   • via parent row   — milestoneTag (milestoneId), phaseTag (phaseId)
@@ -189,6 +189,7 @@ export const GUARDED_MODELS: Record<string, GuardSpec> = {
   projectMilestone: viaProject,
   projectPhase: viaProject,
   projectExtension: viaProject,
+  projectDocument: viaProject,
   taskComment: viaTask,
   taskEvidence: viaTask,
   taskChecklistItem: viaTask,

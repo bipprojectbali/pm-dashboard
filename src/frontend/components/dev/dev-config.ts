@@ -10,6 +10,7 @@ import {
   TbServer,
   TbShieldCheck,
   TbSitemap,
+  TbUserCheck,
   TbUserSearch,
   TbUsers,
 } from 'react-icons/tb'
@@ -28,6 +29,7 @@ export const validTabs = [
   'ext-github',
   'ext-chat',
   'permissions',
+  'signup-allowlist',
 ] as const
 
 export type TabKey = (typeof validTabs)[number]
@@ -85,6 +87,10 @@ export const TAB_META: Record<TabKey, { label: string; description: string }> = 
     label: 'Aturan Izin',
     description: 'Konfigurasi runtime role permission — project create/delete, task write/delete. Cache 60s.',
   },
+  'signup-allowlist': {
+    label: 'Izin Pendaftaran',
+    description: 'Daftar email yang boleh membuat akun baru. Daftar kosong = pendaftaran tertutup.',
+  },
 }
 
 export type DevNavItem = {
@@ -135,6 +141,9 @@ export const navGroups: DevNavGroup[] = [
   },
   {
     label: 'Keamanan',
-    items: [{ label: 'Aturan Izin', icon: TbShieldCheck, key: 'permissions' }],
+    items: [
+      { label: 'Aturan Izin', icon: TbShieldCheck, key: 'permissions' },
+      { label: 'Izin Pendaftaran', icon: TbUserCheck, key: 'signup-allowlist' },
+    ],
   },
 ]

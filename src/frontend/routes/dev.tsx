@@ -34,6 +34,7 @@ import { NotificationBell } from '@/frontend/components/NotificationBell'
 import { PermissionsPanel } from '@/frontend/components/PermissionsPanel'
 import { SidebarAppSwitcher } from '@/frontend/components/SidebarAppSwitcher'
 import { SidebarUserFooter } from '@/frontend/components/SidebarUserFooter'
+import { SignupAllowlistPanel } from '@/frontend/components/SignupAllowlistPanel'
 import { SectionErrorBoundary } from '@/frontend/components/shared/SectionErrorBoundary'
 import { useLogout, useSession } from '@/frontend/hooks/useAuth'
 
@@ -218,6 +219,7 @@ function DevPage() {
               {active === 'ext-github' && <ExtensionTogglePanel only="github" />}
               {active === 'ext-chat' && <ExtensionTogglePanel only="chat" />}
               {active === 'permissions' && <PermissionsPanel />}
+              {active === 'signup-allowlist' && <SignupAllowlistPanel />}
             </SectionErrorBoundary>
           </Stack>
         </Container>

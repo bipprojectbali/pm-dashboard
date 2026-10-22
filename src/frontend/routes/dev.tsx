@@ -24,10 +24,10 @@ import { UsersPanel } from '@/frontend/components/admin/UsersPanel'
 import { ChannelSettingsPanel } from '@/frontend/components/ChannelSettingsPanel'
 import { AppLogsPanel } from '@/frontend/components/dev/AppLogsPanel'
 import { DatabasePanel } from '@/frontend/components/dev/DatabasePanel'
+import { navGroups, TAB_META, type TabKey, validTabs } from '@/frontend/components/dev/dev-config'
 import { OverviewPanel } from '@/frontend/components/dev/OverviewPanel'
 import { ProjectPanel } from '@/frontend/components/dev/ProjectPanel'
 import { SyncPanel } from '@/frontend/components/dev/SyncPanel'
-import { navGroups, TAB_META, type TabKey, validTabs } from '@/frontend/components/dev/dev-config'
 import { ExtensionTogglePanel } from '@/frontend/components/ExtensionTogglePanel'
 import { FileHealthPanel } from '@/frontend/components/FileHealthPanel'
 import { NotificationBell } from '@/frontend/components/NotificationBell'
@@ -138,7 +138,8 @@ function DevPage() {
       <AppShell.Navbar
         p={collapsed && !isMobile ? 'xs' : 'md'}
         style={{
-          backgroundImage: 'linear-gradient(light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)), light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)))',
+          backgroundImage:
+            'linear-gradient(light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)), light-dark(rgba(250,82,82,0.05), rgba(250,82,82,0.08)))',
         }}
       >
         <Stack

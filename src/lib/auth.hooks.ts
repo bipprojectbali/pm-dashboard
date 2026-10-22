@@ -103,9 +103,7 @@ export const authAfterHook = createAuthMiddleware(async (ctx) => {
       const session = ctx.context.session as { user?: { id?: string } } | undefined
       const userId = session?.user?.id
       if (userId) {
-        await prisma.auditLog
-          .create({ data: { userId, action: 'LOGOUT', detail: 'Better Auth', ip } })
-          .catch(() => {})
+        await prisma.auditLog.create({ data: { userId, action: 'LOGOUT', detail: 'Better Auth', ip } }).catch(() => {})
       }
     }
   } catch {

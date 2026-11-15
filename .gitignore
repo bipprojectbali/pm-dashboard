@@ -19,6 +19,14 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env*
 !.env.example
 
+# private keys & cloud credentials
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+.gcp/
+
 # TanStack Router generated
 src/frontend/routeTree.gen.ts
 .tanstack/

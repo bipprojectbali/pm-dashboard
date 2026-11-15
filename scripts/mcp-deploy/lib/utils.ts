@@ -1,4 +1,4 @@
-export const REPO = process.env.GH_DEPLOY_REPO ?? 'bipprojectbali/pm-dashboard'
+export const REPO = process.env.GH_DEPLOY_REPO ?? 'makurosolusi/pm-dashboard'
 export const PUBLISH_WORKFLOW = process.env.GH_PUBLISH_WORKFLOW ?? 'Publish Docker to GHCR'
 export const REPULL_WORKFLOW = process.env.GH_REPULL_WORKFLOW ?? 'Re-Pull Docker'
 export const PROJECT_ROOT = process.env.GH_DEPLOY_ROOT ?? process.cwd()

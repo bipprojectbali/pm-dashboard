@@ -1,6 +1,6 @@
 services:
   pm-dashboard:
-    image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest
+    image: ghcr.io/makurosolusi/pm-dashboard:stg-latest
     container_name: pm-dashboard-stg
     restart: unless-stopped
     environment:
@@ -61,7 +61,7 @@ services:
       - "traefik.http.routers.pm-dashboard.tls.certresolver=letsencrypt"
 
   migrate:
-    image: ghcr.io/bipprojectbali/pm-dashboard:stg-latest
+    image: ghcr.io/makurosolusi/pm-dashboard:stg-latest
     container_name: pm-dashboard-stg-migrate
     restart: "no"
     entrypoint: ["sh", "-c", "bun prisma migrate deploy"]

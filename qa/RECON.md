@@ -61,7 +61,7 @@ Source: analisa otonom dari codebase + environment (read-only)
 ### Env keys yang relevan (source: `src/lib/env.ts` + `.env.example`)
 
 Required (throws saat boot jika missing):
-- `DATABASE_URL` — PostgreSQL URL (local `.env` = `postgresql://bip:***@localhost:5432/pm-dashboard`)
+- `DATABASE_URL` — PostgreSQL URL (local `.env` = `postgresql://user:password@localhost:5432/pm-dashboard`)
 - `REDIS_URL` — default `redis://localhost:6379`
 - `GOOGLE_CLIENT_ID` — OAuth
 - `GOOGLE_CLIENT_SECRET` — OAuth

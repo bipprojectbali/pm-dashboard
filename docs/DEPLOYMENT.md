@@ -34,7 +34,7 @@ Tools: `publish_docker`, `re_pull`, `run_status`, `run_wait`, `run_logs`, `run_l
 
 Env (auto-loaded from `.env` by Bun when the MCP server starts):
 - `GH_TOKEN` — gh CLI auth for non-interactive workflow dispatch. Server logs a warning to stderr on startup if missing.
-- `GH_DEPLOY_REPO` (default `bipprojectbali/pm-dashboard`) — repo `gh workflow run` targets.
+- `GH_DEPLOY_REPO` (default `makurosolusi/pm-dashboard`) — repo `gh workflow run` targets.
 - `STG_BASE_URL` (default `https://pm-dashboard.wibudev.com`) — polled by `verify_stg` / `release_stg` `/api/version`.
 - `STACK_NAME` (default `pm-dashboard`) — Portainer stack base name; combined with `stack_env` (e.g. `pm-dashboard-stg`). Used as the `stack_name` default in `re_pull`, `deploy_stg`, `release_stg`.
 - `SHADOW_DATABASE_URL` — required by `check_migrations` / migration drift gate. Throwaway empty Postgres DB.

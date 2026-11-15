@@ -93,11 +93,9 @@ export function documentContentDisposition(mimeType: string, originalName: strin
 }
 
 /**
- * The `Content-Type` to serve. Non-allowlisted types collapse to
- * `application/octet-stream`: combined with the `attachment` disposition the
- * browser downloads rather than renders, and no client-controlled text reaches
- * the header at all. `charset` is re-attached for `text/plain` only, as a
- * constant, so a UTF-8 note does not render as mojibake.
+ * The `Content-Type` to serve. Allowlisted → bare base type (`text/plain` gets a
+ * constant utf-8 charset); well-formed non-allowlisted → echoed, safe behind
+ * `attachment` + `nosniff`; malformed → `application/octet-stream`.
  */
 export function documentContentType(mimeType: string): string {
   const base = baseType(mimeType)

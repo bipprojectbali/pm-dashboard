@@ -68,7 +68,7 @@ bun run start    # Start production server
 | `bun run start`            | Start production server                          |
 | `bun run test`             | Run all tests                                    |
 | `bun run test:unit`        | Run unit tests                                   |
-| `bun run test:integration` | Run integration tests                            |
+| `bun run test:integration` | Run integration tests in batches                 |
 | `bun run typecheck`        | TypeScript type check                            |
 | `bun run lint`             | Lint with Biome                                  |
 | `bun run lint:fix`         | Lint and auto-fix                                |

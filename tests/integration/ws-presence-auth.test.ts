@@ -51,8 +51,22 @@ afterAll(async () => {
 
 type ConnResult = { opened: boolean; messages: string[]; closeCode: number | null }
 
-/** Open a WS to /ws/presence with the given cookie, hold briefly, return lifecycle. */
-function connect(cookie: string, holdMs = 400): Promise<ConnResult> {
+/**
+ * Open a WS to /ws/presence with the given cookie, return lifecycle once the
+ * socket has settled: either the server closed it (4001) or we got the presence
+ * snapshot and closed it ourselves.
+ *
+ * Menunggu peristiwa, bukan jam. Handler `open` di route melakukan
+ * `prisma.session.findUnique` ke Postgres remote SEBELUM `addConnection()`
+ * mengirim frame snapshot, jadi hold berdurasi tetap akan menutup socket
+ * sebelum frame tiba begitu DB sedang dibebani — flake, bukan bug produk.
+ * `timeoutMs` cuma jaring kalau frame itu tidak pernah datang.
+ *
+ * Both exits resolve from the `close` listener, so the server has already run
+ * `removeConnection` by the time we return — the next connect() reads a clean
+ * presence snapshot.
+ */
+function connect(cookie: string, timeoutMs = 10_000): Promise<ConnResult> {
   return new Promise((resolve) => {
     const WS = (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket
     const messages: string[] = []
@@ -61,29 +75,37 @@ function connect(cookie: string, holdMs = 400): Promise<ConnResult> {
     // @ts-expect-error — Bun's WebSocket accepts a headers option
     const sock = new WS(`ws://localhost:${PORT}/ws/presence`, { headers: { cookie } })
     let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
+    let timer: ReturnType<typeof setTimeout>
+    const closeSock = () => {
       try {
         sock.close()
       } catch {
         // already closing
       }
+    }
+    const settle = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       resolve({ opened, messages, closeCode })
     }
     sock.addEventListener('open', () => {
       opened = true
     })
     sock.addEventListener('message', (e: MessageEvent) => {
-      messages.push(String(e.data))
+      const data = String(e.data)
+      messages.push(data)
+      // Snapshot sudah tiba — tidak ada lagi yang ditunggu.
+      if (data.includes('"type":"presence"')) closeSock()
     })
     sock.addEventListener('close', (e: CloseEvent) => {
       closeCode = e.code
-      if (settled) return
-      settled = true
-      resolve({ opened, messages, closeCode })
+      settle()
     })
-    setTimeout(finish, holdMs)
+    timer = setTimeout(() => {
+      closeSock()
+      settle()
+    }, timeoutMs)
   })
 }
 

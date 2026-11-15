@@ -7,17 +7,6 @@ describe('QC ticket pagination', () => {
   let selfProjectId: string
   const TOTAL = 30
 
-  const createTicket = (body: Record<string, unknown>) =>
-    app
-      .handle(
-        new Request('http://localhost/api/qc/tickets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Cookie: `session=${qcToken}` },
-          body: JSON.stringify(body),
-        }),
-      )
-      .then((r) => r.json())
-
   const list = (qs: string) =>
     app
       .handle(new Request(`http://localhost/api/qc/tickets?${qs}`, { headers: { Cookie: `session=${qcToken}` } }))
@@ -48,15 +37,33 @@ describe('QC ticket pagination', () => {
     )
     selfProjectId = (await projRes.json()).project.id
     await prisma.project.update({ where: { id: selfProjectId }, data: { isSelf: true } })
-    await prisma.tag.upsert({
+    const aiQueueTag = await prisma.tag.upsert({
       where: { projectId_name: { projectId: selfProjectId, name: 'ai-queue' } },
       update: {},
       create: { projectId: selfProjectId, name: 'ai-queue', color: 'blue' },
     })
 
-    for (let i = 0; i < TOTAL; i++) {
-      await createTicket({ title: `Ticket ${String(i).padStart(2, '0')}`, description: 'x', priority: 'MEDIUM' })
-    }
+    // Seed langsung lewat prisma, bukan 30 POST /api/qc/tickets: DB test remote
+    // (~100ms per round trip) membuat 30 request serial menembus timeout 60s hook
+    // saat batch lain membebani koneksi. Bentuk barisnya menyamai jalur create
+    // (kind BUG, status OPEN default, priority MEDIUM, link tag ai-queue) supaya
+    // predikat GET /api/qc/tickets tetap cocok.
+    const base = Date.now() - TOTAL * 1000
+    const tickets = Array.from({ length: TOTAL }, (_, i) => ({
+      id: crypto.randomUUID(),
+      projectId: selfProjectId,
+      reporterId: qc.id,
+      kind: 'BUG' as const,
+      title: `Ticket ${String(i).padStart(2, '0')}`,
+      description: 'x',
+      priority: 'MEDIUM' as const,
+      // createdAt eksplisit & berjarak: route mengurutkan priority desc lalu createdAt desc,
+      // dan satu createMany memberi now() yang sama ke semua baris sehingga urutan
+      // halaman jadi tidak deterministik — tes "does not overlap pages" butuh ini stabil.
+      createdAt: new Date(base + i * 1000),
+    }))
+    await prisma.task.createMany({ data: tickets })
+    await prisma.taskTag.createMany({ data: tickets.map((t) => ({ taskId: t.id, tagId: aiQueueTag.id })) })
   })
 
   afterAll(async () => {

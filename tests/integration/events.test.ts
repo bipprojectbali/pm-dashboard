@@ -132,15 +132,27 @@ describe('GET /api/events/badge-stats', () => {
     await prisma.event.deleteMany()
     // 110 events today, 1 tomorrow — well past the old client-side 100-row cap
     // that GET /api/events?limit=100 used to be filtered over.
-    const now = Date.now()
+    //
+    // Offset relatif terhadap midnight lokal, bukan `Date.now() + n`: route
+    // membucket per hari kalender (`startsAt >= now && startsAt < startOfTomorrow`)
+    // dengan `now` dievaluasi saat request. Offset absolut bocor ke hari berikutnya
+    // kalau test jalan lewat ~22:10 lokal, dan `now + 1 menit` sudah lewat kalau
+    // seed+request makan lebih dari semenit. Titik tengah antara sekarang dan
+    // midnight selalu di dalam jendela "hari ini", pada jam berapa pun.
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const startOfTomorrow = startOfToday.getTime() + 24 * 60 * 60 * 1000
+    // Jaraknya tidak diuji, jumlahnya yang diuji — jadi semuanya boleh satu titik.
+    const todayAt = new Date(Math.floor((Date.now() + startOfTomorrow) / 2))
+    const tomorrowAt = new Date(startOfTomorrow + 12 * 60 * 60 * 1000)
     await prisma.event.createMany({
       data: [
         ...Array.from({ length: 110 }, (_, i) => ({
           title: `Today ${i}`,
-          startsAt: new Date(now + (i + 1) * 60 * 1000), // a few minutes apart, all today
+          startsAt: todayAt,
           createdById: userId,
         })),
-        { title: 'Tomorrow', startsAt: new Date(now + 26 * 60 * 60 * 1000), createdById: userId },
+        { title: 'Tomorrow', startsAt: tomorrowAt, createdById: userId },
       ],
     })
 

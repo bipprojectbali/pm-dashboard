@@ -120,32 +120,35 @@ describe('MinIO path: allowlisted types render inline', () => {
 
 describe('MinIO path: scriptable types are forced to download', () => {
   // The actual attack payload, through the real upload endpoint.
-  test('an uploaded .html is attachment + nosniff, not rendered', async () => {
+  test('an uploaded .html is attachment + nosniff, so it downloads instead of rendering', async () => {
     const html = '<script>fetch("/api/users")</script>'
     const { served } = await uploadThenServe(new File([html], 'payload.html', { type: 'text/html' }))
     expect(served.status).toBe(200)
-    expect(served.headers.get('Content-Type')).not.toContain('text/html')
+    // The type is echoed (CLAUDE.md "Header serve dokumen"); attachment + nosniff
+    // is the property that stops it rendering.
+    expect(served.headers.get('Content-Type')).toBe('text/html')
     expect(served.headers.get('Content-Disposition')).toStartWith('attachment;')
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff')
     // Bytes still delivered intact — this is a download, not censorship.
     expect(await served.text()).toBe(html)
   })
 
-  test('an uploaded .svg is attachment + nosniff', async () => {
+  test('an uploaded .svg is attachment + nosniff, so it downloads instead of rendering', async () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
     const { served } = await uploadThenServe(new File([svg], 'logo.svg', { type: 'image/svg+xml' }))
     expect(served.status).toBe(200)
-    expect(served.headers.get('Content-Type')).not.toContain('svg')
+    expect(served.headers.get('Content-Type')).toBe('image/svg+xml')
     expect(served.headers.get('Content-Disposition')).toStartWith('attachment;')
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff')
   })
 
   // The upload endpoint lets the client claim any `file.type`, but the serve
   // route never reads it — the type comes from the stored extension. A .html
-  // dressed up as image/png must therefore still download.
-  test('a .html claiming image/png is still an attachment', async () => {
+  // dressed up as image/png is served as text/html (from the extension, not the
+  // claim) and still downloads.
+  test('a .html claiming image/png gets its type from the extension and is still an attachment', async () => {
     const { served } = await uploadThenServe(new File(['<script>1</script>'], 'liar.html', { type: 'image/png' }))
-    expect(served.headers.get('Content-Type')).not.toContain('text/html')
+    expect(served.headers.get('Content-Type')).toBe('text/html')
     expect(served.headers.get('Content-Disposition')).toStartWith('attachment;')
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff')
   })
@@ -162,19 +165,19 @@ describe('legacy disk path sends the same headers', () => {
   // Pre-MinIO evidence still on disk. This path built its Response from a
   // BunFile, which injects Content-Type from the extension, so it needs the
   // headers set explicitly rather than being assumed safe already.
-  test('a .html on disk is attachment + nosniff, not text/html', async () => {
+  test('a .html on disk is attachment + nosniff, so it downloads instead of rendering', async () => {
     const served = await diskThenServe('legacy.html', '<script>alert(1)</script>')
     expect(served.status).toBe(200)
-    expect(served.headers.get('Content-Type')).not.toContain('text/html')
+    expect(served.headers.get('Content-Type')).toBe('text/html')
     expect(served.headers.get('Content-Disposition')).toStartWith('attachment;')
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(await served.text()).toBe('<script>alert(1)</script>')
   })
 
-  test('a .svg on disk is attachment + nosniff', async () => {
+  test('a .svg on disk is attachment + nosniff, so it downloads instead of rendering', async () => {
     const served = await diskThenServe('legacy.svg', '<svg><script>alert(1)</script></svg>')
     expect(served.status).toBe(200)
-    expect(served.headers.get('Content-Type')).not.toContain('svg')
+    expect(served.headers.get('Content-Type')).toBe('image/svg+xml')
     expect(served.headers.get('Content-Disposition')).toStartWith('attachment;')
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff')
   })

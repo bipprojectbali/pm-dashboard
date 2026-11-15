@@ -5,6 +5,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [0.13.1] - 2026-11-15
+
+### Diperbaiki
+- **Berkas bukti task tidak lagi dibuka sebagai halaman web di browser**: lubang yang sama yang sudah ditutup untuk dokumen proyek di 0.12.0 ternyata masih ada di bukti task. Berkas bukti disajikan dari alamat aplikasi sendiri tanpa memberi tahu browser bahwa itu unduhan, sehingga satu berkas `.html` atau `.svg` yang diunggah sebagai bukti akan **berjalan sebagai program** di browser orang yang mengkliknya, memakai sesi login orang itu — padahal syarat mengunggah bukti cuma "anggota proyek, bukan Viewer". Kini bukti task memakai aturan yang sama persis dengan dokumen proyek: hanya gambar, PDF, dan teks biasa yang dibuka langsung di aplikasi; semua jenis lain dipaksa diunduh, browser diberi tahu untuk tidak menebak-nebak sendiri jenis berkasnya, dan nama berkas disandikan sehingga tidak bisa menyusupkan instruksi tambahan ke dalam respons. Jenis berkas ditentukan dari ekstensi nama tersimpan, bukan dari jenis yang diakui pengunggah, jadi berkas `.html` yang menyamar sebagai gambar tetap diunduh. Bukti lama yang sudah terlanjur diunggah ikut terlindungi tanpa perlu diunggah ulang. Tool MCP baru `evidence_serve_headers_check` (readonly) menjawab "berkas bukti ini akan dibuka atau diunduh?" tanpa harus login UI.
+
+---
+
+## [0.13.0] - 2026-10-22
+
+### Ditambahkan
+- **Pendaftaran akun baru kini tertutup secara bawaan**: sebelum ini siapa pun yang punya akun Google bisa menekan "Masuk dengan Google" dan langsung memiliki akun di aplikasi ini — tanpa persetujuan siapa pun, tanpa undangan, dan tanpa jejak bahwa ada sesuatu yang perlu ditinjau. Karena proyek berstatus "Internal" bisa dibaca siapa saja yang sudah masuk, orang asing yang membuat akun sendiri otomatis bisa melihat daftar proyek perusahaan beserta ringkasannya. Pendaftaran lewat email/password terbuka dengan cara yang sama. Kini keduanya ditutup dari satu titik yang sama: **tidak ada akun baru yang bisa dibuat kecuali alamat emailnya sudah terdaftar lebih dulu di daftar izin**. Keadaan bawaannya tertutup — daftar yang kosong berarti tidak seorang pun bisa mendaftar, bukan semua orang bisa.
+- **Panel "Izin Pendaftaran"** di halaman pengaturan (`/dev`, hanya untuk admin sistem): tambahkan alamat email saat ada karyawan baru yang akan bergabung, lalu hapus lagi setelah akunnya dibuat. Bentuknya daftar izin, bukan tombol buka/tutup, dan itu disengaja — tombol punya arah kegagalan yang salah: dibuka untuk satu orang, lalu lupa ditutup, dan sejak saat itu pendaftaran terbuka untuk seluruh internet tanpa ada yang menyadarinya. Dengan daftar izin, membuka untuk satu orang tidak pernah berarti membuka untuk semua orang, dan tidak ada yang perlu diingat untuk ditutup kembali.
+- Yang perlu diketahui tentang daftar ini: **akun yang sudah ada tidak terpengaruh** — menghapus sebuah alamat tidak mengeluarkan orang itu, karena daftar ini hanya mengatur pembuatan akun baru. Pencocokan alamat tidak membedakan huruf besar/kecil. Alamat admin utama yang diatur lewat konfigurasi server selalu boleh mendaftar terlepas dari daftar ini — tanpa pengecualian itu, pemasangan baru akan mengunci pemiliknya sendiri di luar. Orang yang ditolak menerima satu pesan yang sama apa pun alasannya, supaya penolakan tidak bisa dipakai untuk menebak alamat mana yang sudah punya akun.
+
+---
+
 ## [0.12.0] - 2026-10-22
 
 ### Ditambahkan

@@ -5,6 +5,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 ---
 
+## [0.14.0] - 2026-11-19
+
+### Diubah
+- **Project yang melewati batas waktu kini hanya bisa dibuka dan diputuskan oleh admin sistem (ADMIN dan SUPER_ADMIN)**: sebelumnya Owner project masih bisa membuka project yang terkunci dan memperpanjang deadline sendiri, tetapi keputusan itu terlalu sering terlewat. Kini Owner, PM, dan anggota biasa tidak bisa membuka project terkunci sama sekali — isi project, perpanjangan deadline, penutupan (Selesai/Dibatalkan), dan token akses semuanya ditolak sampai admin memutuskan. Anggota tetap bisa menekan "Minta keputusan", dan admin tetap menerima notifikasi seperti sebelumnya. Tidak ada perubahan untuk project yang belum terkunci.
+- **Perubahan perilaku yang mencabut kemampuan Owner (breaking untuk alur lama)**: bila selama ini Owner biasa memperpanjang deadline project terkunci sendiri, kini ia harus meminta admin sistem untuk melakukannya.
+
+### Dihapus
+- **Layar khusus Owner pada project terkunci** (ringkasan nama/status/tanggal beserta tombol perpanjang): kini hanya admin sistem yang melihat layar kunci berikut tombol keputusannya.
+
+---
+
 ## [0.13.1] - 2026-11-15
 
 ### Diperbaiki

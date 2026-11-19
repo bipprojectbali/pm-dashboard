@@ -11,13 +11,7 @@ import { api, formatDate } from './types'
 
 type Disposition = 'COMPLETED' | 'CANCELLED'
 
-// A locked project is served to its OWNER as a reduced payload — id/name/status/
-// dates only — so this screen must not reach for task lists, members or counts.
-export type ProjectLockSubject = Pick<ProjectDetail, 'id' | 'name' | 'endsAt' | 'startsAt'> & {
-  taskStats?: ProjectDetail['taskStats']
-}
-
-// The view a member who may NOT decide gets. They can no longer open the
+// The view anyone but a system admin gets. They can no longer open the
 // project at all (the API returns 403), so this is rendered standalone from the
 // denial — nudging the people who can decide is the only action left to them.
 export function ProjectLockedDenied({ projectId }: { projectId: string }) {
@@ -34,8 +28,8 @@ export function ProjectLockedDenied({ projectId }: { projectId: string }) {
       setRequested(true)
       notifySuccess({
         message: res.deduped
-          ? 'Permintaan kamu sebelumnya masih berlaku — pemilik dan admin sudah diberi tahu.'
-          : 'Permintaan keputusan terkirim ke pemilik proyek, PM, dan admin.',
+          ? 'Permintaan kamu sebelumnya masih berlaku — admin sudah diberi tahu.'
+          : 'Permintaan terkirim ke pemilik proyek, PM, dan admin. Keputusan ada di tangan admin.',
       })
     },
     onError: (err) => notifyError(err),
@@ -53,20 +47,17 @@ export function ProjectLockedDenied({ projectId }: { projectId: string }) {
             {/* Not dimmed: this is the sentence that explains why the project is
                 frozen, and the red wash underneath already costs contrast. */}
             <Text size="sm">
-              Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai pemilik proyek atau admin
-              memutuskan: perpanjang deadline, tandai selesai, atau batalkan. Selama terkunci, isi proyek tidak bisa
-              dibuka — termasuk daftar tugas, tim, dan milestone.
+              Deadline-nya sudah terlewat tanpa keputusan, jadi proyek ini ditutup sampai admin memutuskan: perpanjang
+              deadline, tandai selesai, atau batalkan. Selama terkunci, isi proyek tidak bisa dibuka — termasuk daftar
+              tugas, tim, dan milestone.
             </Text>
           </Stack>
         </Group>
-        <Text size="sm">
-          Hanya pemilik proyek atau admin yang bisa membuka kunci ini. Kirim permintaan supaya mereka segera
-          memutuskan.
-        </Text>
+        <Text size="sm">Hanya admin yang bisa membuka kunci ini. Kirim permintaan supaya admin segera memutuskan.</Text>
         {requested ? (
           // `classes.calm` keeps the success out of the red wash — see the CSS.
           <Alert color="teal" variant="light" icon={<TbBell size={16} />} radius="md" className={classes.calm}>
-            Pemilik proyek, PM, dan admin sudah diberi tahu. Tidak perlu mengirim lagi — tunggu keputusan mereka.
+            Pemilik proyek, PM, dan admin sudah diberi tahu. Tidak perlu mengirim lagi — tunggu keputusan admin.
           </Alert>
         ) : (
           <Group>
@@ -89,7 +80,7 @@ export function ProjectLockedScreen({
   lock,
   canDecide,
 }: {
-  project: ProjectLockSubject
+  project: ProjectDetail
   lock: ProjectLockState
   canDecide: boolean
 }) {
@@ -129,9 +120,7 @@ export function ProjectLockedScreen({
           </Text>
           <Text size="sm" c="dimmed">
             {selesai
-              ? // taskStats is absent from the reduced locked payload — only mention
-                // the open-task count when it was actually sent.
-                `Status proyek menjadi COMPLETED dan kuncinya terbuka.${
+              ? `Status proyek menjadi COMPLETED dan kuncinya terbuka.${
                   project.taskStats ? ` ${project.taskStats.open} tugas masih terbuka dan tidak akan ikut ditutup.` : ''
                 }`
               : 'Status proyek menjadi CANCELLED dan kuncinya terbuka. Pekerjaan yang tersisa dianggap tidak dilanjutkan.'}
@@ -197,8 +186,8 @@ export function ProjectLockedScreen({
             </Group>
           </Stack>
         ) : (
-          // Defensive: the API only serves a locked project to people who can
-          // decide, so this is a fallback rather than a path members reach.
+          // Defensive: the API only serves a locked project to system admins
+          // (canDecide), so this is a fallback rather than a path members reach.
           <ProjectLockedDenied projectId={project.id} />
         )}
       </Stack>

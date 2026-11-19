@@ -80,7 +80,7 @@ export function messageForStage(
     case 'LOCKED':
       return {
         title: `"${project.name}" read-only, terlambat ${lock.overdueDays} hari`,
-        body: `Project terkunci sejak ${lockAt} dan tidak bisa diubah sampai ada keputusan: deadline diperpanjang, atau project ditandai selesai/dibatalkan.`,
+        body: `Project terkunci sejak ${lockAt} dan tidak bisa diubah sampai admin sistem memutuskan: deadline diperpanjang, atau project ditandai selesai/dibatalkan.`,
       }
     default:
       return null

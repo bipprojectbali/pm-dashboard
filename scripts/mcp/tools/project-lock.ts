@@ -124,7 +124,7 @@ export const projectLockReadonly: ToolModule = {
       {
         title: 'Explain a project read decision for one user',
         description:
-          'Untuk satu project + satu user: tampilkan stage lock, peran asli (raw) user di project, peran efektif (turun jadi VIEWER saat terkunci), dan hasil pembacaan — FULL (payload penuh), LOCK_SCREEN (payload minimal khusus OWNER di project terkunci; PM tidak termasuk), atau DENIED_403/DENIED_404. Juga melaporkan apakah sub-resource (task, milestone, phase, tag, retro, github) boleh dibaca. Read-only: memanggil gate canReadProject yang sama dengan API, jadi hasilnya tidak bisa melenceng dari behavior asli.',
+          'Untuk satu project + satu user: tampilkan stage lock, peran asli (raw) user di project, peran efektif (turun jadi VIEWER saat terkunci), dan hasil pembacaan — FULL (payload penuh; di project terkunci hanya system admin) atau DENIED_403/DENIED_404 (OWNER dan PM di project terkunci termasuk ditolak). Juga melaporkan apakah sub-resource (task, milestone, phase, tag, retro, github) boleh dibaca. Read-only: memanggil gate canReadProject yang sama dengan API, jadi hasilnya tidak bisa melenceng dari behavior asli.',
         inputSchema: {
           projectId: z.string().describe('ID project yang diperiksa'),
           userEmail: z.string().email().describe('Email user yang hendak membaca project'),
@@ -138,10 +138,7 @@ export const projectLockReadonly: ToolModule = {
         if (!user) return jsonText({ error: `User ${userEmail} tidak ditemukan` })
 
         const auth = { userId: user.id, role: user.role }
-        // Two calls on purpose: the detail route opts into the OWNER carve-out,
-        // every sub-resource route does not — that difference IS the behavior.
-        const detail = await canReadProject(projectId, auth, { allowLockedDecider: true })
-        const sub = await canReadProject(projectId, auth)
+        const detail = await canReadProject(projectId, auth)
         if (detail.status === 404) return jsonText({ error: `Project ${projectId} tidak ditemukan` })
 
         return jsonText({
@@ -151,10 +148,10 @@ export const projectLockReadonly: ToolModule = {
           lock: detail.lock,
           rawRole: detail.rawRole,
           effectiveRole: detail.membership?.role ?? null,
-          projectDetailRead: detail.ok ? (detail.lockedView ? 'LOCK_SCREEN' : 'FULL') : `DENIED_${detail.status}`,
-          subResourceRead: sub.ok ? 'ALLOWED' : `DENIED_${sub.status}`,
-          // Same predicate the API uses, so this can't drift from the carve-out.
-          canDecide: canDecideLockedProject(auth, detail.rawRole ? { role: detail.rawRole } : null),
+          projectDetailRead: detail.ok ? 'FULL' : `DENIED_${detail.status}`,
+          subResourceRead: detail.ok ? 'ALLOWED' : `DENIED_${detail.status}`,
+          // Same predicate the API uses, so this can't drift from its behavior.
+          canDecide: canDecideLockedProject(auth),
         })
       },
     )

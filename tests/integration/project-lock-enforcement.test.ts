@@ -135,27 +135,27 @@ describe('project terkunci — pembacaan ikut tertutup', () => {
     expect(data.locked).toBe(true)
   })
 
-  test('owner dapat payload layar kunci, bukan isi project', async () => {
+  test('owner juga ditolak 403 locked, tanpa payload layar kunci', async () => {
     const res = await req(ownerToken, 'GET', `/api/projects/${lockedProjectId}`)
+    expect(res.status).toBe(403)
+    const data = (await res.json()) as { locked: boolean; project?: unknown }
+    expect(data.locked).toBe(true)
+    expect(data.project).toBeUndefined()
+  })
+
+  test('admin sistem dapat payload penuh dengan canDecide', async () => {
+    const res = await req(adminToken, 'GET', `/api/projects/${lockedProjectId}`)
     expect(res.status).toBe(200)
     const data = (await res.json()) as {
-      project: Record<string, unknown>
-      myRole: string
+      project: { members: unknown[] }
       canDecide: boolean
-      canWrite: boolean
-      lockedView: boolean
       lock: { locked: boolean; stage: string; overdueDays: number }
     }
     expect(data.lock.locked).toBe(true)
     expect(data.lock.stage).toBe('LOCKED')
     expect(data.lock.overdueDays).toBeGreaterThanOrEqual(30)
-    expect(data.lockedView).toBe(true)
-    // Peran asli tidak disembunyikan: layar kunci butuh ini untuk tahu siapa
-    // yang boleh mengambil keputusan.
-    expect(data.myRole).toBe('OWNER')
     expect(data.canDecide).toBe(true)
-    expect(data.canWrite).toBe(false)
-    expect(data.project.members).toBeUndefined()
+    expect(data.project.members.length).toBe(2)
   })
 
   test('project sehat tidak terpengaruh', async () => {
@@ -223,11 +223,29 @@ describe('project terkunci — penulisan ditolak', () => {
   })
 })
 
-describe('jalan keluar dari kunci', () => {
-  test('owner bisa memperpanjang deadline dan kunci terbuka', async () => {
-    const newEnd = new Date(Date.now() + 14 * DAY_MS)
+describe('jalan keluar dari kunci — hanya admin sistem', () => {
+  test('owner tidak bisa memperpanjang deadline', async () => {
     const res = await req(ownerToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
-      newEndAt: newEnd.toISOString(),
+      newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
+      reason: 'owner coba membuka kunci',
+    })
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { locked?: boolean }).locked).toBe(true)
+    const after = await req(memberToken, 'GET', `/api/projects/${lockedProjectId}`)
+    expect(after.status).toBe(403)
+  })
+
+  test('owner tidak bisa menandai project selesai walau terkunci', async () => {
+    const res = await req(ownerToken, 'PATCH', `/api/projects/${lockedProjectId}`, { status: 'COMPLETED' })
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { locked?: boolean }).locked).toBe(true)
+    const row = await prisma.project.findUnique({ where: { id: lockedProjectId }, select: { status: true } })
+    expect(row?.status).toBe('ACTIVE')
+  })
+
+  test('admin bisa memperpanjang deadline dan kunci terbuka', async () => {
+    const res = await req(adminToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
+      newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
       reason: 'butuh waktu tambahan',
     })
     expect(res.status).toBe(200)
@@ -238,15 +256,15 @@ describe('jalan keluar dari kunci', () => {
     expect(data.canWrite).toBe(true)
   })
 
-  test('owner bisa menandai project selesai walau terkunci', async () => {
+  test('admin bisa menandai project selesai walau terkunci', async () => {
     await prisma.project.update({
       where: { id: lockedProjectId },
       data: { endsAt: new Date(Date.now() - 30 * DAY_MS) },
     })
-    const res = await req(ownerToken, 'PATCH', `/api/projects/${lockedProjectId}`, { status: 'COMPLETED' })
+    const res = await req(adminToken, 'PATCH', `/api/projects/${lockedProjectId}`, { status: 'COMPLETED' })
     expect(res.status).toBe(200)
 
-    const after = await req(ownerToken, 'GET', `/api/projects/${lockedProjectId}`)
+    const after = await req(adminToken, 'GET', `/api/projects/${lockedProjectId}`)
     const data = (await after.json()) as { lock: { locked: boolean; stage: string } }
     expect(data.lock.locked).toBe(false)
     expect(data.lock.stage).toBe('EXEMPT')

@@ -42,7 +42,7 @@ export async function uploadProjectDocumentHandler({ request, params, set }: Ctx
     return gate.body
   }
   // Effective role, so a locked project's VIEWER downgrade would reject here
-  // too even if the read gate above ever grew a carve-out.
+  // too even if the read gate above ever let a locked member through.
   if (gate.membership?.role === 'VIEWER' && !gate.admin) {
     set.status = 403
     return { error: 'Not a writable project member' }

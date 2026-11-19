@@ -28,8 +28,8 @@ import type { withSoftDelete } from './prisma-soft-delete'
 //   • project          — update only. Create has no project to resolve yet, and
 //                        delete stays open: a locked project you cannot delete
 //                        is a trap, and deletion is already a disposition
-//                        restricted to OWNER (blocked by the role downgrade) or
-//                        system admin.
+//                        restricted to system admin while locked (the role
+//                        downgrade blocks OWNER).
 //   • own projectId    — task, tag, event, projectMember, projectMilestone,
 //                        projectPhase, projectExtension, projectDocument
 //   • via parent task  — taskComment, taskEvidence, taskChecklistItem,
@@ -136,7 +136,7 @@ const bypassStore = new AsyncLocalStorage<true>()
 /**
  * Run `fn` with the overdue-lock write guard disabled, regardless of actor.
  * Only for the sanctioned writes that a lock must not block (extend deadline,
- * disposition, decision notification, admin sync, trash retention) and for test
+ * decision notification, admin sync, trash retention) and for test
  * teardown. Grep this symbol to audit every exemption.
  */
 export function withLockBypass<T>(fn: () => T | Promise<T>): Promise<T> {

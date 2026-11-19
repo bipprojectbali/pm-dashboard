@@ -1,7 +1,8 @@
 // Overdue lock closes READS, not just writes: a locked project is only openable
-// by system admins, plus its OWNER who gets a reduced lock-screen payload so the
-// lock still has an exit. Everyone else gets 403 — PM included, and including on
-// the routes scoped under the project, otherwise the denial would be cosmetic.
+// by system admins. Everyone else — OWNER and PM included — gets 403, and that
+// includes the routes scoped under the project, otherwise the denial would be
+// cosmetic. Decision paths (extend/disposition/tokens) live in
+// project-lock-admin-only.test.ts.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { withLockBypass } from '../../src/lib/prisma-project-lock'
 import { invalidateProjectLockCache, LOCK_GRACE_SETTING_KEY } from '../../src/lib/project-lock'
@@ -195,82 +196,22 @@ describe('project terkunci — detail ditolak untuk anggota biasa', () => {
   })
 })
 
-describe('project terkunci — hanya OWNER dapat payload layar kunci', () => {
-  test('OWNER dapat 200 tanpa data berat', async () => {
+describe('project terkunci — OWNER dan PM juga ditolak, hanya admin sistem yang membuka', () => {
+  // Carve-out OWNER dicabut: tidak ada lagi payload layar kunci. Jalur keputusan
+  // (extend, disposisi, access-token) ditegaskan di project-lock-admin-only.test.ts.
+  test('OWNER dapat 403 locked, tanpa payload project', async () => {
     const res = await req(ownerToken, 'GET', `/api/projects/${lockedProjectId}`)
-    expect(res.status).toBe(200)
-    const data = (await res.json()) as {
-      project: Record<string, unknown>
-      myRole: string
-      canWrite: boolean
-      canDecide: boolean
-      lockedView: boolean
-      lock: { locked: boolean; stage: string; overdueDays: number; graceDays: number }
-    }
-    expect(data.lockedView).toBe(true)
-    expect(data.lock.locked).toBe(true)
-    expect(data.lock.stage).toBe('LOCKED')
-    expect(data.lock.graceDays).toBe(7)
-    expect(data.lock.overdueDays).toBeGreaterThanOrEqual(30)
-    // Peran asli, bukan hasil downgrade jadi VIEWER.
-    expect(data.myRole).toBe('OWNER')
-    expect(data.canWrite).toBe(false)
-    expect(data.canDecide).toBe(true)
-
-    // Cukup untuk mengenali project dan menjalankan keputusan…
-    expect(Object.keys(data.project).sort()).toEqual(['endsAt', 'id', 'name', 'startsAt', 'status'])
-    expect(data.project.id).toBe(lockedProjectId)
-    expect(data.project.name).toBe('RD Locked')
-    // …dan tidak lebih dari itu.
-    for (const heavy of [
-      'members',
-      '_count',
-      'taskStats',
-      'milestoneStats',
-      'owner',
-      'description',
-      'priority',
-      'visibility',
-      'githubRepo',
-    ]) {
-      expect(data.project[heavy]).toBeUndefined()
-    }
+    expect(res.status).toBe(403)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.locked).toBe(true)
+    expect(body.lockedView).toBeUndefined()
+    expect(body.project).toBeUndefined()
   })
 
-  // Carve-out dipersempit: satu project bisa punya beberapa PM, dan tiap orang
-  // tambahan yang bisa membuka kunci melemahkan tekanan untuk memutuskan.
-  test('PM ikut ditolak 403 — carve-out sekarang hanya OWNER', async () => {
+  test('PM dapat 403 locked', async () => {
     const res = await req(pmToken, 'GET', `/api/projects/${lockedProjectId}`)
     expect(res.status).toBe(403)
-    const body = (await res.json()) as { error: string; locked: boolean }
-    expect(body.locked).toBe(true)
-  })
-
-  test('PM tidak bisa mendisposisi project terkunci', async () => {
-    for (const status of ['COMPLETED', 'CANCELLED']) {
-      const res = await req(pmToken, 'PATCH', `/api/projects/${lockedProjectId}`, { status })
-      expect(res.status).toBe(403)
-      expect(((await res.json()) as { locked?: boolean }).locked).toBe(true)
-    }
-    // Dan project-nya memang tidak berubah.
-    const after = await prisma.project.findUnique({ where: { id: lockedProjectId }, select: { status: true } })
-    expect(after?.status).toBe('ACTIVE')
-  })
-
-  test('PM tidak bisa memperpanjang deadline project terkunci', async () => {
-    const res = await req(pmToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
-      newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
-      reason: 'PM coba membuka kunci',
-    })
-    expect(res.status).toBe(403)
-    expect(((await res.json()) as { locked?: boolean }).locked).toBe(true)
-    // Masih terkunci untuk anggota biasa — percobaan PM tidak boleh berefek.
-    expect((await req(memberToken, 'GET', `/api/projects/${lockedProjectId}`)).status).toBe(403)
-  })
-
-  test('PM tidak bisa melihat access token project terkunci', async () => {
-    const res = await req(pmToken, 'GET', `/api/projects/${lockedProjectId}/access-tokens`)
-    expect(res.status).toBe(403)
+    expect(((await res.json()) as { locked: boolean }).locked).toBe(true)
   })
 
   test('admin sistem tetap dapat payload penuh', async () => {
@@ -325,7 +266,7 @@ describe('project terkunci — sub-resource ikut tertutup', () => {
     expect(await statuses(memberToken, lockedProjectId)).toEqual(expected(lockedProjectId, 403))
   })
 
-  test('OWNER juga ditolak — carve-out hanya untuk layar keputusan', async () => {
+  test('OWNER juga ditolak — tidak ada carve-out', async () => {
     expect(await statuses(ownerToken, lockedProjectId)).toEqual(expected(lockedProjectId, 403))
   })
 
@@ -336,6 +277,10 @@ describe('project terkunci — sub-resource ikut tertutup', () => {
   test('admin sistem tetap bisa membaca sub-resource project terkunci', async () => {
     const res = await req(adminToken, 'GET', `/api/projects/${lockedProjectId}/milestones`)
     expect(res.status).toBe(200)
+  })
+
+  test('PM ditolak di semua sub-resource project terkunci', async () => {
+    expect(await statuses(pmToken, lockedProjectId)).toEqual(expected(lockedProjectId, 403))
   })
 })
 
@@ -389,10 +334,8 @@ describe('project tidak terkunci — tidak ada yang berubah', () => {
       myRole: string
       canWrite: boolean
       canDecide: boolean
-      lockedView?: boolean
       lock: { locked: boolean; stage: string }
     }
-    expect(data.lockedView).toBeUndefined()
     expect(data.lock.locked).toBe(false)
     expect(data.myRole).toBe('MEMBER')
     expect(data.canWrite).toBe(true)
@@ -405,46 +348,9 @@ describe('project tidak terkunci — tidak ada yang berubah', () => {
   })
 })
 
-// Kehilangan carve-out kunci tidak boleh merembet ke wewenang normal PM: yang
-// dicabut hanya kemampuan membuka project yang sudah terkunci.
-describe('project sehat — wewenang normal PM utuh', () => {
-  test('PM dapat payload penuh, tapi canDecide false', async () => {
-    const res = await req(pmToken, 'GET', `/api/projects/${healthyProjectId}`)
-    expect(res.status).toBe(200)
-    const data = (await res.json()) as {
-      project: { members: unknown[] }
-      myRole: string
-      canWrite: boolean
-      canDecide: boolean
-    }
-    expect(data.myRole).toBe('PM')
-    expect(data.canWrite).toBe(true)
-    expect(data.canDecide).toBe(false)
-    expect(Array.isArray(data.project.members)).toBe(true)
-  })
-
-  test('PM masih bisa mengubah field project sehat', async () => {
-    const res = await req(pmToken, 'PATCH', `/api/projects/${healthyProjectId}`, { priority: 'HIGH' })
-    expect(res.status).toBe(200)
-  })
-
-  test('PM masih bisa memperpanjang deadline project sehat', async () => {
-    const res = await req(pmToken, 'POST', `/api/projects/${healthyProjectId}/extend`, {
-      newEndAt: new Date(Date.now() + 60 * DAY_MS).toISOString(),
-      reason: 'geser jadwal',
-    })
-    expect(res.status).toBe(200)
-  })
-
-  test('PM masih bisa melihat access token project sehat', async () => {
-    const res = await req(pmToken, 'GET', `/api/projects/${healthyProjectId}/access-tokens`)
-    expect(res.status).toBe(200)
-  })
-})
-
 describe('keputusan membuka kembali akses', () => {
-  test('setelah deadline diperpanjang, MEMBER bisa membaca lagi', async () => {
-    const res = await req(ownerToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
+  test('setelah admin memperpanjang deadline, MEMBER bisa membaca lagi', async () => {
+    const res = await req(adminToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
       newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
       reason: 'butuh waktu tambahan',
     })
@@ -454,11 +360,9 @@ describe('keputusan membuka kembali akses', () => {
     expect(after.status).toBe(200)
     const data = (await after.json()) as {
       project: { members: unknown[] }
-      lockedView?: boolean
       lock: { locked: boolean }
     }
     expect(data.lock.locked).toBe(false)
-    expect(data.lockedView).toBeUndefined()
     expect(Array.isArray(data.project.members)).toBe(true)
 
     // Kembalikan ke keadaan terkunci supaya urutan test tidak saling bergantung.

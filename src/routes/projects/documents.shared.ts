@@ -62,9 +62,8 @@ export type Gate =
 /**
  * Read gate for every document route, trash included: `canReadProject` with NO
  * options, so an overdue-locked project serves nothing to anyone but a system
- * admin — the OWNER decision carve-out belongs to GET /api/projects/:id alone,
- * and letting it through here would keep handing out the files the lock is meant
- * to freeze. The lock screen does not need a trash listing to decide anything.
+ * admin — letting anyone else through would keep handing out the files the lock
+ * is meant to freeze.
  *
  * Membership (or system admin) is required on top of it, like the evidence
  * serve route: a project's documents are its artefacts and official letters,

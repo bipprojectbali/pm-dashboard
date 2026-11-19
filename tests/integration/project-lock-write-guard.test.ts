@@ -273,8 +273,21 @@ describe('jalan keluar tetap hidup saat terkunci', () => {
     expect(body.ok).toBe(true)
   })
 
-  test('owner bisa memperpanjang deadline dan kunci terbuka', async () => {
+  test('owner ditolak memperpanjang deadline di project terkunci', async () => {
     const res = await req(ownerToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
+      newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
+      reason: 'butuh waktu tambahan',
+    })
+    expect(res.status).toBe(403)
+    expect(((await res.json()) as { locked?: boolean }).locked).toBe(true)
+
+    const detail = await req(adminToken, 'GET', `/api/projects/${lockedProjectId}`)
+    expect(((await detail.json()) as { lock: { locked: boolean } }).lock.locked).toBe(true)
+  })
+
+  // Harus tetap yang terakhir di describe ini: ia membuka kunci.
+  test('admin bisa memperpanjang deadline dan kunci terbuka', async () => {
+    const res = await req(adminToken, 'POST', `/api/projects/${lockedProjectId}/extend`, {
       newEndAt: new Date(Date.now() + 14 * DAY_MS).toISOString(),
       reason: 'butuh waktu tambahan',
     })

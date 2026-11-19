@@ -1,5 +1,5 @@
-// The lock carve-out is narrower than normal management on purpose: PM runs a
-// healthy project but may not unfreeze an overdue one. These two predicates
+// The lock carve-out is narrower than normal management on purpose: OWNER and
+// PM run a healthy project but only a system admin may unfreeze an overdue one. These two predicates
 // must therefore never be collapsed back into one.
 import { describe, expect, test } from 'bun:test'
 import { canDecideLockedProject, canManageProject } from '../../src/lib/project-access'
@@ -23,22 +23,27 @@ describe('canManageProject — wewenang normal, PM tetap termasuk', () => {
   })
 })
 
-describe('canDecideLockedProject — carve-out kunci, PM dicabut', () => {
-  test('hanya OWNER di antara peran project', () => {
-    expect(canDecideLockedProject(user, { role: 'OWNER' })).toBe(true)
-    expect(canDecideLockedProject(user, { role: 'PM' })).toBe(false)
-    expect(canDecideLockedProject(user, { role: 'MEMBER' })).toBe(false)
-    expect(canDecideLockedProject(user, { role: 'VIEWER' })).toBe(false)
-    expect(canDecideLockedProject(user, null)).toBe(false)
+describe('canDecideLockedProject — hanya system admin', () => {
+  test('ADMIN dan SUPER_ADMIN boleh', () => {
+    expect(canDecideLockedProject(admin)).toBe(true)
+    expect(canDecideLockedProject(superAdmin)).toBe(true)
   })
 
-  test('system admin tidak terpengaruh', () => {
-    expect(canDecideLockedProject(admin, null)).toBe(true)
-    expect(canDecideLockedProject(superAdmin, { role: 'PM' })).toBe(true)
+  test('USER ditolak, apa pun peran project-nya (OWNER/PM tidak punya carve-out)', () => {
+    expect(canDecideLockedProject(user)).toBe(false)
+    // Argumen kedua sudah dihapus; kalau ada yang masih mengirim membership,
+    // peran OWNER/PM tetap tidak boleh mengubah jawabannya.
+    const legacy = canDecideLockedProject as (a: { role: string }, m?: { role: string } | null) => boolean
+    expect(legacy(user, { role: 'OWNER' })).toBe(false)
+    expect(legacy(user, { role: 'PM' })).toBe(false)
+    expect(legacy(user, { role: 'MEMBER' })).toBe(false)
+    expect(legacy(user, null)).toBe(false)
   })
 
   test('lebih sempit dari canManageProject, bukan sama', () => {
-    expect(canManageProject(user, { role: 'PM' })).toBe(true)
-    expect(canDecideLockedProject(user, { role: 'PM' })).toBe(false)
+    for (const role of ['OWNER', 'PM']) {
+      expect(canManageProject(user, { role })).toBe(true)
+      expect(canDecideLockedProject(user)).toBe(false)
+    }
   })
 })

@@ -161,9 +161,7 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     return { error: 'Unauthorized' }
   }
 
-  // The lock-aware gate. `allowLockedDecider` is opted into here and nowhere
-  // else: this is the only route that can serve the reduced lock-screen payload.
-  const access = await canReadProject(params.id, auth, { allowLockedDecider: true })
+  const access = await canReadProject(params.id, auth)
   if (!access.ok) {
     set.status = access.status!
     if (access.status === 404) return { error: 'Project not found' }
@@ -173,21 +171,6 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
   }
 
   const isAdmin = isSystemAdmin(auth.role)
-
-  // Locked, and the caller is the OWNER who must decide: hand back only what
-  // the lock screen needs. Returning the full payload here would give back the
-  // very project the lock just closed.
-  if (access.lockedView) {
-    const p = access.project!
-    return {
-      project: { id: p.id, name: p.name, status: p.status, startsAt: p.startsAt, endsAt: p.endsAt },
-      myRole: access.rawRole,
-      canWrite: false,
-      canDecide: true,
-      lock: access.lock,
-      lockedView: true,
-    }
-  }
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
@@ -221,9 +204,8 @@ export async function getProjectHandler({ request, params, set }: CtxWithId) {
     },
     myRole,
     canWrite: isAdmin || (myRole != null && !lock.locked),
-    // Who can end the overdue state — unaffected by the lock on purpose, and
-    // narrower than canWrite: PM may run the project but not unfreeze it.
-    canDecide: isAdmin || myRole === 'OWNER',
+    // Who can end the overdue state: system admins only, locked or not.
+    canDecide: isAdmin,
     lock,
   }
 }

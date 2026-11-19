@@ -53,10 +53,6 @@ export function ProjectDetailView({
         canWrite: boolean
         canDecide: boolean
         lock: ProjectLockState
-        // Set when the project is locked and the caller may only decide: the
-        // payload is reduced to id/name/status/dates, so nothing that needs the
-        // full project (header, tabs) may render.
-        lockedView?: boolean
       }>(`/api/projects/${projectId}`),
     // A locked project answers 403 for good — retrying just repeats the denial.
     retry: false,
@@ -67,13 +63,12 @@ export function ProjectDetailView({
   const canWrite = detailQ.data?.canWrite ?? false
   const lock = detailQ.data?.lock
   const locked = lock?.locked ?? false
-  const lockedView = detailQ.data?.lockedView ?? false
   // 403 because the project is frozen pending a decision — its own screen, not
   // an error box: the member did nothing wrong and has an action to take.
   const lockedOut = (detailQ.error as ApiError | null)?.locked === true
 
   // The red wash. A 403 denial is a locked project by definition, so it gets the
-  // hardest rung even though its reduced payload never arrives to say so.
+  // hardest rung even though no payload arrives to say so.
   // Neutral stages return attr === null and nothing extra renders at all.
   const tone = lockTone(lockedOut ? 'LOCKED' : lock?.stage)
 
@@ -172,15 +167,11 @@ export function ProjectDetailView({
         <Alert color="yellow" icon={<TbAlertTriangle size={18} />} radius="md">
           Proyek tidak ditemukan atau kamu tidak punya akses.
         </Alert>
-      ) : locked && lock && lockedView ? (
-        // Reduced payload: the lock screen is the whole page. No header and no
-        // tabs — neither the data nor the permission to see it exists here.
-        <ProjectLockedScreen project={project} lock={lock} canDecide={detailQ.data?.canDecide ?? false} />
       ) : (
         <>
           <ProjectHeader project={project} systemRole={systemRole} canWrite={canWrite} myRole={myRole} />
-          {/* Locked with a full payload = a system admin: lock screen first, then
-              the project itself, which only they may still see. */}
+          {/* Locked and served = a system admin: lock screen first, then the
+              project itself, which only they may still see. */}
           {locked && lock && (
             <ProjectLockedScreen project={project} lock={lock} canDecide={detailQ.data?.canDecide ?? false} />
           )}

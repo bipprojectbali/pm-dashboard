@@ -70,7 +70,7 @@ export function projectLockRoutes() {
     recipients.delete(auth.userId)
 
     const title = `Permintaan keputusan untuk "${project.name}"`
-    const body = `Project terkunci karena terlambat ${lock.overdueDays} hari. Anggota meminta keputusan: perpanjang deadline, tandai selesai, atau batalkan project.`
+    const body = `Project terkunci karena terlambat ${lock.overdueDays} hari. Anggota meminta keputusan. Hanya admin sistem yang bisa memutuskan: perpanjang deadline, tandai selesai, atau batalkan project.`
     // Bypass sanctioned: asking for a decision is an exit from the lock, and it
     // runs *because* the project is locked. Notification is outside the guarded
     // model set today, so this is belt-and-braces — it keeps the escape hatch

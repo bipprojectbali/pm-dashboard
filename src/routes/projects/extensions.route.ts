@@ -11,14 +11,14 @@ export function projectExtensionRoutes() {
       const auth = await requireAuth(request)
       if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
       // Lock-aware on purpose: extending is the way out of an overdue lock, so
-      // it must stay available while locked — but only to the OWNER, not to
-      // every PM. On a healthy project PM extends exactly as before.
+      // it must stay available while locked — but only to system admins, not to
+      // OWNER or PM. On a healthy project OWNER/PM extend exactly as before.
       const { allowed, locked } = await canManageProjectNow(params.id, auth)
       if (!allowed) {
         set.status = 403
         return locked
           ? {
-              error: 'Project terkunci karena overdue — hanya pemilik project atau admin yang bisa memperpanjang',
+              error: 'Project terkunci karena overdue — hanya admin sistem yang bisa memperpanjang',
               locked: true,
             }
           : { error: 'Only OWNER, PM, or system admin can extend deadline' }

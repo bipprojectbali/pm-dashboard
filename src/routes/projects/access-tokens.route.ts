@@ -25,7 +25,7 @@ const TOKEN_SELECT = {
 const EXPIRY_PRESETS = [7, 30, 90, 365] as const
 
 // Tokens are project credentials — only OWNER/PM (or system admin) may list or
-// manage them, narrowing to OWNER + system admin while the project is locked;
+// manage them, narrowing to system admin while the project is locked;
 // the raw plaintext is returned exactly once on create.
 export function projectAccessTokenRoutes() {
   return new Elysia()
@@ -34,14 +34,14 @@ export function projectAccessTokenRoutes() {
       if (!auth) { set.status = 401; return { error: 'Unauthorized' } }
       // Lock-aware raw role: listing tokens is a read the overdue lock must not
       // take from the people who already had it — but once locked that is only
-      // the OWNER, since every other read of the project is already a 403 and
-      // its credentials must not outlive it.
+      // a system admin, since every other read of the project is already a 403
+      // and its credentials must not outlive it.
       const { allowed, locked } = await canManageProjectNow(params.id, auth)
       if (!allowed) {
         set.status = 403
         return locked
           ? {
-              error: 'Project terkunci karena overdue — access token hanya bisa dilihat pemilik project atau admin',
+              error: 'Project terkunci karena overdue — access token hanya bisa dilihat admin sistem',
               locked: true,
             }
           : { error: 'Only OWNER, PM, or system admin can view access tokens' }

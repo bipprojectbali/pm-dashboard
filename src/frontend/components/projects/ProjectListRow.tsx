@@ -18,7 +18,8 @@ export function ProjectListRow({
   onEdit: () => void
 }) {
   const { overdue, daysOver } = computeOverdue(p)
-  const canEdit = isAdmin || p.myRole === 'OWNER' || p.myRole === 'PM'
+  // A locked project is decided by system admins only — myRole is not enough there.
+  const canEdit = isAdmin || (!p.lock?.locked && (p.myRole === 'OWNER' || p.myRole === 'PM'))
   const taskDone =
     p.taskStats && p.taskStats.total > 0 ? Math.round((p.taskStats.closed / p.taskStats.total) * 100) : null
   const [_hover, setHover] = useState(false)
@@ -51,7 +52,7 @@ export function ProjectListRow({
               {p.priority}
             </Badge>
             {p.lock?.locked && (
-              <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya OWNER atau admin yang bisa membukanya">
+              <Tooltip label="Terkunci karena deadline lewat tanpa keputusan — hanya admin yang bisa membukanya">
                 <Badge color="red" variant="filled" size="xs" leftSection={<TbLock size={10} />}>
                   TERKUNCI
                 </Badge>
